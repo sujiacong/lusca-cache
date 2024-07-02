@@ -1,0 +1,39 @@
+This is a very simple regular expression external ACL helper.
+It is designed as a proof-of-concept helper and not designed
+for production use. That said, people _ARE_ using it, so it's
+up to you.
+
+The largest URL this supports currently is 16k - HELPERBUFSZ.
+
+To use:
+
+* Compile:
+
+$ cc regex.c -o regex
+
+* Copy somewhere, eg
+
+$ cp regex /Users/adrian/work/lusca/run/local/
+
+* Copy the config file too
+
+$ cp test.txt /Users/adrian/work/lusca/run/local/regex.txt
+
+* Add the external_acl section to the config:
+
+external_acl_type check_regex children=1 concurrency=32 ttl=1 negative_ttl=1 %URI /Users/adrian/work/lusca/run/local/regex /Users/adrian/work/lusca/run/etc/regex.txt
+acl acl_check_regex external check_regex
+
+Now, use "check_regex" as a check against whether something is in the file
+or not. Since the file returns OK if it's not in the file, and ERR if there's
+a match, you need to use a negation. I hate it, I will change the ordering
+of this soon.
+
+# deny external ACL stuff
+http_access deny !acl_check_regex
+
+Note that concurrency is required - increase this if you have issues.
+You can also bump children up past 1 (I have 1 CPU on this laptop so it
+wouldn't help) but you shouldn't need to bump it up past the number of
+CPU cores you have.
+

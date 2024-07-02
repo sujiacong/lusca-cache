@@ -1,0 +1,36 @@
+#!/bin/sh
+
+LUSCA_BIN="/usr/local/lusca/sbin/squid"
+LUSCA_COREDIR="/usr/local/lusca/var/logs"
+LUSCA_START_FLAGS="-D"
+
+ulimit -n 65535
+
+case $1 in
+	'start')
+		echo "Starting Lusca.."
+		cd ${LUSCA_COREDIR} && ${LUSCA_BIN} ${LUSCA_START_FLAGS}
+		exit 0
+	;;
+	'stop')
+		echo "Stopping Lusca.."
+		${LUSCA_BIN} -k shutdown
+		sleep 60
+		exit 0
+	;;
+	'rotate')
+		echo "Rotating Lusca Logfiles.."
+		${LUSCA_BIN} -k rotate
+		exit 0
+	;;
+	'reconfigure')
+		echo "Reconfiguring Lusca.."
+		${LUSCA_BIN} -k reconfigure
+		exit 0
+	;;
+	*)
+		echo "$0: {start|stop|rotate|reconfigure}"
+		exit 1
+	;;
+esac
+exit 0

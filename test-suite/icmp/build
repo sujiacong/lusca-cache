@@ -1,0 +1,11 @@
+#!/bin/sh
+
+CFLAGS="-g -Wall -Werror -I../.."
+LDFLAGS="-L../../libsqdebug  -L../../libcore -L../../libmem -L../../libsqinet -L../../lib -L../../libstat -L../../libiapp -L../../libcb -L../../libhelper -L../../libsqinet"
+LIBS="-lssl -liapp -lsqinet -lcb -lmem -lsqdebug -lcore -lstat -lhelper -lmiscutil -lm"
+
+rm test_pinger
+
+gcc ${CFLAGS}  test_pinger.c -o test_pinger ${LDFLAGS} ${LIBS}
+
+./test_pinger

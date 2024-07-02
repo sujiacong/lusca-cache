@@ -1,0 +1,8 @@
+#ifndef	__LUSCA_LIBSQURL_DEFINES_H__
+#define	__LUSCA_LIBSQURL_DEFINES_H__
+
+#define SQUIDHOSTNAMELEN 256
+#define MAX_URL  4096
+#define MAX_LOGIN_SZ  128
+
+#endif

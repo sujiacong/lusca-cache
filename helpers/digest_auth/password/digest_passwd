@@ -1,0 +1,32 @@
+#!/bin/sh
+
+#
+# This program creates a digest password file entry with the given username,
+# password and realm.
+#
+# Please note that it doesn't even begin to pretend to correctly handle
+# certain cases: eg the username, password or realm having a colon or quote
+# mark in them.
+#
+# A better password creation program should likely be written.
+# The digest code should also be double-checked to ensure encodings
+# for special and UTF-8 characters are correctly handled.
+#
+
+user="$1"
+realm="$3"
+pass="$2"
+
+echocmd="/bin/echo"
+
+if [ -z "$1" -o -z "$2" -o -z "$3" ] ; then
+	echo "Usage: $0 user pass 'realm'";
+	exit 1
+fi
+
+# Since (at least) MacOS X sh has a built-in echo that doesn't understand -n
+# (and happily adds it to the output), manually call the echo binary.
+
+ha1=$(${echocmd} -n "$user:$realm:$pass" | md5)
+
+echo "$user:$realm:$ha1"

@@ -1,0 +1,13 @@
+#!/bin/sh
+
+CFLAGS="-g -Wall -Werror -I../.."
+LDFLAGS="-L../../libcore -L../../lib"
+LIBS="-lcore -lmiscutil -lm"
+
+rm test_libcore_1
+
+gcc ${CFLAGS}  test_libcore_1.c -o test_libcore_1 ${LDFLAGS} ${LIBS}
+gcc ${CFLAGS}  test_libcore_2.c -o test_libcore_2 ${LDFLAGS} ${LIBS}
+
+./test_libcore_1
+./test_libcore_2

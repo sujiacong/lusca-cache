@@ -1,0 +1,56 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+  <head>
+    @STYLE@
+    <meta http-equiv="Content-Type" content="text/html;charset=iso-8859-1" />
+    <title>ERROR: Cache Access Denied</title>
+  </head>
+
+  <body>
+    <div id="container">
+      <div id="header">
+        <h1>ERROR</h1>
+        <h2>Cache Access Denied</h2>
+      </div>
+
+      <div id="body">
+        <div id="what">
+          <p>While trying to retrieve the URL: <a href="%U">%U</a></p>
+        </div>
+        <div id="errortitle">
+          <p>The following error was encountered:</p>
+        </div>
+        <div id="errorwhat">
+          <p>Cache Access Denied.</p>
+        </div>
+
+        <div id="errordescription">
+          <p>
+            Sorry, you are not currently allowed to request:
+          </p>
+          <pre>
+            %U
+          </pre>
+            from this cache until you have authenticated yourself.
+          </p>
+
+	  <p>
+            You need to use Netscape version 2.0 or greater, or Microsoft Internet
+            Explorer 3.0, or an HTTP/1.1 compliant browser for this to work.  Please
+            contact the <a href="mailto:%w">cache administrator</a> if you have
+            difficulties authenticating yourself or 
+            <a href="http://%h/cgi-bin/chpasswd.cgi">change</a> your default password.
+          </p>
+	    
+        </div>
+      </div>
+
+      <p>
+        <div id="footer">Your cache administrator is <a href="mailto:%w">%w</a>.</div>
+        <div id="signature">Generated %T by %h (%s).</div>
+      </p>
+
+    </div>
+  </body>
+</html>
+

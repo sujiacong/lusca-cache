@@ -1,0 +1,13 @@
+#!/bin/sh
+
+CFLAGS="-g -Wall -Werror -I../.."
+LDFLAGS="-L../../libhttp -L../../libcore -L../../libmem -L../../libsqinet -L../../lib -L../../libstat -L../../libiapp"
+LIBS="-lhttp -lmem -lcore -lstat -liapp -lmiscutil -lm"
+
+rm rfc1035
+
+gcc ${CFLAGS}  rfc1035.c -o rfc1035 ${LDFLAGS} ${LIBS}
+gcc ${CFLAGS}  util.c -o util ${LDFLAGS} ${LIBS}
+
+# ./rfc1035
+./util

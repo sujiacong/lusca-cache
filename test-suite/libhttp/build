@@ -1,0 +1,14 @@
+#!/bin/sh
+
+CFLAGS="-g -Wall -Werror -I../.."
+LDFLAGS="-L../../libhttp -L../../libsqdebug  -L../../libcore -L../../libmem -L../../libsqinet -L../../lib -L../../libstat -L../../libiapp"
+LIBS="-lhttp -lmem -lsqdebug -lcore -lstat -liapp -lmiscutil -lm"
+
+rm test_libhttp_1
+gcc ${CFLAGS}  test_libhttp_1.c -o test_libhttp_1 ${LDFLAGS} ${LIBS}
+./test_libhttp_1
+
+# specifically testing the vector routines
+rm test_libhttp_2
+gcc ${CFLAGS}  test_libhttp_2.c -o test_libhttp_2 ${LDFLAGS} ${LIBS}
+./test_libhttp_2

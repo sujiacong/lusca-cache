@@ -1,0 +1,8 @@
+
+if ENABLE_ATF
+ATFDIR=	atf/
+else
+ATFDIR=
+endif
+
+SUBDIRS=	$(ATFDIR)

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cc test_sqinet.c -o test_sqinet -g -I../.. -L../../lib -L../../libsqinet -L../../libcore -lsqinet -lcore -lmiscutil -lm
+
+./test_sqinet
