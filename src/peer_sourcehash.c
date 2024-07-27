@@ -122,7 +122,7 @@ peerSourceHashInit(void)
 	X_last = p->sourcehash.load_multiplier;
 	P_last = p->sourcehash.load_factor;
     }
-    cachemgrRegister("sourcehash", "peer sourcehash information", peerSourceHashCachemgr, 0, 1);
+    cachemgrRegister("sourcehash", "peer sourcehash information", peerSourceHashCachemgr, NULL, NULL,0, 1, 0);
 }
 
 peer *
@@ -144,7 +144,7 @@ peerSourceHashSelectParent(request_t * request)
     key = inet_ntoa(request->client_addr);
 
     /* calculate hash key */
-    debug(39, 2) ("peerSourceHashSelectParent: Calculating hash for %s\n", key);
+    debugs(39, 2, "peerSourceHashSelectParent: Calculating hash for %s", key);
     for (c = key; *c != 0; c++)
 	user_hash += ROTATE_LEFT(user_hash, 19) + *c;
     /* select peer */
@@ -154,7 +154,7 @@ peerSourceHashSelectParent(request_t * request)
 	combined_hash += combined_hash * 0x62531965;
 	combined_hash = ROTATE_LEFT(combined_hash, 21);
 	score = combined_hash * tp->sourcehash.load_multiplier;
-	debug(39, 3) ("peerSourceHashSelectParent: %s combined_hash %u score %.0f\n",
+	debugs(39, 3, "peerSourceHashSelectParent: %s combined_hash %u score %.0f",
 	    tp->name, combined_hash, score);
 	if ((score > high_score) && peerHTTPOkay(tp, request)) {
 	    p = tp;
@@ -162,12 +162,12 @@ peerSourceHashSelectParent(request_t * request)
 	}
     }
     if (p)
-	debug(39, 2) ("peerSourceHashSelectParent: selected %s\n", p->name);
+	debugs(39, 2, "peerSourceHashSelectParent: selected %s", p->name);
     return p;
 }
 
 static void
-peerSourceHashCachemgr(StoreEntry * sentry)
+peerSourceHashCachemgr(StoreEntry * sentry, void* data)
 {
     peer *p;
     int sumfetches = 0;

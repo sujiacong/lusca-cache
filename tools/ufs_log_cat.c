@@ -63,7 +63,7 @@ read_entry(FILE *fp, int version)
 
 	r = fread(buf, s, 1, fp);
 	if (r != 1) {
-		debug(1, 2) ("fread: returned %d (ferror %d)\n", r, ferror(fp));
+		debugs(1, 2, "fread: returned %d (ferror %d)", r, ferror(fp));
 		return -1;
 	}
 	num_objects++;
@@ -80,7 +80,7 @@ read_entry(FILE *fp, int version)
 		num_valid_objects++;
 		write(1, &sd, sizeof(sd));
 	} else {
-		debug(1, 5) ("error! Got swaplog entry op %d?!\n", sd.op);
+		debugs(1, 5, "error! Got swaplog entry op %d?!", sd.op);
 		num_invalid_objects++;
 	}
 
@@ -125,7 +125,7 @@ read_file(const char *swapfile)
 		} else if (hdr.version == 1 && hdr.record_size == sizeof(storeSwapLogDataOld)) {
 			version = 0;
 		} else {
-			debug(1, 1) ("Unsupported swap.state version %d size %d\n", hdr.version, hdr.record_size);
+			debugs(1, 1, "Unsupported swap.state version %d size %d", hdr.version, hdr.record_size);
 			fclose(fp);
 			return;
 		}
@@ -152,6 +152,8 @@ read_file(const char *swapfile)
 	fclose(fp);
 }
 
+int KidIdentifier = 0;
+
 int
 main(int argc, char *argv[])
 {
@@ -166,7 +168,7 @@ main(int argc, char *argv[])
 
     read_file(argv[2]);
 
-    debug(1, 1) ("%s: Read %d objects\n", argv[2], num_objects);
+    debugs(1, 1, "%s: Read %d objects", argv[2], num_objects);
 
     return 0;
 }

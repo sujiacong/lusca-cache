@@ -372,6 +372,10 @@ struct logformat_token_table_entry logformat_token_table[] =
 
 /*{ "<a", LFT_SERVER_IP_ADDRESS }, */
 /*{ "<p", LFT_SERVER_PORT }, */
+	
+	/*compatible with squid3*/
+	{"<a", LFT_SERVER_IP_OR_PEER_NAME},
+	
     {"<A", LFT_SERVER_IP_OR_PEER_NAME},
     {"oa", LFT_OUTGOING_IP},
 
@@ -401,6 +405,10 @@ struct logformat_token_table_entry logformat_token_table[] =
     {"ue", LFT_USER_EXT},
 
     {"Hs", LFT_HTTP_CODE},
+
+	/*compatible with squid3*/
+	{">Hs", LFT_HTTP_CODE},
+
 /*{ "Ht", LFT_HTTP_STATUS }, */
 
     {"Ss", LFT_SQUID_STATUS},
@@ -946,7 +954,7 @@ accessLogParseLogFormat(logformat_token ** fmt, char *def)
     logformat_token *new_lt, *last_lt;
     enum log_quote quote = LOG_QUOTE_NONE;
 
-    debug(46, 1) ("accessLogParseLogFormat: got definition '%s'\n", def);
+    debugs(46, 1, "accessLogParseLogFormat: got definition '%s'", def);
 
     /* very inefficent parser, but who cares, this needs to be simple */
     /* First off, let's tokenize, we'll optimize in a second pass.
@@ -971,10 +979,10 @@ accessLogDumpLogFormat(StoreEntry * entry, const char *name, logformat * definit
     logformat_token *t;
     logformat *format;
     struct logformat_token_table_entry *te;
-    debug(46, 4) ("accessLogDumpLogFormat called\n");
+    debugs(46, 4, "accessLogDumpLogFormat called");
 
     for (format = definitions; format; format = format->next) {
-	debug(46, 4) ("Dumping logformat definition for %s\n", format->name);
+	debugs(46, 4, "Dumping logformat definition for %s", format->name);
 	storeAppendPrintf(entry, "logformat %s ", format->name);
 	for (t = format->format; t; t = t->next) {
 	    if (t->type == LFT_STRING)
@@ -1306,7 +1314,7 @@ accessLogInit(void)
 	    "Multicast Miss Stream");
 	if (mcast_miss_fd < 0)
 	    fatal("Cannot open Multicast Miss Stream Socket");
-	debug(46, 1) ("Multicast Miss Stream Socket opened on FD %d\n",
+	debugs(46, 1, "Multicast Miss Stream Socket opened on FD %d",
 	    mcast_miss_fd);
 	mcastSetTtl(mcast_miss_fd, Config.mcast_miss.ttl);
 	if (strlen(Config.mcast_miss.encode_key) < 16)
@@ -1337,9 +1345,9 @@ fvdbInit(void)
 {
     via_table = hash_create((HASHCMP *) strcmp, 977, hash4);
     forw_table = hash_create((HASHCMP *) strcmp, 977, hash4);
-    cachemgrRegister("via_headers", "Via Request Headers", fvdbDumpVia, 0, 1);
+    cachemgrRegister("via_headers", "Via Request Headers", fvdbDumpVia, NULL, NULL, 0, 1, 0);
     cachemgrRegister("forw_headers", "X-Forwarded-For Request Headers",
-	fvdbDumpForw, 0, 1);
+	fvdbDumpForw, NULL, NULL, 0, 1, 0);
 }
 
 static void
@@ -1384,13 +1392,13 @@ fvdbDumpTable(StoreEntry * e, hash_table * hash)
 }
 
 static void
-fvdbDumpVia(StoreEntry * e)
+fvdbDumpVia(StoreEntry * e, void* data)
 {
     fvdbDumpTable(e, via_table);
 }
 
 static void
-fvdbDumpForw(StoreEntry * e)
+fvdbDumpForw(StoreEntry * e, void* data)
 {
     fvdbDumpTable(e, forw_table);
 }

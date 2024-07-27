@@ -92,7 +92,7 @@ httpHeaderEntryCreate(HttpHeaderEntry *e, http_hdr_type id, const char *name, in
     else
         stringLimitInit(&e->value, value, vl);
     Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
+    debugs(55, 9, "created entry %p: '%.*s: %.*s'", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     e->active = 1;
 }
 
@@ -108,7 +108,7 @@ httpHeaderEntryCreateStr(HttpHeaderEntry *e, http_hdr_type id, const String *nam
 	e->name = stringDup(name);
     e->value = stringDup(value);
     Headers[id].stat.aliveCount++;
-    debug(55, 9) ("created entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
+    debugs(55, 9, "created entry %p: '%.*s: %.*s'", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     e->active = 1;
 }
 
@@ -117,7 +117,7 @@ httpHeaderEntryDestroy(HttpHeaderEntry * e)
 {
     assert(e);
     assert_eid(e->id);
-    debug(55, 9) ("destroying entry %p: '%.*s: %.*s'\n", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
+    debugs(55, 9, "destroying entry %p: '%.*s: %.*s'", e, strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
     /* clean name if needed */
     if (e->id == HDR_OTHER)
         stringClean(&e->name);

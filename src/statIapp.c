@@ -4,7 +4,7 @@
  * Dump out statistics pertaining to the libiapp stuff
  */
 void
-statIappStats(StoreEntry *sentry)
+statIappStats(StoreEntry *sentry, void* data)
 {
         storeAppendPrintf(sentry, "libiapp.commstats.syscalls.sock.accepts = %d\n", CommStats.syscalls.sock.accepts);
         storeAppendPrintf(sentry, "libiapp.commstats.syscalls.sock.sockets = %d\n", CommStats.syscalls.sock.sockets);

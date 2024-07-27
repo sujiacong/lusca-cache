@@ -68,7 +68,7 @@ acceptSock(int sfd, void *d)
 			sqinet_done(&peer);
 			break;
 		}
-		debug(1, 2) ("acceptSock: FD %d: new socket!\n", fd);
+		debugs(1, 2, "acceptSock: FD %d: new socket!", fd);
 
 		/* Create tunnel */
 		sslStart(fd, &dest);
@@ -78,7 +78,7 @@ acceptSock(int sfd, void *d)
 	/* register for another pass */
 	commSetSelect(sfd, COMM_SELECT_READ, acceptSock, NULL, 0);
 }
-
+int KidIdentifier = 0;
 int
 main(int argc, const char *argv[])
 {
@@ -120,7 +120,7 @@ main(int argc, const char *argv[])
 	host = argv[1];
 	port = atoi(argv[2]);
 
-	debug(1, 1) ("main: forwarding to %s:%d\n", host, port);
+	debugs(1, 1, "main: forwarding to %s:%d", host, port);
 
 	bzero(&t, sizeof(t));
 	t.sin_port = htons(port);

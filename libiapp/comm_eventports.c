@@ -56,7 +56,7 @@ do_select_init()
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using Solaris Event Ports for the IO loop\n");
+    debugs(5, 1, "Using Solaris Event Ports for the IO loop");
 }
 
 static void
@@ -91,7 +91,7 @@ commSetEvents(int fd, int need_read, int need_write)
     int st_new = (need_read ? POLLIN : 0) | (need_write ? POLLOUT : 0);
 
     assert(fd >= 0);
-    debug(5, 8) ("commSetEvents(fd=%d, read=%d, write=%d)\n", fd, need_read, need_write);
+    debugs(5, 8, "commSetEvents(fd=%d, read=%d, write=%d)", fd, need_read, need_write);
 
     if (st_new == 0)
         port_dissociate(ev_fd, PORT_SOURCE_FD, fd);
@@ -120,7 +120,7 @@ do_comm_select(int msec)
 	if (ignoreErrno(errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: port_getn() failure: %s\n", xstrerror());
+	debugs(5, 1, "comm_select: port_getn() failure: %s", xstrerror());
 	return COMM_ERROR;
     }
     statHistCount(&statCounter.select_fds_hist, num);

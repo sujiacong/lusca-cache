@@ -163,12 +163,12 @@ httpHdrCcParseInit(HttpHdrCc * cc, const String * str)
 	type = httpHeaderIdByName(item, nlen,
 	    CcFieldsInfo, CC_ENUM_END);
 	if (type < 0) {
-	    debug(65, 2) ("hdr cc: unknown cache-directive: near '%s' in '%.*s'\n", item, strLen2(*str), strBuf2(*str));
+	    debugs(65, 2, "hdr cc: unknown cache-directive: near '%s' in '%.*s'", item, strLen2(*str), strBuf2(*str));
 	    type = CC_OTHER;
 	}
 	if (EBIT_TEST(cc->mask, type)) {
 	    if (type != CC_OTHER)
-		debug(65, 2) ("hdr cc: ignoring duplicate cache-directive: near '%s' in '%.*s'\n", item, strLen2(*str), strBuf2(*str));
+		debugs(65, 2, "hdr cc: ignoring duplicate cache-directive: near '%s' in '%.*s'", item, strLen2(*str), strBuf2(*str));
 	    CcFieldsInfo[type].stat.repCount++;
 	    continue;
 	}
@@ -178,38 +178,38 @@ httpHdrCcParseInit(HttpHdrCc * cc, const String * str)
 	switch (type) {
 	case CC_MAX_AGE:
 	    if (!p || !httpHeaderParseInt(p, &cc->max_age)) {
-		debug(65, 2) ("httpHdrCcParseInit: invalid max-age specs near '%s'\n", item);
+		debugs(65, 2, "httpHdrCcParseInit: invalid max-age specs near '%s'", item);
 		cc->max_age = -1;
 		EBIT_CLR(cc->mask, type);
 	    }
 	    break;
 	case CC_S_MAXAGE:
 	    if (!p || !httpHeaderParseInt(p, &cc->s_maxage)) {
-		debug(65, 2) ("httpHdrCcParseInit: invalid s-maxage specs near '%s'\n", item);
+		debugs(65, 2, "httpHdrCcParseInit: invalid s-maxage specs near '%s'", item);
 		cc->s_maxage = -1;
 		EBIT_CLR(cc->mask, type);
 	    }
 	    break;
 	case CC_MAX_STALE:
 	    if (!p) {
-		debug(65, 3) ("httpHdrCcParseInit: max-stale directive is valid without value\n");
+		debugs(65, 3, "httpHdrCcParseInit: max-stale directive is valid without value");
 		cc->max_stale = -1;
 	    } else if (!httpHeaderParseInt(p, &cc->max_stale)) {
-		debug(65, 2) ("httpHdrCcParseInit: invalid max-stale specs near '%s'\n", item);
+		debugs(65, 2, "httpHdrCcParseInit: invalid max-stale specs near '%s'", item);
 		cc->max_stale = -1;
 		EBIT_CLR(cc->mask, type);
 	    }
 	    break;
 	case CC_STALE_WHILE_REVALIDATE:
 	    if (!p || !httpHeaderParseInt(p, &cc->stale_while_revalidate)) {
-		debug(65, 2) ("httpHdrCcParseInit: invalid stale-while-revalidate specs near '%s'\n", item);
+		debugs(65, 2, "httpHdrCcParseInit: invalid stale-while-revalidate specs near '%s'", item);
 		cc->stale_while_revalidate = -1;
 		EBIT_CLR(cc->mask, type);
 	    }
 	    break;
 	case CC_STALE_IF_ERROR:
 	    if (!p || !httpHeaderParseInt(p, &cc->stale_if_error)) {
-		debug(65, 2) ("httpHdrCcParseInit: invalid stale-if-error specs near '%s'\n", item);
+		debugs(65, 2, "httpHdrCcParseInit: invalid stale-if-error specs near '%s'", item);
 		cc->stale_if_error = -1;
 		EBIT_CLR(cc->mask, type);
 	    }

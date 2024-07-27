@@ -29,7 +29,7 @@ clientAsyncDone(clientAsyncRefreshRequest * async)
     memset(&al, 0, sizeof(al));
     al.icp.opcode = ICP_INVALID;
     al.url = mem->url;
-    debug(33, 9) ("clientAsyncDone: url='%s'\n", al.url);
+    debugs(33, 9, "clientAsyncDone: url='%s'", al.url);
     al.http.code = mem->reply->sline.status;
     al.http.content_type = strBuf(mem->reply->content_type);
     al.cache.size = async->offset;
@@ -120,7 +120,7 @@ clientAsyncRefresh(clientHttpRequest * http)
     char *url = http->uri;
     clientAsyncRefreshRequest *async;
     request_t *request = http->request;
-    debug(33, 3) ("clientAsyncRefresh: '%s'\n", http->uri);
+    debugs(33, 3, "clientAsyncRefresh: '%s'", http->uri);
     CBDATA_INIT_TYPE(clientAsyncRefreshRequest);
     http->entry->mem_obj->refresh_timestamp = squid_curtime;
     async = cbdataAlloc(clientAsyncRefreshRequest);

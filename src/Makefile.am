@@ -254,6 +254,7 @@ squid_LDADD = \
 	-L../libasyncio \
 	-L../libsqtlv \
 	-L../libsqstore \
+        -L../libmutiprocess \
 	@XTRA_OBJS@ \
 	@REPL_OBJS@ \
 	@STORE_OBJS@ \
@@ -278,6 +279,7 @@ squid_LDADD = \
 	-lcb \
 	-lhelper \
 	-lmime \
+	-lmutiprocess \
 	-liapp \
 	-lsqftp \
 	-lsqurl \
@@ -316,7 +318,8 @@ BUILT_SOURCES = \
 sysconf_DATA = \
 	squid.conf.default \
 	squid.conf.clean \
-	mime.conf.default
+	mime.conf.default \
+	errorpage.css
 
 data_DATA = \
 	mib.txt

@@ -109,7 +109,7 @@ do_select_init()
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using select for the IO loop\n");
+    debugs(5, 1, "Using select for the IO loop");
 }
 
 static void
@@ -176,12 +176,12 @@ do_comm_select(int msec)
     num = select(Biggest_FD + 1, &readfds, &writefds, &errfds, &tv);
     saved_errno = errno;
     getCurrentTime();
-    debug(5, 5) ("do_comm_select: %d fds ready\n", num);
+    debugs(5, 5, "do_comm_select: %d fds ready", num);
     if (num < 0) {
 	if (ignoreErrno(saved_errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: select failure: %s\n", xstrerror());
+	debugs(5, 1, "comm_select: select failure: %s", xstrerror());
 	return COMM_ERROR;
     }
     CommStats.select_fds++;

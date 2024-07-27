@@ -32,6 +32,7 @@
 typedef struct _close_handler close_handler;
 
 typedef void PF(int, void *);
+typedef int  CDT(int, void *);
 typedef void CWCB(int fd, char *, size_t size, int flag, void *data);
 typedef void CRCB(int fd, int size, int flag, int xerrno, void *data);
 typedef void CNCB(int fd, int status, void *);
@@ -211,6 +212,7 @@ extern void commSetSelect(int, unsigned int, PF *, void *, time_t);
 extern void commRemoveSlow(int fd);
 extern void comm_add_close_handler(int fd, PF *, void *);
 extern void comm_remove_close_handler(int fd, PF *, void *);
+extern void comm_condition_remove_close_handler(int fd, PF *, CDT *);
 extern int comm_udp_sendto(int, const struct sockaddr_in *, int, const void *, int);
 extern int comm_udp_sendto6(int, const sqaddr_t *, const void *, int);
 extern void comm_write(int fd,
@@ -234,7 +236,8 @@ extern void comm_write_mbuf_header(int fd, MemBuf mb, const char *header, size_t
 extern void comm_read(int fd, char *buf, int size, CRCB *cb, void *data);
 extern int comm_read_cancel(int fd);
 #endif
-
+extern int comm_open_uds(int sock_type,int proto,struct sockaddr_un* addr,int flags);
+extern void comm_import_opened(int fd, int ai_socktype, const char *note, sqaddr_t *addr, int flags);
 extern void commCallCloseHandlers(int fd);
 extern int commSetTimeout(int fd, int, PF *, void *);
 extern void commSetDefer(int fd, DEFER * func, void *);
@@ -243,6 +246,7 @@ extern void commCloseAllSockets(void);
 extern int commBind(int s, sqaddr_t *addr);
 extern void commSetTcpNoDelay(int);
 extern void commSetTcpRcvbuf(int, int);
+extern void commSetReuseAddr(int fd);
 
 extern int comm_create_fifopair(int *prfd, int *pwfd, int *crfd, int *cwfd);
 extern int comm_create_unix_stream_pair(int *prfd, int *pwfd, int *crfd, int *cwfd, int buflen);

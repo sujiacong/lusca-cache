@@ -89,7 +89,7 @@ httpHeaderTestParser(const char *hstr)
     parse_success = httpHeaderParse(&hdr, hstr, hstr + hstr_len);
     /* debugLevels[55] = 2; */
     if (!parse_success) {
-	debug(66, 2) ("TEST (%d): failed to parsed a header: {\n%s}\n", bug_count, hstr);
+	debugs(66, 2, "TEST (%d): failed to parsed a header: {\n%s}", bug_count, hstr);
 	return;
     }
     /* we think that we parsed it, veryfy */
@@ -98,7 +98,7 @@ httpHeaderTestParser(const char *hstr)
     httpHeaderPackInto(&hdr, &p);
     if ((pos = abs(httpHeaderStrCmp(hstr, mb.buf, hstr_len)))) {
 	bug_count++;
-	debug(66, 2) ("TEST (%d): hdr parsing bug (pos: %d near '%s'): expected: {\n%s} got: {\n%s}\n",
+	debugs(66, 2, "TEST (%d): hdr parsing bug (pos: %d near '%s'): expected: {\n%s} got: {\n%s}",
 	    bug_count, pos, hstr + pos, hstr, mb.buf);
     }
     httpHeaderClean(&hdr);

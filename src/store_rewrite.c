@@ -57,7 +57,7 @@ storeurlHandleReply(void *data, char *reply)
     storeurlStateData *r = data;
     int valid;
     char *t;
-    debug(61, 5) ("storeurlHandleReply: {%s}\n", reply ? reply : "<NULL>");
+    debugs(61, 5, "storeurlHandleReply: {%s}", reply ? reply : "<NULL>");
     if (reply) {
 	if ((t = strchr(reply, ' ')))
 	    *t = '\0';
@@ -79,7 +79,7 @@ storeurlStateFree(storeurlStateData * r)
 }
 
 static void
-storeurlStats(StoreEntry * sentry)
+storeurlStats(StoreEntry * sentry, void* data)
 {
     storeAppendPrintf(sentry, "Redirector Statistics:\n");
     helperStats(sentry, storeurlors);
@@ -102,7 +102,7 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
     char myaddr[20];
     assert(http);
     assert(handler);
-    debug(61, 5) ("storeurlStart: '%s'\n", http->uri);
+    debugs(61, 5, "storeurlStart: '%s'", http->uri);
     if (Config.onoff.storeurl_bypass && storeurlors->stats.queue_size) {
 	/* Skip storeurlor if there is one request queued */
 	n_bypassed++;
@@ -143,7 +143,7 @@ storeurlStart(clientHttpRequest * http, RH * handler, void *data)
 	urlgroup ? urlgroup : "-",
 	myaddr,
 	http->request->my_port);
-    debug(61, 6) ("storeurlStart: sending '%s' to the helper\n", buf);
+    debugs(61, 6, "storeurlStart: sending '%s' to the helper", buf);
     strcat(buf, "\n");
     helperSubmit(storeurlors, buf, storeurlHandleReply, r);
 }
@@ -164,7 +164,7 @@ storeurlInit(void)
     if (!init) {
 	cachemgrRegister("store_rewriter",
 	    "URL Rewriter Stats",
-	    storeurlStats, 0, 1);
+	    storeurlStats, NULL, NULL, 0, 1, 0);
 	init = 1;
 	CBDATA_INIT_TYPE(storeurlStateData);
     }

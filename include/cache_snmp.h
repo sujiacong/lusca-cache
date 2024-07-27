@@ -109,6 +109,7 @@ enum {
     MESH_END
 };
 
+#if 1
 enum {				/* cachePeerTable */
     MESH_PTBL_START,
     MESH_PTBL_NAME,
@@ -142,6 +143,46 @@ enum {				/* cacheClientTable */
     MESH_CTBL_ICPHITBYTES,
     MESH_CTBL_END
 };
+#endif
+
+#if 0
+/* CachePeerTableEntry (version 3) */
+enum {
+    MESH_PTBL_START     = 0,
+    MESH_PTBL_INDEX     = 1,  /* cachePeerIndex  */
+    MESH_PTBL_NAME      = 2,  /* cachePeerName  */
+    MESH_PTBL_ADDR_TYPE = 3,  /* cachePeerAddressType */
+    MESH_PTBL_ADDR      = 4,  /* cachePeerAddress */
+    MESH_PTBL_HTTP      = 5,  /* cachePortHttp */
+    MESH_PTBL_ICP       = 6,  /* cachePeerPortIcp */
+    MESH_PTBL_TYPE      = 7,  /* cachePeerType  */
+    MESH_PTBL_STATE     = 8,  /* cachePeerStat */
+    MESH_PTBL_SENT      = 9,  /* cachePeerPingsSent */
+    MESH_PTBL_PACKED    = 10, /* cachePeerPingsAcked */
+    MESH_PTBL_FETCHES   = 11, /* cachePeerFetches */
+    MESH_PTBL_RTT       = 12, /* cachePeerRtt */
+    MESH_PTBL_IGN       = 13, /* cachePeerIgnored */
+    MESH_PTBL_KEEPAL_S  = 14, /* cachePeerKeepAlSent */
+    MESH_PTBL_KEEPAL_R  = 15, /* cachePeerKeepAlRecv */
+    MESH_PTBL_END
+};
+
+/* cacheClientEntry */
+enum {
+    MESH_CTBL_START       = 0,
+    MESH_CTBL_ADDR_TYPE   = 1,  /* cacheClientAddressType */
+    MESH_CTBL_ADDR        = 2,  /* cacheClientAddress */
+    MESH_CTBL_HTREQ       = 3,  /* cacheClientHttpRequests */
+    MESH_CTBL_HTBYTES     = 4,  /* cacheClientHttpKb */
+    MESH_CTBL_HTHITS      = 5,  /* cacheClientHttpHits */
+    MESH_CTBL_HTHITBYTES  = 6,  /* cacheClientHTTPHitKb */
+    MESH_CTBL_ICPREQ      = 7,  /* cacheClientIcpRequests */
+    MESH_CTBL_ICPBYTES    = 8,  /* cacheClientIcpKb  */
+    MESH_CTBL_ICPHITS     = 9,  /* cacheClientIcpHits */
+    MESH_CTBL_ICPHITBYTES = 10, /* cacheClientIcpHitKb */
+    MESH_CTBL_END
+};
+#endif
 
 /* 
  * cacheNetwork group 

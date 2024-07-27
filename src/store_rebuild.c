@@ -72,9 +72,9 @@ storeCleanup(void *datanotused)
 
     while (validnum - validnum_start < limit) {
 	if (++bucketnum >= store_hash_buckets) {
-	    debug(20, 1) ("  Completed Validation Procedure\n");
-	    debug(20, 1) ("  Validated %d Entries\n", validnum);
-	    debug(20, 1) ("  store_swap_size = %dk\n", store_swap_size);
+	    debugs(20, 1, "  Completed Validation Procedure");
+	    debugs(20, 1, "  Validated %d Entries", validnum);
+	    debugs(20, 1, "  store_swap_size = %dk", store_swap_size);
 	    store_dirs_rebuilding--;
 	    assert(0 == store_dirs_rebuilding);
 	    if (opt_store_doublecheck)
@@ -108,7 +108,7 @@ storeCleanup(void *datanotused)
 	    if (EBIT_TEST(e->flags, KEY_PRIVATE))
 		storeRelease(e);
 	    if ((++validnum & 0x3FFFF) == 0)
-		debug(20, 1) ("  %7d Entries Validated so far.\n", validnum);
+		debugs(20, 1, "  %7d Entries Validated so far.", validnum);
 	}
     }
     eventAdd("storeCleanup", storeCleanup, NULL, 0.0, 1);
@@ -137,18 +137,18 @@ storeRebuildComplete(struct _store_rebuild_data *dc)
     if (store_dirs_rebuilding > 1)
 	return;
     dt = tvSubDsec(rebuild_start, current_time);
-    debug(20, 1) ("Finished rebuilding storage from disk.\n");
-    debug(20, 1) ("  %7d Entries scanned\n", counts.scancount);
-    debug(20, 1) ("  %7d Invalid entries.\n", counts.invalid);
-    debug(20, 1) ("  %7d With invalid flags.\n", counts.badflags);
-    debug(20, 1) ("  %7d Objects loaded.\n", counts.objcount);
-    debug(20, 1) ("  %7d Objects expired.\n", counts.expcount);
-    debug(20, 1) ("  %7d Objects cancelled.\n", counts.cancelcount);
-    debug(20, 1) ("  %7d Duplicate URLs purged.\n", counts.dupcount);
-    debug(20, 1) ("  %7d Swapfile clashes avoided.\n", counts.clashcount);
-    debug(20, 1) ("  Took %3.1f seconds (%6.1f objects/sec).\n", dt,
+    debugs(20, 1, "Finished rebuilding storage from disk.");
+    debugs(20, 1, "  %7d Entries scanned", counts.scancount);
+    debugs(20, 1, "  %7d Invalid entries.", counts.invalid);
+    debugs(20, 1, "  %7d With invalid flags.", counts.badflags);
+    debugs(20, 1, "  %7d Objects loaded.", counts.objcount);
+    debugs(20, 1, "  %7d Objects expired.", counts.expcount);
+    debugs(20, 1, "  %7d Objects cancelled.", counts.cancelcount);
+    debugs(20, 1, "  %7d Duplicate URLs purged.", counts.dupcount);
+    debugs(20, 1, "  %7d Swapfile clashes avoided.", counts.clashcount);
+    debugs(20, 1, "  Took %3.1f seconds (%6.1f objects/sec).", dt,
 	(double) counts.objcount / (dt > 0.0 ? dt : 1.0));
-    debug(20, 1) ("Beginning Validation Procedure\n");
+    debugs(20, 1, "Beginning Validation Procedure");
     eventAdd("storeCleanup", storeCleanup, NULL, 0.0, 1);
     safe_free(RebuildProgress);
 }
@@ -197,6 +197,6 @@ storeRebuildProgress(int sd_index, int total, int sofar)
 	n += (double) RebuildProgress[sd_index].scanned;
 	d += (double) RebuildProgress[sd_index].total;
     }
-    debug(20, 1) ("Store rebuilding is %4.1f%% complete\n", 100.0 * n / d);
+    debugs(20, 1, "Store rebuilding is %4.1f%% complete", 100.0 * n / d);
     last_report = squid_curtime;
 }

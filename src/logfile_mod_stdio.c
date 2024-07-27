@@ -134,7 +134,7 @@ logfile_mod_stdio_rotate(Logfile * lf)
 
 #endif
 
-    debug(0, 1) ("logfileRotate (stdio): %s\n", lf->path);
+    debugs(0, 1, "logfileRotate (stdio): %s", lf->path);
 
     /* Rotate numbers 0 through N up one */
     for (i = Config.Log.rotateNumber; i > 1;) {
@@ -157,7 +157,7 @@ logfile_mod_stdio_rotate(Logfile * lf)
     ll->fd = file_open(lf->path, O_WRONLY | O_CREAT | O_TEXT);
 
     if (DISK_ERROR == ll->fd && lf->flags.fatal) {
-	debug(50, 1) ("logfileRotate (stdio): %s: %s\n", lf->path, xstrerror());
+	debugs(50, 1, "logfileRotate (stdio): %s: %s", lf->path, xstrerror());
 	fatalf("Cannot open %s: %s", lf->path, xstrerror());
     }
 }
@@ -211,7 +211,7 @@ logfile_mod_stdio_open(Logfile * lf, const char *path, size_t bufsz, int fatal_f
 		"\tuser '%s', which is the cache_effective_user\n"
 		"\tset in squid.conf.", path, Config.effectiveUser);
 	} else {
-	    debug(50, 1) ("logfileOpen (stdio): %s: %s\n", path, xstrerror());
+	    debugs(50, 1, "logfileOpen (stdio): %s: %s", path, xstrerror());
 	    return 0;
 	}
     }

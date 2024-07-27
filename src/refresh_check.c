@@ -377,7 +377,7 @@ refreshCheckHandleReply(void *data, char *reply)
     MemBuf hdrs = MemBufNULL;
 
 
-    debug(84, 2) ("refreshCheckHandleReply: reply=\"%s\"\n", reply);
+    debugs(84, 2, "refreshCheckHandleReply: reply=\"%s\"", reply);
 
     if (reply) {
 	char *t = NULL;
@@ -466,7 +466,7 @@ refreshCheckSubmit(StoreEntry * entry, REFRESHCHECK * callback, void *callback_d
 	callback(callback_data, 0, NULL);
 	return;
     }
-    debug(84, 2) ("refreshCheckSubmit: for '%s'\n", key);
+    debugs(84, 2, "refreshCheckSubmit: for '%s'", key);
 
     /* Check for a pending lookup to hook into */
     for (node = def->queue.head; node; node = node->next) {
@@ -493,7 +493,7 @@ refreshCheckSubmit(StoreEntry * entry, REFRESHCHECK * callback, void *callback_d
 	/* No pending lookup found. Sumbit to helper */
 	/* Check for queue overload */
 	if (refreshCheckOverload(def)) {
-	    debug(84, 1) ("refreshCheckSubmit: queue overload\n");
+	    debugs(84, 1, "refreshCheckSubmit: queue overload");
 	    cbdataFree(state);
 	    callback(callback_data, 0, "Overload");
 	    return;
@@ -508,7 +508,7 @@ refreshCheckSubmit(StoreEntry * entry, REFRESHCHECK * callback, void *callback_d
 }
 
 static void
-refreshCheckStats(StoreEntry * sentry)
+refreshCheckStats(StoreEntry * sentry, void* data)
 {
     refresh_check_helper *p = Config.Program.refresh_check;
 
@@ -544,7 +544,7 @@ refreshCheckInit(void)
 	    firstTimeInit = 0;
 	    cachemgrRegister("refresh_check",
 		"External ACL stats",
-		refreshCheckStats, 0, 1);
+		refreshCheckStats, NULL, NULL,  0, 1, 0);
 	}
 	CBDATA_INIT_TYPE_FREECB(refreshCheckState, free_refreshCheckState);
     }

@@ -31,7 +31,7 @@ static void
 free_AddVaryState(void *data)
 {
     AddVaryState *state = data;
-    debug(11, 2) ("free_AddVaryState: %p\n", data);
+    debugs(11, 2, "free_AddVaryState: %p", data);
     if (!EBIT_TEST(state->e->flags, ENTRY_ABORTED)) {
 	storeBuffer(state->e);
 	if (!state->done && state->key) {
@@ -154,9 +154,9 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
     char *p = state->buf;
     const char *buf = nr.node->data + nr.offset;
 
-    debug(11, 3) ("storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d\n", data, state->seen_offset, (int) state->buf_offset, (int) size);
+    debugs(11, 3, "storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d", data, state->seen_offset, (int) state->buf_offset, (int) size);
     if (size <= 0) {
-	debug(11, 2) ("storeAddVaryReadOld: DONE\n");
+	debugs(11, 2, "storeAddVaryReadOld: DONE");
 	cbdataFree(state);
 	goto finish;
     }
@@ -167,7 +167,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
     memcpy(state->buf + state->buf_offset, nr.node->data + nr.offset, size);
 
     if (EBIT_TEST(state->e->flags, ENTRY_ABORTED)) {
-	debug(11, 1) ("storeAddVaryReadOld: New index aborted at %d (%d)\n", (int) state->seen_offset, (int) size);
+	debugs(11, 1, "storeAddVaryReadOld: New index aborted at %d (%d)", (int) state->seen_offset, (int) size);
 	cbdataFree(state);
 	goto finish;
     }
@@ -182,7 +182,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	    goto invalid_marker_obj;
 	if (strCmp(state->oe->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
 	  invalid_marker_obj:
-	    debug(11, 2) ("storeAddVaryReadOld: %p (%s) is not a Vary maker object, ignoring\n", data, storeUrl(state->oe));
+	    debugs(11, 2, "storeAddVaryReadOld: %p (%s) is not a Vary maker object, ignoring", data, storeUrl(state->oe));
 	    cbdataFree(state);
 	    goto finish;
 	}
@@ -218,10 +218,10 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 		if (strcmp(state->current.key, state->key) == 0)
 		    state->current.this_key = 1;
 	    }
-	    debug(11, 3) ("storeAddVaryReadOld: Key: %s%s\n", state->current.key, state->current.this_key ? " (THIS)" : "");
+	    debugs(11, 3, "storeAddVaryReadOld: Key: %s%s", state->current.key, state->current.this_key ? " (THIS)" : "");
 #if 0				/* This condition is not correct here.. current.key is always null */
 	} else if (!state->current.key) {
-	    debug(11, 1) ("storeAddVaryReadOld: Unexpected data '%s'\n", p);
+	    debugs(11, 1, "storeAddVaryReadOld: Unexpected data '%s'", p);
 #endif
 	} else if (strmatchbeg(p, "ETag: ", l) == 0) {
 	    /* etag field */
@@ -253,7 +253,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	    } else if (state->current.this_key) {
 		state->current.ignore = 1;
 	    }
-	    debug(11, 2) ("storeAddVaryReadOld: ETag: %s%s%s\n", state->current.etag, state->current.this_key ? " (THIS)" : "", state->current.ignore ? " (IGNORE)" : "");
+	    debugs(11, 2, "storeAddVaryReadOld: ETag: %s%s%s", state->current.etag, state->current.this_key ? " (THIS)" : "", state->current.ignore ? " (IGNORE)" : "");
 	} else if (!state->current.ignore && strmatchbeg(p, "VaryData: ", l) == 0) {
 	    /* vary field */
 	    p2 = p + 10;
@@ -261,7 +261,7 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
 	    storeAddVaryFlush(state);
 	    if (strmatch(p2, state->vary_headers, l2) != 0) {
 		storeAppend(state->e, p, e - p + 1);
-		debug(11, 3) ("storeAddVaryReadOld: %s\n", p);
+		debugs(11, 3, "storeAddVaryReadOld: %s", p);
 	    }
 	} else if (strmatchbeg(p, "Accept-Encoding: ", l) == 0) {
 	    p2 = p + 17;
@@ -284,16 +284,16 @@ storeAddVaryReadOld(void *data, mem_node_ref nr, ssize_t size)
     if (state->buf_offset == state->buf_size) {
 	/* Oops.. the buffer size is not sufficient. Grow */
 	if (state->buf_size < 65536) {
-	    debug(11, 2) ("storeAddVaryReadOld: Increasing entry buffer size to %d\n", (int) state->buf_size * 2);
+	    debugs(11, 2, "storeAddVaryReadOld: Increasing entry buffer size to %d", (int) state->buf_size * 2);
 	    state->buf = memReallocBuf(state->buf, state->buf_size * 2, &state->buf_size);
 	} else {
 	    /* This does not look good. Bail out. This should match the size <= 0 case above */
-	    debug(11, 1) ("storeAddVaryReadOld: Buffer very large and still can't fit the data.. bailing out\n");
+	    debugs(11, 1, "storeAddVaryReadOld: Buffer very large and still can't fit the data.. bailing out");
 	    cbdataFree(state);
 	    goto finish;
 	}
     }
-    debug(11, 3) ("storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d\n", data, state->seen_offset, (int) state->buf_offset);
+    debugs(11, 3, "storeAddVaryReadOld: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d", data, state->seen_offset, (int) state->buf_offset);
     storeBufferFlush(state->e);
     storeClientRef(state->sc, state->oe,
 	state->seen_offset,
@@ -327,7 +327,7 @@ storeAddVary(const char *store_url, const char *url, method_t * method, const ca
     if (etag)
 	state->etag = xstrdup(etag);
     state->oe = storeGetPublic(store_url ? store_url : url, method);
-    debug(11, 2) ("storeAddVary: %s (%s) %s %s\n",
+    debugs(11, 2, "storeAddVary: %s (%s) %s %s",
 	state->url, state->key, state->vary_headers, state->etag);
     if (state->oe)
 	storeLockObject(state->oe);
@@ -362,7 +362,7 @@ storeAddVary(const char *store_url, const char *url, method_t * method, const ca
 	}
 	state->sc = storeClientRegister(state->oe, state);
 	state->buf = memAllocBuf(4096, &state->buf_size);
-	debug(11, 3) ("storeAddVary: %p\n", state);
+	debugs(11, 3, "storeAddVary: %p", state);
 	storeClientRef(state->sc, state->oe, 0, 0,
 	    state->buf_size,
 	    storeAddVaryReadOld,
@@ -444,7 +444,7 @@ storeLocateVaryCallback(LocateVaryState * state)
 	state->buf = NULL;
     }
     cbdataFree(state);
-    debug(11, 2) ("storeLocateVaryCallback: DONE\n");
+    debugs(11, 2, "storeLocateVaryCallback: DONE");
 }
 
 static void
@@ -454,7 +454,7 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
     char *e;
     char *p = state->buf;
     size_t l = size + state->buf_offset;
-    debug(11, 3) ("storeLocateVaryRead: %s %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d\n", state->vary_data, data, state->seen_offset, (int) state->buf_offset, (int) size);
+    debugs(11, 3, "storeLocateVaryRead: %s %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d size=%d", state->vary_data, data, state->seen_offset, (int) state->buf_offset, (int) size);
     if (size <= 0) {
 	storeLocateVaryCallback(state);
 	goto finish;
@@ -481,13 +481,13 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 	    state->current.key = xmalloc(l2 + 1);
 	    memcpy(state->current.key, p2, l2);
 	    state->current.key[l2] = '\0';
-	    debug(11, 3) ("storeLocateVaryRead: Key: %s\n", state->current.key);
+	    debugs(11, 3, "storeLocateVaryRead: Key: %s", state->current.key);
 	} else if (state->current.ignore) {
 	    /* Skip this entry */
 	} else if (!state->current.key) {
 	    char *t1 = xstrndup(p, e - p);
 	    char *t2 = xstrndup(state->buf, size + state->buf_offset);
-	    debug(11, 1) ("storeLocateVaryRead: Unexpected data '%s' in '%s'", t1, t2);
+	    debugs(11, 1, "storeLocateVaryRead: Unexpected data '%s' in '%s'", t1, t2);
 	    safe_free(t2);
 	    safe_free(t1);
 	} else if (strmatchbeg(p, "ETag: ", l) == 0) {
@@ -504,7 +504,7 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 		etag[l2] = '\0';
 		state->current.etag = etag;
 		arrayAppend(&state->data->etags, etag);
-		debug(11, 3) ("storeLocateVaryRead: ETag: %s\n", etag);
+		debugs(11, 3, "storeLocateVaryRead: ETag: %s", etag);
 	    } else {
 		state->current.ignore = 1;
 	    }
@@ -520,7 +520,7 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
 		safe_free(state->data->key);
 		state->data->key = xstrdup(state->current.key);
 		state->data->etag = state->current.etag;
-		debug(11, 2) ("storeLocateVaryRead: MATCH! %s %s\n", state->current.key, state->current.etag);
+		debugs(11, 2, "storeLocateVaryRead: MATCH! %s %s", state->current.key, state->current.etag);
 	    }
 	} else if (strmatchbeg(p, "Accept-Encoding: ", l) == 0) {
 	    p2 = p + 17;
@@ -551,16 +551,16 @@ storeLocateVaryRead(void *data, mem_node_ref nr, ssize_t size)
     if (state->buf_offset == state->buf_size) {
 	/* Oops.. the buffer size is not sufficient. Grow */
 	if (state->buf_size < 65536) {
-	    debug(11, 2) ("storeLocateVaryRead: Increasing entry buffer size to %d\n", (int) state->buf_size * 2);
+	    debugs(11, 2, "storeLocateVaryRead: Increasing entry buffer size to %d", (int) state->buf_size * 2);
 	    state->buf = memReallocBuf(state->buf, state->buf_size * 2, &state->buf_size);
 	} else {
 	    /* This does not look good. Bail out. This should match the size <= 0 case above */
-	    debug(11, 1) ("storeLocateVaryRead: Buffer very large and still can't fit the data.. bailing out\n");
+	    debugs(11, 1, "storeLocateVaryRead: Buffer very large and still can't fit the data.. bailing out");
 	    storeLocateVaryCallback(state);
 	    goto finish;
 	}
     }
-    debug(11, 3) ("storeLocateVaryRead: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d\n", data, state->seen_offset, (int) state->buf_offset);
+    debugs(11, 3, "storeLocateVaryRead: %p seen_offset=%" PRINTF_OFF_T " buf_offset=%d", data, state->seen_offset, (int) state->buf_offset);
     storeClientRef(state->sc, state->e,
 	state->seen_offset,
 	state->seen_offset,
@@ -575,7 +575,7 @@ void
 storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept_encoding, STLVCB * callback, void *cbdata)
 {
     LocateVaryState *state;
-    debug(11, 2) ("storeLocateVary: %s\n", vary_data);
+    debugs(11, 2, "storeLocateVary: %s", vary_data);
     CBDATA_INIT_TYPE(LocateVaryState);
     if (!VaryData_pool)
 	VaryData_pool = memPoolCreate("VaryData", sizeof(VaryData));
@@ -594,7 +594,7 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
     state->seen_offset = offset;
     if (!strLen2(e->mem_obj->reply->content_type) || strCmp(e->mem_obj->reply->content_type, "x-squid-internal/vary") != 0) {
 	/* This is not our Vary marker object. Bail out. */
-	debug(33, 1) ("storeLocateVary: Not our vary marker object, %s = '%s', vary_data='%s' ; content-type: '%.*s' ; accept_encoding='%.*s'\n",
+	debugs(33, 1, "storeLocateVary: Not our vary marker object, %s = '%s', vary_data='%s' ; content-type: '%.*s' ; accept_encoding='%.*s'",
 	    storeKeyText(e->hash.key), e->mem_obj->url, vary_data,
 	    strLen2(e->mem_obj->reply->content_type) ? strLen2(e->mem_obj->reply->content_type) : 1,
 	    strBuf2(e->mem_obj->reply->content_type) ? strBuf2(e->mem_obj->reply->content_type) : "-",
@@ -602,11 +602,11 @@ storeLocateVary(StoreEntry * e, int offset, const char *vary_data, String accept
 	    strBuf2(accept_encoding) ? strBuf2(accept_encoding) : "-");
 
 	if (strLen2(e->mem_obj->reply->content_type))
-		debug(33, 1) ("storeLocateVary: local content type: '%.*s'\n",
+		debugs(33, 1, "storeLocateVary: local content type: '%.*s'",
 		    strLen2(e->mem_obj->reply->content_type),
 		    strBuf2(e->mem_obj->reply->content_type));
 	else
-		debug(33, 1) ("storeLocateVary: reply->content_type length is 0, why!?\n");
+		debugs(33, 1, "storeLocateVary: reply->content_type length is 0, why!?");
 
 	storeLocateVaryCallback(state);
 	return;

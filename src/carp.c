@@ -122,7 +122,7 @@ carpInit(void)
 	X_last = p->carp.load_multiplier;
 	P_last = p->carp.load_factor;
     }
-    cachemgrRegister("carp", "CARP information", carpCachemgr, 0, 1);
+    cachemgrRegister("carp", "CARP information", carpCachemgr, NULL, NULL, 0, 1, 0);
 }
 
 peer *
@@ -144,7 +144,7 @@ carpSelectParent(request_t * request)
     key = urlCanonical(request);
 
     /* calculate hash key */
-    debug(39, 2) ("carpSelectParent: Calculating hash for %s\n", key);
+    debugs(39, 2, "carpSelectParent: Calculating hash for %s", key);
     for (c = key; *c != 0; c++)
 	user_hash += ROTATE_LEFT(user_hash, 19) + *c;
     /* select peer */
@@ -154,7 +154,7 @@ carpSelectParent(request_t * request)
 	combined_hash += combined_hash * 0x62531965;
 	combined_hash = ROTATE_LEFT(combined_hash, 21);
 	score = combined_hash * tp->carp.load_multiplier;
-	debug(39, 3) ("carpSelectParent: %s combined_hash %u score %.0f\n",
+	debugs(39, 3, "carpSelectParent: %s combined_hash %u score %.0f",
 	    tp->name, combined_hash, score);
 	if ((score > high_score) && peerHTTPOkay(tp, request)) {
 	    p = tp;
@@ -162,12 +162,12 @@ carpSelectParent(request_t * request)
 	}
     }
     if (p)
-	debug(39, 2) ("carpSelectParent: selected %s\n", p->name);
+	debugs(39, 2, "carpSelectParent: selected %s", p->name);
     return p;
 }
 
 static void
-carpCachemgr(StoreEntry * sentry)
+carpCachemgr(StoreEntry * sentry, void* data)
 {
     peer *p;
     int sumfetches = 0;

@@ -53,6 +53,8 @@
 
 #include "store_vary.h"
 
+#include "../libmutiprocess/ipcsupport.h"
+
 
 #if LINGERING_CLOSE
 #define comm_close comm_lingering_close
@@ -271,7 +273,7 @@ httpRequestLog(clientHttpRequest *http)
 	http->al.url = http->log_uri;
 	if (!http->al.url)
 	    http->al.url = urlCanonicalClean(request);
-	debug(33, 9) ("httpRequestLog: al.url='%s'\n", http->al.url);
+	debugs(33, 9, "httpRequestLog: al.url='%s'", http->al.url);
 	http->al.cache.out_ip = request->out_ip;
 	if (http->reply && http->log_type != LOG_TCP_DENIED) {
 	    http->al.http.code = http->reply->sline.status;
@@ -339,7 +341,7 @@ httpRequestFree(void *data)
     StoreEntry *e;
     request_t *request = http->request;
 
-    debug(33, 3) ("httpRequestFree: %s\n", storeUrl(http->entry));
+    debugs(33, 3, "httpRequestFree: %s", storeUrl(http->entry));
     if (!clientCheckTransferDone(http)) {
 	requestAbortBody(request);	/* abort request body transter */
 	/* HN: This looks a bit odd.. why should client_side care about
@@ -556,11 +558,11 @@ clientInterpretRequestHeaders(clientHttpRequest * http)
 	request->flags.cachable = 1;
     if (clientHierarchical(http))
 	request->flags.hierarchical = 1;
-    debug(33, 5) ("clientInterpretRequestHeaders: REQ_NOCACHE = %s\n",
+    debugs(33, 5, "clientInterpretRequestHeaders: REQ_NOCACHE = %s",
 	request->flags.nocache ? "SET" : "NOT SET");
-    debug(33, 5) ("clientInterpretRequestHeaders: REQ_CACHABLE = %s\n",
+    debugs(33, 5, "clientInterpretRequestHeaders: REQ_CACHABLE = %s",
 	request->flags.cachable ? "SET" : "NOT SET");
-    debug(33, 5) ("clientInterpretRequestHeaders: REQ_HIERARCHICAL = %s\n",
+    debugs(33, 5, "clientInterpretRequestHeaders: REQ_HIERARCHICAL = %s",
 	request->flags.hierarchical ? "SET" : "NOT SET");
 }
 
@@ -797,25 +799,25 @@ clientBuildReplyHeader(clientHttpRequest * http, HttpReply * rep)
 #endif
     if (httpReplyBodySize(request->method, rep) < 0) {
 	if (http->conn->port->http11 && (request->http_ver.major > 1 || (request->http_ver.major == 1 && request->http_ver.minor >= 1))) {
-	    debug(33, 2) ("clientBuildReplyHeader: send chunked response, unknown body size\n");
+	    debugs(33, 2, "clientBuildReplyHeader: send chunked response, unknown body size");
 	    request->flags.chunked_response = 1;
 	} else {
-	    debug(33, 3) ("clientBuildReplyHeader: can't keep-alive, unknown body size\n");
+	    debugs(33, 3, "clientBuildReplyHeader: can't keep-alive, unknown body size");
 	    request->flags.proxy_keepalive = 0;
 	}
     }
     if (fdUsageHigh() && !request->flags.must_keepalive) {
-	debug(33, 3) ("clientBuildReplyHeader: Not many unused FDs, can't keep-alive\n");
+	debugs(33, 3, "clientBuildReplyHeader: Not many unused FDs, can't keep-alive");
 	request->flags.proxy_keepalive = 0;
     }
     if (!Config.onoff.error_pconns && rep->sline.status >= 400 && !request->flags.must_keepalive) {
-	debug(33, 3) ("clientBuildReplyHeader: Error, don't keep-alive\n");
+	debugs(33, 3, "clientBuildReplyHeader: Error, don't keep-alive");
 	request->flags.proxy_keepalive = 0;
     }
     if (!Config.onoff.client_pconns && !request->flags.must_keepalive)
 	request->flags.proxy_keepalive = 0;
     if (request->flags.connection_auth && !rep->keep_alive) {
-	debug(33, 2) ("clientBuildReplyHeader: Connection oriented auth but server side non-persistent\n");
+	debugs(33, 2, "clientBuildReplyHeader: Connection oriented auth but server side non-persistent");
 	request->flags.proxy_keepalive = 0;
     }
     /* Append Transfer-Encoding */
@@ -915,13 +917,13 @@ clientProcessVary(VaryData * vary, void *data)
 	return;
     }
     if (vary->key) {
-	debug(33, 2) ("clientProcessVary: HIT key=%s etag=%s\n",
+	debugs(33, 2, "clientProcessVary: HIT key=%s etag=%s",
 	    vary->key, vary->etag ? vary->etag : "NONE");
     } else {
 	int i;
-	debug(33, 2) ("clientProcessVary MISS\n");
+	debugs(33, 2, "clientProcessVary MISS");
 	for (i = 0; i < vary->etags.count; i++) {
-	    debug(33, 3) ("ETag: %s\n", (char *) vary->etags.items[i]);
+	    debugs(33, 3, "ETag: %s", (char *) vary->etags.items[i]);
 	}
     }
     http->request->vary = vary;
@@ -946,29 +948,29 @@ clientCheckUrlIsValid(clientHttpRequest *http)
 
 	if (r->store_url) {
 		if (mem->store_url == NULL && mem->url == NULL) {
-			debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem has no url or store_url!\n",
+			debugs(33, 1, "clientCacheHit: request has store_url '%s'; mem has no url or store_url!",
 			    r->store_url);
 			return 0;
 		}
 		if (mem->store_url && strcmp(r->store_url, mem->store_url) != 0) {
-			debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched store_url '%s'!\n",
+			debugs(33, 1, "clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched store_url '%s'!",
 			    r->store_url, mem->store_url);
 		    return 0;
 		}
 		if (mem->store_url == NULL && mem->url && strcmp(r->store_url, mem->url) != 0) {
-			debug(33, 1) ("clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched url '%s'!\n",
+			debugs(33, 1, "clientCacheHit: request has store_url '%s'; mem object in hit has mis-matched url '%s'!",
 			    r->store_url, mem->url);
 		    return 0;
 		}
 	} else {			/* no store URL in request */
 		if (mem->store_url == NULL && mem->url == NULL) {
-			debug(33, 1) ("clientCacheHit: request has url '%s'; mem has no url or store_url!\n",
+			debugs(33, 1, "clientCacheHit: request has url '%s'; mem has no url or store_url!",
 			    urlCanonical(r));
 			return 0;
 		}
 		/* We currently don't enforce that memObjects with storeurl's -require- a request with a storeurl */
 		if (strcmp(mem->url, urlCanonical(r)) != 0) {
-			debug(33, 1) ("clientCacheHit: (store url '%s'); URL mismatch '%s' != '%s'?\n",
+			debugs(33, 1, "clientCacheHit: (store url '%s'); URL mismatch '%s' != '%s'?",
 			    r->store_url, e->mem_obj->url, urlCanonical(r));
 			return 0;
 		}
@@ -994,23 +996,23 @@ clientCacheHit(void *data, HttpReply * rep)
     int stale;
     http->flags.hit = 0;
     if (http->entry == NULL) {
-	debug(33, 3) ("clientCacheHit: request aborted\n");
+	debugs(33, 3, "clientCacheHit: request aborted");
 	return;
     } else if (!rep) {
 	/* swap in failure */
-	debug(33, 3) ("clientCacheHit: swapin failure for %s\n", http->uri);
+	debugs(33, 3, "clientCacheHit: swapin failure for %s", http->uri);
 	http->log_type = LOG_TCP_SWAPFAIL_MISS;
 	clientProcessMiss(http);
 	return;
     } else if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
 	/* aborted object */
-	debug(33, 3) ("clientCacheHit: hit an aborted object %s\n", http->uri);
+	debugs(33, 3, "clientCacheHit: hit an aborted object %s", http->uri);
 	http->log_type = LOG_TCP_SWAPFAIL_MISS;
 	clientProcessMiss(http);
 	return;
     }
     mem = e->mem_obj;
-    debug(33, 3) ("clientCacheHit: %s = %d\n", http->uri, rep->sline.status);
+    debugs(33, 3, "clientCacheHit: %s = %d", http->uri, rep->sline.status);
 
     /* Make sure the request URL matches the object URL. */
     /* Take the store URL into account! */
@@ -1035,7 +1037,7 @@ clientCacheHit(void *data, HttpReply * rep)
 	break;
     case VARY_MATCH:
 	/* This is the correct entity for this request. Continue */
-	debug(33, 2) ("clientCacheHit: Vary MATCH!\n");
+	debugs(33, 2, "clientCacheHit: Vary MATCH!");
 	break;
     case VARY_OTHER:
 	{
@@ -1056,7 +1058,7 @@ clientCacheHit(void *data, HttpReply * rep)
 	    /* Note: varyEvalyateMatch updates the request with vary information
 	     * so we only get here once. (it also takes care of cancelling loops)
 	     */
-	    debug(33, 2) ("clientCacheHit: Vary detected!\n");
+	    debugs(33, 2, "clientCacheHit: Vary detected!");
 	    return;
 	}
     case VARY_RESTART:
@@ -1069,7 +1071,7 @@ clientCacheHit(void *data, HttpReply * rep)
 	return;
     case VARY_CANCEL:
 	/* varyEvaluateMatch found a object loop. Process as miss */
-	debug(33, 1) ("clientCacheHit: Vary object loop!\n");
+	debugs(33, 1, "clientCacheHit: Vary object loop!");
 	storeClientUnregister(http->sc, e, http);
 	http->sc = NULL;
 	clientProcessMiss(http);
@@ -1120,7 +1122,7 @@ clientCacheHit(void *data, HttpReply * rep)
 	const char *rep_etag = httpHeaderGetStr(&e->mem_obj->reply->header, HDR_ETAG);
 	int has_etag;
 	if (mem->reply->sline.status != HTTP_OK) {
-	    debug(33, 4) ("clientCacheHit: Reply code %d != 200\n",
+	    debugs(33, 4, "clientCacheHit: Reply code %d != 200",
 		mem->reply->sline.status);
 	    http->log_type = LOG_TCP_MISS;
 	    clientProcessMiss(http);
@@ -1131,21 +1133,21 @@ clientCacheHit(void *data, HttpReply * rep)
 	    has_etag = strListIsMember(&req_etags, rep_etag, ',');
 	    stringClean(&req_etags);
 	    if (has_etag) {
-		debug(33, 4) ("clientCacheHit: If-None-Match matches\n");
+		debugs(33, 4, "clientCacheHit: If-None-Match matches");
 		if (is_modified == -1)
 		    is_modified = 0;
 	    } else {
-		debug(33, 4) ("clientCacheHit: If-None-Match mismatch\n");
+		debugs(33, 4, "clientCacheHit: If-None-Match mismatch");
 		is_modified = 1;
 	    }
 	}
     }
     if (r->flags.ims && mem->reply->sline.status == HTTP_OK) {
 	if (modifiedSince(e, http->request)) {
-	    debug(33, 4) ("clientCacheHit: If-Modified-Since modified\n");
+	    debugs(33, 4, "clientCacheHit: If-Modified-Since modified");
 	    is_modified = 1;
 	} else {
-	    debug(33, 4) ("clientCacheHit: If-Modified-Since not modified\n");
+	    debugs(33, 4, "clientCacheHit: If-Modified-Since not modified");
 	    if (is_modified == -1)
 		is_modified = 0;
 	}
@@ -1164,40 +1166,40 @@ clientCacheHit(void *data, HttpReply * rep)
 	if (mem->reply->sline.status >= 300 && mem->reply->sline.status < 400) {
 	if (httpHeaderHas(&e->mem_obj->reply->header, HDR_LOCATION))
 	if (!strcmp(http->uri,httpHeaderGetStr(&e->mem_obj->reply->header, HDR_LOCATION))) {
-		debug(33, 2) ("clientCacheHit: Redirect Loop Detected: %s\n",http->uri);
+		debugs(33, 2, "clientCacheHit: Redirect Loop Detected: %s",http->uri);
 		http->log_type = LOG_TCP_MISS;
 		clientProcessMiss(http);
 			return;
 	}
 	}
     stale = refreshCheckHTTPStale(e, r);
-    debug(33, 2) ("clientCacheHit: refreshCheckHTTPStale returned %d\n", stale);
+    debugs(33, 2, "clientCacheHit: refreshCheckHTTPStale returned %d", stale);
     if (stale == 0) {
-	debug(33, 2) ("clientCacheHit: HIT\n");
+	debugs(33, 2, "clientCacheHit: HIT");
     } else if (stale == -1 && Config.refresh_stale_window > 0 && e->mem_obj->refresh_timestamp + Config.refresh_stale_window > squid_curtime) {
-	debug(33, 2) ("clientCacheHit: refresh_stale HIT\n");
+	debugs(33, 2, "clientCacheHit: refresh_stale HIT");
 	http->log_type = LOG_TCP_STALE_HIT;
 	stale = 0;
     } else if (stale == -2 && e->mem_obj->refresh_timestamp + e->mem_obj->stale_while_revalidate >= squid_curtime) {
-	debug(33, 2) ("clientCacheHit: stale-while-revalidate HIT\n");
+	debugs(33, 2, "clientCacheHit: stale-while-revalidate HIT");
 	http->log_type = LOG_TCP_STALE_HIT;
 	stale = 0;
     } else if (stale && http->flags.internal) {
-	debug(33, 2) ("clientCacheHit: internal HIT\n");
+	debugs(33, 2, "clientCacheHit: internal HIT");
 	stale = 0;
     } else if (stale && Config.onoff.offline) {
-	debug(33, 2) ("clientCacheHit: offline HIT\n");
+	debugs(33, 2, "clientCacheHit: offline HIT");
 	http->log_type = LOG_TCP_OFFLINE_HIT;
 	stale = 0;
     } else if (stale == -2 && !clientOnlyIfCached(http)) {
-	debug(33, 2) ("clientCacheHit: stale-while-revalidate needs revalidation\n");
+	debugs(33, 2, "clientCacheHit: stale-while-revalidate needs revalidation");
 	clientAsyncRefresh(http);
 	http->log_type = LOG_TCP_STALE_HIT;
 	stale = 0;
     }
     http->is_modified = is_modified;
     if (stale) {
-	debug(33, 5) ("clientCacheHit: in refreshCheck() block\n");
+	debugs(33, 5, "clientCacheHit: in refreshCheck() block");
 	/*
 	 * We hold a stale copy; it needs to be validated
 	 */
@@ -1284,7 +1286,7 @@ clientMaxBodySize(request_t * request, clientHttpRequest * http, HttpReply * rep
 	    /* Allow - use this entry */
 	    http->maxBodySize = bs->maxsize;
 	    bs = NULL;
-	    debug(58, 3) ("clientMaxBodySize: Setting maxBodySize to %ld\n", (long int) http->maxBodySize);
+	    debugs(58, 3, "clientMaxBodySize: Setting maxBodySize to %ld", (long int) http->maxBodySize);
 	}
 	aclChecklistFree(checklist);
     }
@@ -1314,7 +1316,7 @@ clientDelayMaxBodySize(request_t * request, clientHttpRequest * http, HttpReply 
 	    http->delayMaxBodySize = dbs->maxsize;
 	    http->delayAssignedPool = dbs->pool;
 	    dbs = NULL;
-	    debug(58, 3) ("clientDelayMaxBodySize: Setting delayMaxBodySize to %ld\n",
+	    debugs(58, 3, "clientDelayMaxBodySize: Setting delayMaxBodySize to %ld",
 		(long int) http->delayMaxBodySize);
 	}
 	aclChecklistFree(checklist);
@@ -1373,7 +1375,7 @@ clientMaxRequestBodyDelayForwardSize(request_t * request, clientHttpRequest * ht
 	    /* Allow - use this entry */
 	    http->maxRequestBodyDelayForwardSize = bs->maxsize;
 	    bs = NULL;
-	    debug(33, 2) ("clientMaxRequestBodyDelayForwardSize: Setting maxRequestBodyDelayForwardSize to %ld\n", (long int) http->maxRequestBodyDelayForwardSize);
+	    debugs(33, 2, "clientMaxRequestBodyDelayForwardSize: Setting maxRequestBodyDelayForwardSize to %ld", (long int) http->maxRequestBodyDelayForwardSize);
 	}
 	aclChecklistFree(checklist);
     }
@@ -1464,11 +1466,11 @@ clientSendHeaders(void *data, HttpReply * rep)
     assert(http->request != NULL);
     dlinkDelete(&http->active, &ClientActiveRequests);
     dlinkAdd(http, &http->active, &ClientActiveRequests);
-    debug(33, 5) ("clientSendHeaders: FD %d '%s'\n", fd, storeUrl(entry));
+    debugs(33, 5, "clientSendHeaders: FD %d '%s'", fd, storeUrl(entry));
     assert(conn->reqs.head != NULL);
     if (DLINK_HEAD(conn->reqs) != http) {
 	/* there is another object in progress, defer this one */
-	debug(33, 2) ("clientSendHeaders: Deferring %s\n", storeUrl(entry));
+	debugs(33, 2, "clientSendHeaders: Deferring %s", storeUrl(entry));
 	return;
     } else if (http->request->flags.reset_tcp) {
 	comm_reset_close(fd);
@@ -1518,7 +1520,7 @@ clientSendHeaders(void *data, HttpReply * rep)
      * - [ahc]
      */
     http->range_iter.prefix_size = rep->hdr_sz;
-    debug(33, 3) ("clientSendHeaders: %d bytes of headers\n", rep->hdr_sz);
+    debugs(33, 3, "clientSendHeaders: %d bytes of headers", rep->hdr_sz);
     clientHttpLocationRewriteCheck(http);
 }
 
@@ -1551,7 +1553,7 @@ static void
 clientHttpReplyAccessCheckDone(int answer, void *data)
 {
     clientHttpRequest *http = data;
-    debug(33, 2) ("The reply for %s %s is %s, because it matched '%s'\n",
+    debugs(33, 2, "The reply for %s %s is %s, because it matched '%s'",
 	urlMethodGetConstStr(http->request->method), http->uri,
 	answer ? "ALLOWED" : "DENIED",
 	AclMatchedName ? AclMatchedName : "NO ACL's");
@@ -1655,7 +1657,7 @@ clientCheckHeaderDone(clientHttpRequest * http)
 	}
 	mb = httpReplyPack(rep);
     } else {
-	debug(33, 2) ("HTTP/0.9 response, disable everything\n");
+	debugs(33, 2, "HTTP/0.9 response, disable everything");
 	http->request->flags.chunked_response = 0;
 	http->request->flags.proxy_keepalive = 0;
 	memBufDefInit(&mb);
@@ -1707,18 +1709,18 @@ clientSendMoreData(void *data, mem_node_ref ref, ssize_t size)
     ConnStateData *conn = http->conn;
     int fd = conn->fd;
     MemBuf mb;
-    debug(33, 5) ("clientSendMoreData: %s, %d bytes\n", http->uri, (int) size);
+    debugs(33, 5, "clientSendMoreData: %s, %d bytes", http->uri, (int) size);
     assert(size + ref.offset <= SM_PAGE_SIZE);
     assert(size <= SM_PAGE_SIZE);
     assert(http->request != NULL);
     dlinkDelete(&http->active, &ClientActiveRequests);
     dlinkAdd(http, &http->active, &ClientActiveRequests);
-    debug(33, 5) ("clientSendMoreData: FD %d '%s', out.offset=%d \n",
+    debugs(33, 5, "clientSendMoreData: FD %d '%s', out.offset=%d ",
 	fd, storeUrl(entry), (int) http->out.offset);
     assert(conn->reqs.head != NULL);
     if (DLINK_HEAD(conn->reqs) != http) {
 	/* there is another object in progress, defer this one */
-	debug(33, 1) ("clientSendMoreData: Deferring %s\n", storeUrl(entry));
+	debugs(33, 1, "clientSendMoreData: Deferring %s", storeUrl(entry));
 	stmemNodeUnref(&ref);
 	return;
     } else if (size < 0) {
@@ -1808,11 +1810,11 @@ clientKeepaliveNextRequest(clientHttpRequest * http)
 {
     ConnStateData *conn = http->conn;
     StoreEntry *entry;
-    debug(33, 3) ("clientKeepaliveNextRequest: FD %d\n", conn->fd);
+    debugs(33, 3, "clientKeepaliveNextRequest: FD %d", conn->fd);
     conn->defer.until = 0;	/* Kick it to read a new request */
     httpRequestFree(http);
     if (conn->pinning.pinned && conn->pinning.fd == -1) {
-	debug(33, 2) ("clientKeepaliveNextRequest: FD %d Connection was pinned but server side gone. Terminating client connection\n", conn->fd);
+	debugs(33, 2, "clientKeepaliveNextRequest: FD %d Connection was pinned but server side gone. Terminating client connection", conn->fd);
 	comm_close(conn->fd);
 	return;
     }
@@ -1821,7 +1823,7 @@ clientKeepaliveNextRequest(clientHttpRequest * http)
 	http = DLINK_HEAD(conn->reqs);
     }
     if (http == NULL) {
-	debug(33, 5) ("clientKeepaliveNextRequest: FD %d reading next req\n",
+	debugs(33, 5, "clientKeepaliveNextRequest: FD %d reading next req",
 	    conn->fd);
 	fd_note_static(conn->fd, "Waiting for next request");
 	/*
@@ -1841,12 +1843,12 @@ clientKeepaliveNextRequest(clientHttpRequest * http)
 	if (http->request->method->code == METHOD_CONNECT)
 	    clientCheckFollowXForwardedFor(http);
     } else {
-	debug(33, 2) ("clientKeepaliveNextRequest: FD %d Sending next\n",
+	debugs(33, 2, "clientKeepaliveNextRequest: FD %d Sending next",
 	    conn->fd);
 	assert(entry);
 	if (0 == storeClientCopyPending(http->sc, entry, http)) {
 	    if (EBIT_TEST(entry->flags, ENTRY_ABORTED))
-		debug(33, 0) ("clientKeepaliveNextRequest: ENTRY_ABORTED\n");
+		debugs(33, 0, "clientKeepaliveNextRequest: ENTRY_ABORTED");
 	    storeClientCopyHeaders(http->sc, entry,
 		clientSendHeaders,
 		http);
@@ -1861,7 +1863,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
     StoreEntry *entry = http->entry;
     int done;
     http->out.size += size;
-    debug(33, 5) ("clientWriteComplete: FD %d, sz %d, err %d, off %" PRINTF_OFF_T ", len %" PRINTF_OFF_T "\n",
+    debugs(33, 5, "clientWriteComplete: FD %d, sz %d, err %d, off %" PRINTF_OFF_T ", len %" PRINTF_OFF_T "",
 	fd, (int) size, errflag, http->out.offset, entry ? objectLen(entry) : (squid_off_t) 0);
     if (size > 0) {
 	kb_incr(&statCounter.client_http.kbytes_out, size);
@@ -1870,20 +1872,20 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
     }
 #if SIZEOF_SQUID_OFF_T <= 4
     if (http->out.size > 0x7FFF0000) {
-	debug(33, 1) ("WARNING: closing FD %d to prevent counter overflow\n", fd);
-	debug(33, 1) ("\tclient %s\n", inet_ntoa(http->conn->peer.sin_addr));
-	debug(33, 1) ("\treceived %d bytes\n", (int) http->out.size);
-	debug(33, 1) ("\tURI %s\n", http->uri);
+	debugs(33, 1, "WARNING: closing FD %d to prevent counter overflow", fd);
+	debugs(33, 1, "\tclient %s", inet_ntoa(http->conn->peer.sin_addr));
+	debugs(33, 1, "\treceived %d bytes", (int) http->out.size);
+	debugs(33, 1, "\tURI %s", http->uri);
 	comm_close(fd);
     } else
 #endif
 #if SIZEOF_SQUID_OFF_T <= 4
     if (http->out.offset > 0x7FFF0000) {
-	debug(33, 1) ("WARNING: closing FD %d to prevent counter overflow\n", fd);
-	debug(33, 1) ("\tclient %s\n", inet_ntoa(http->conn->peer.sin_addr));
-	debug(33, 1) ("\treceived %d bytes (offset %d)\n", (int) http->out.size,
+	debugs(33, 1, "WARNING: closing FD %d to prevent counter overflow", fd);
+	debugs(33, 1, "\tclient %s", inet_ntoa(http->conn->peer.sin_addr));
+	debugs(33, 1, "\treceived %d bytes (offset %d)", (int) http->out.size,
 	    (int) http->out.offset);
-	debug(33, 1) ("\tURI %s\n", http->uri);
+	debugs(33, 1, "\tURI %s", http->uri);
 	comm_close(fd);
     } else
 #endif
@@ -1895,23 +1897,23 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
     } else if (NULL == entry) {
 	comm_close(fd);		/* yuk */
     } else if ((done = clientCheckTransferDone(http)) != 0 || size == 0) {
-	debug(33, 5) ("clientWriteComplete: FD %d transfer is DONE\n", fd);
+	debugs(33, 5, "clientWriteComplete: FD %d transfer is DONE", fd);
 	/* We're finished case */
 	if (!done) {
-	    debug(33, 5) ("clientWriteComplete: closing, !done\n");
+	    debugs(33, 5, "clientWriteComplete: closing, !done");
 	    comm_close(fd);
 	} else if (clientGotNotEnough(http)) {
-	    debug(33, 5) ("clientWriteComplete: client didn't get all it expected\n");
+	    debugs(33, 5, "clientWriteComplete: client didn't get all it expected");
 	    comm_close(fd);
 	} else if (EBIT_TEST(http->entry->flags, ENTRY_ABORTED)) {
-	    debug(33, 5) ("clientWriteComplete: aborted object\n");
+	    debugs(33, 5, "clientWriteComplete: aborted object");
 	    comm_close(fd);
 	} else if (http->request->flags.chunked_response) {
 	    /* Finish chunked transfer encoding */
 	    http->request->flags.chunked_response = 0;	/* no longer chunking */
 	    comm_write(http->conn->fd, "0\r\n\r\n", 5, clientWriteComplete, http, NULL);
 	} else if (http->request->body_reader == clientReadBody) {
-	    debug(33, 5) ("clientWriteComplete: closing, but first we need to read the rest of the request\n");
+	    debugs(33, 5, "clientWriteComplete: closing, but first we need to read the rest of the request");
 	    /* XXX We assumes the reply does fit in the TCP transmit window.
 	     * If not the connection may stall while sending the reply
 	     * (before reaching here) if the client does not try to read the
@@ -1920,7 +1922,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	     */
 	    clientEatRequestBody(http);
 	} else if (http->request->flags.proxy_keepalive) {
-	    debug(33, 5) ("clientWriteComplete: FD %d Keeping Alive\n", fd);
+	    debugs(33, 5, "clientWriteComplete: FD %d Keeping Alive", fd);
 	    clientKeepaliveNextRequest(http);
 	} else {
 	    comm_close(fd);
@@ -1930,9 +1932,9 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 	comm_close(fd);
     } else {
 #if DELAY_POOLS
-	debug(33, 5) ("clientWriteComplete : Normal\n");
+	debugs(33, 5, "clientWriteComplete : Normal");
 	if (clientDelayBodyTooLarge(http, http->out.offset - 4096)) {
-	    debug(33, 5) ("clientWriteComplete: we should put this into the pool: DelayId=%i\n",
+	    debugs(33, 5, "clientWriteComplete: we should put this into the pool: DelayId=%i",
 		http->sc->delay_id);
 	    delayUnregisterDelayIdPtr(&http->sc->delay_id);
 	    delaySetStoreClient(http->sc, delayPoolClient(http->delayAssignedPool,
@@ -1941,7 +1943,7 @@ clientWriteComplete(int fd, char *bufnotused, size_t size, int errflag, void *da
 #endif
 	/* More data will be coming from primary server; register with 
 	 * storage manager. */
-	debug(33, 3) ("clientWriteComplete: copying from offset %d\n", (int) http->out.offset);
+	debugs(33, 3, "clientWriteComplete: copying from offset %d", (int) http->out.offset);
 	storeClientRef(http->sc, entry,
 	    http->out.offset,
 	    http->out.offset,
@@ -1964,7 +1966,7 @@ clientProcessOnlyIfCachedMiss(clientHttpRequest * http)
     request_t *r = http->request;
     ErrorState *err = NULL;
     http->flags.hit = 0;
-    debug(33, 4) ("clientProcessOnlyIfCachedMiss: '%s %s'\n",
+    debugs(33, 4, "clientProcessOnlyIfCachedMiss: '%s %s'",
 	urlMethodGetConstStr(r->method), url);
     http->al.http.code = HTTP_GATEWAY_TIMEOUT;
     err = errorCon(ERR_ONLY_IF_CACHED_MISS, HTTP_GATEWAY_TIMEOUT, http->orig_request);
@@ -2019,12 +2021,12 @@ clientProcessRequest2(clientHttpRequest * http)
 #endif
     if (NULL == e) {
 	/* this object isn't in the cache */
-	debug(33, 3) ("clientProcessRequest2: storeGet() MISS\n");
+	debugs(33, 3, "clientProcessRequest2: storeGet() MISS");
 	if (r->vary) {
 	    if (r->done_etag) {
-		debug(33, 2) ("clientProcessRequest2: ETag loop\n");
+		debugs(33, 2, "clientProcessRequest2: ETag loop");
 	    } else if (r->etags) {
-		debug(33, 2) ("clientProcessRequest2: ETag miss\n");
+		debugs(33, 2, "clientProcessRequest2: ETag miss");
 		r->etags = NULL;
 	    } else if (r->vary->etags.count > 0) {
 		r->etags = &r->vary->etags;
@@ -2033,7 +2035,7 @@ clientProcessRequest2(clientHttpRequest * http)
 	return LOG_TCP_MISS;
     }
     if (Config.onoff.offline) {
-	debug(33, 3) ("clientProcessRequest2: offline HIT\n");
+	debugs(33, 3, "clientProcessRequest2: offline HIT");
 	http->entry = e;
 	return LOG_TCP_HIT;
     }
@@ -2043,7 +2045,7 @@ clientProcessRequest2(clientHttpRequest * http)
 	return LOG_TCP_MISS;
     }
     if (!storeEntryValidToSend(e)) {
-	debug(33, 3) ("clientProcessRequest2: !storeEntryValidToSend MISS\n");
+	debugs(33, 3, "clientProcessRequest2: !storeEntryValidToSend MISS");
 	http->entry = NULL;
 	return LOG_TCP_MISS;
     }
@@ -2052,12 +2054,12 @@ clientProcessRequest2(clientHttpRequest * http)
     }
     if (EBIT_TEST(e->flags, ENTRY_SPECIAL)) {
 	/* Special entries are always hits, no matter what the client says */
-	debug(33, 3) ("clientProcessRequest2: ENTRY_SPECIAL HIT\n");
+	debugs(33, 3, "clientProcessRequest2: ENTRY_SPECIAL HIT");
 	http->entry = e;
 	return LOG_TCP_HIT;
     }
     if (r->flags.nocache) {
-	debug(33, 3) ("clientProcessRequest2: no-cache REFRESH MISS\n");
+	debugs(33, 3, "clientProcessRequest2: no-cache REFRESH MISS");
 	http->entry = NULL;
 	return LOG_TCP_CLIENT_REFRESH_MISS;
     }
@@ -2070,15 +2072,15 @@ clientProcessRequest2(clientHttpRequest * http)
 	 * Range request that is also a HIT. Thus, let's prevent HITs
 	 * on complex Range requests
 	 */
-	debug(33, 3) ("clientProcessRequest2: complex range MISS\n");
+	debugs(33, 3, "clientProcessRequest2: complex range MISS");
 	http->entry = NULL;
 	return LOG_TCP_MISS;
     } else if (clientCheckRangeForceMiss(e, r->range)) {
-	debug(33, 3) ("clientProcessRequest2: forcing miss due to range_offset_limit\n");
+	debugs(33, 3, "clientProcessRequest2: forcing miss due to range_offset_limit");
 	http->entry = NULL;
 	return LOG_TCP_MISS;
     }
-    debug(33, 3) ("clientProcessRequest2: default HIT\n");
+    debugs(33, 3, "clientProcessRequest2: default HIT");
     http->entry = e;
     return LOG_TCP_HIT;
 }
@@ -2117,7 +2119,7 @@ clientProcessRequest(clientHttpRequest * http)
     char *url = http->uri;
     request_t *r = http->request;
     HttpReply *rep;
-    debug(33, 4) ("clientProcessRequest: %s '%s'\n", urlMethodGetConstStr(r->method), url);
+    debugs(33, 4, "clientProcessRequest: %s '%s'", urlMethodGetConstStr(r->method), url);
     r->flags.collapsed = 0;
     if (httpHeaderHas(&r->header, HDR_EXPECT)) {
 	int ignore = 0;
@@ -2168,7 +2170,7 @@ clientProcessRequest(clientHttpRequest * http)
     } else {
 	http->log_type = clientProcessRequest2(http);
     }
-    debug(33, 4) ("clientProcessRequest: %s for '%s'\n",
+    debugs(33, 4, "clientProcessRequest: %s for '%s'",
 	log_tags[http->log_type],
 	http->uri);
     http->out.offset = 0;
@@ -2222,7 +2224,7 @@ clientBeginForwarding(clientHttpRequest * http)
 
     /* XXX should we ensure we only try beginning forwarding once? */
     assert(r->flags.delayed == 0);
-    debug(33, 2) ("clientBeginForwarding: %p: begin forwarding request\n", http);
+    debugs(33, 2, "clientBeginForwarding: %p: begin forwarding request", http);
     fwdStart(http->conn->fd, http->entry, r);
 }
 
@@ -2252,7 +2254,7 @@ clientCheckBeginForwarding(clientHttpRequest * http)
 
     bytes_read = http->conn->in.offset;
     bytes_left = r->content_length - bytes_read;
-    debug(33, 2) ("clientCheckBeginForwarding: request %p: request body size %d; read %d bytes; %d bytes to go\n", r, (int) r->content_length, bytes_read, bytes_left);
+    debugs(33, 2, "clientCheckBeginForwarding: request %p: request body size %d; read %d bytes; %d bytes to go", r, (int) r->content_length, bytes_read, bytes_left);
 
     bytes_to_delay = clientMaxRequestBodyDelayForwardSize(r, http);
 
@@ -2280,7 +2282,7 @@ clientProcessMiss(clientHttpRequest * http)
     char *url = http->uri;
     request_t *r = http->request;
     ErrorState *err = NULL;
-    debug(33, 4) ("clientProcessMiss: '%s %s'\n", urlMethodGetConstStr(r->method), url);
+    debugs(33, 4, "clientProcessMiss: '%s %s'", urlMethodGetConstStr(r->method), url);
     http->flags.hit = 0;
     r->flags.collapsed = 0;
     /*
@@ -2289,8 +2291,8 @@ clientProcessMiss(clientHttpRequest * http)
      */
     if (http->entry) {
 	if (EBIT_TEST(http->entry->flags, ENTRY_SPECIAL)) {
-	    debug(33, 0) ("clientProcessMiss: miss on a special object (%s).\n", url);
-	    debug(33, 0) ("\tlog_type = %s\n", log_tags[http->log_type]);
+	    debugs(33, 0, "clientProcessMiss: miss on a special object (%s).", url);
+	    debugs(33, 0, "\tlog_type = %s", log_tags[http->log_type]);
 	    storeEntryDump(http->entry, 1);
 	}
 	/* touch timestamp for refresh_stale_hit */
@@ -2356,7 +2358,7 @@ clientProcessMiss(clientHttpRequest * http)
      * If so, set the "connection forwarding delayed" flag.
      */
     if (r->content_length > 0) {
-	debug(33, 2) ("clientProcessMiss: request %p: time to consider delaying\n", r);
+	debugs(33, 2, "clientProcessMiss: request %p: time to consider delaying", r);
 	r->flags.delayed = 1;
 	http->conn->body.delayed = 1;
 	http->conn->body.delay_http = http;
@@ -2399,17 +2401,17 @@ clientReadRequest(int fd, void *data)
     fde *F = &fd_table[fd];
     int len = conn->in.size - conn->in.offset - 1;
     int ret;
-    debug(33, 4) ("clientReadRequest: FD %d: reading request...\n", fd);
+    debugs(33, 4, "clientReadRequest: FD %d: reading request...", fd);
     if (len == 0) {
 	/* Grow the request memory area to accomodate for a large request */
 	conn->in.buf = memReallocBuf(conn->in.buf, conn->in.size * 2, &conn->in.size);
-	debug(33, 2) ("growing request buffer: offset=%ld size=%ld\n",
+	debugs(33, 2, "growing request buffer: offset=%ld size=%ld",
 	    (long) conn->in.offset, (long) conn->in.size);
 	len = conn->in.size - conn->in.offset - 1;
     }
     CommStats.syscalls.sock.reads++;
     size = FD_READ_METHOD(fd, conn->in.buf + conn->in.offset, len);
-    debug(33, 4) ("clientReadRequest: FD %d: read %d bytes\n", fd, size);
+    debugs(33, 4, "clientReadRequest: FD %d: read %d bytes", fd, size);
     if (size > 0) {
 	fd_bytes(fd, size, FD_READ);
 	kb_incr(&statCounter.client_http.kbytes_in, size);
@@ -2427,17 +2429,17 @@ clientReadRequest(int fd, void *data)
     } else if (size == 0) {
 	if (DLINK_ISEMPTY(conn->reqs) && conn->in.offset == 0) {
 	    /* no current or pending requests */
-	    debug(33, 4) ("clientReadRequest: FD %d closed\n", fd);
+	    debugs(33, 4, "clientReadRequest: FD %d closed", fd);
 	    comm_close(fd);
 	    return;
 	} else if (!Config.onoff.half_closed_clients) {
 	    /* admin doesn't want to support half-closed client sockets */
-	    debug(33, 3) ("clientReadRequest: FD %d aborted (half_closed_clients disabled)\n", fd);
+	    debugs(33, 3, "clientReadRequest: FD %d aborted (half_closed_clients disabled)", fd);
 	    comm_close(fd);
 	    return;
 	}
 	/* It might be half-closed, we can't tell */
-	debug(33, 5) ("clientReadRequest: FD %d closed?\n", fd);
+	debugs(33, 5, "clientReadRequest: FD %d closed?", fd);
 	F->flags.socket_eof = 1;
 	conn->defer.until = squid_curtime + 1;
 	conn->defer.n++;
@@ -2449,11 +2451,11 @@ clientReadRequest(int fd, void *data)
 	/* Continue to process previously read data */
     } else if (size < 0) {
 	if (!ignoreErrno(errno)) {
-	    debug(50, 2) ("clientReadRequest: FD %d: %s\n", fd, xstrerror());
+	    debugs(50, 2, "clientReadRequest: FD %d: %s", fd, xstrerror());
 	    comm_close(fd);
 	    return;
 	} else if (conn->in.offset == 0) {
-	    debug(50, 2) ("clientReadRequest: FD %d: no data to process (%s)\n", fd, xstrerror());
+	    debugs(50, 2, "clientReadRequest: FD %d: no data to process (%s)", fd, xstrerror());
 	}
 	/* Continue to process previously read data */
     }
@@ -2488,13 +2490,13 @@ clientReadRequest(int fd, void *data)
     if (F->flags.socket_eof) {
 	if (conn->in.offset != conn->body.size_left) {	/* != 0 when no request body */
 	    /* Partial request received. Abort client connection! */
-	    debug(33, 3) ("clientReadRequest: FD %d aborted, partial request\n", fd);
+	    debugs(33, 3, "clientReadRequest: FD %d aborted, partial request", fd);
 	    comm_close(fd);
 	    return;
 	}
     }
     if (ret >= 0) {
-	debug(33, 9) ("clientReadRequest: FD %d: re-registering for another read\n", fd);
+	debugs(33, 9, "clientReadRequest: FD %d: re-registering for another read", fd);
 	commSetSelect(fd, COMM_SELECT_READ, clientReadRequest, conn, 0);
     }
 }
@@ -2511,7 +2513,7 @@ requestTimeout(int fd, void *data)
      * the open has already been completed on another
      * connection)
      */
-    debug(33, 3) ("requestTimeout: FD %d: lifetime is expired.\n", fd);
+    debugs(33, 3, "requestTimeout: FD %d: lifetime is expired.", fd);
     comm_close(fd);
 }
 
@@ -2520,9 +2522,9 @@ clientLifetimeTimeout(int fd, void *data)
 {
     clientHttpRequest *http = data;
     ConnStateData *conn = http->conn;
-    debug(33, 1) ("WARNING: Closing client %s connection due to lifetime timeout\n",
+    debugs(33, 1, "WARNING: Closing client %s connection due to lifetime timeout",
 	inet_ntoa(conn->peer.sin_addr));
-    debug(33, 1) ("\t%s\n", http->uri);
+    debugs(33, 1, "\t%s", http->uri);
     comm_close(fd);
 }
 
@@ -2533,7 +2535,7 @@ httpAcceptDefer(int fd, void *dataunused)
     if (fdNFree() >= RESERVED_FD)
 	return 0;
     if (last_warn + 15 < squid_curtime) {
-	debug(33, 0) ("WARNING! Your cache is running out of filedescriptors\n");
+	debugs(33, 0, "WARNING! Your cache is running out of filedescriptors");
 	last_warn = squid_curtime;
     }
     commDeferFD(fd);
@@ -2560,14 +2562,14 @@ httpAccept(int sock, void *data)
         sqinet_init(&me);
 	if ((fd = comm_accept(sock, &peer, &me)) < 0) {
 	    if (!ignoreErrno(errno))
-		debug(50, 1) ("httpAccept: FD %d: accept failure: %s\n",
+		debugs(50, 1, "httpAccept: FD %d: accept failure: %s",
 		    sock, xstrerror());
             sqinet_done(&peer);
             sqinet_done(&me);
             break;
 	}
         if (sqinet_get_family(&peer) != AF_INET) {
-            debug(1, 1) ("httpAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
+            debugs(1, 1, "httpAccept: FD %d: (%s:%d) is not an IPv4 socket!", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
             comm_close(fd);
             sqinet_done(&peer);
             sqinet_done(&me);
@@ -2575,7 +2577,7 @@ httpAccept(int sock, void *data)
        }
 
 	F = &fd_table[fd];
-	debug(33, 4) ("httpAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
+	debugs(33, 4, "httpAccept: FD %d: accepted port %d client %s:%d", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	fd_note_static(fd, "client http connect");
 	connState = connStateCreate(fd, &peer, &me);
         connState->port = s;
@@ -2626,7 +2628,7 @@ clientNegotiateSSL(int fd, void *data)
 	    return;
 	case SSL_ERROR_SYSCALL:
 	    if (ret == 0) {
-		debug(83, 2) ("clientNegotiateSSL: Error negotiating SSL connection on FD %d: Aborted by client\n", fd);
+		debugs(83, 2, "clientNegotiateSSL: Error negotiating SSL connection on FD %d: Aborted by client", fd);
 		comm_close(fd);
 		return;
 	    } else {
@@ -2639,11 +2641,11 @@ clientNegotiateSSL(int fd, void *data)
 		return;
 	    }
 	case SSL_ERROR_ZERO_RETURN:
-	    debug(83, 1) ("clientNegotiateSSL: Error negotiating SSL connection on FD %d: Closed by client\n", fd);
+	    debugs(83, 1, "clientNegotiateSSL: Error negotiating SSL connection on FD %d: Closed by client", fd);
 	    comm_close(fd);
 	    return;
 	default:
-	    debug(83, 1) ("clientNegotiateSSL: Error negotiating SSL connection on FD %d: %s (%d/%d)\n",
+	    debugs(83, 1, "clientNegotiateSSL: Error negotiating SSL connection on FD %d: %s (%d/%d)",
 		fd, ERR_error_string(ERR_get_error(), NULL), ssl_error, ret);
 	    comm_close(fd);
 	    return;
@@ -2652,7 +2654,7 @@ clientNegotiateSSL(int fd, void *data)
     }
     fd_table[fd].read_pending = COMM_PENDING_NOW;
     if (SSL_session_reused(ssl)) {
-	debug(83, 2) ("clientNegotiateSSL: Session %p reused on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
+	debugs(83, 2, "clientNegotiateSSL: Session %p reused on FD %d (%s:%d)", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
     } else {
 	if (do_debug(83, 4)) {
 	    /* Write out the SSL session details.. actually the call below, but
@@ -2665,22 +2667,22 @@ clientNegotiateSSL(int fd, void *data)
 #endif
 	    /* Note: This does not automatically fflush the log file.. */
 	}
-	debug(83, 2) ("clientNegotiateSSL: New session %p on FD %d (%s:%d)\n", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
+	debugs(83, 2, "clientNegotiateSSL: New session %p on FD %d (%s:%d)", SSL_get_session(ssl), fd, fd_table[fd].ipaddrstr, (int) fd_table[fd].remote_port);
     }
-    debug(83, 3) ("clientNegotiateSSL: FD %d negotiated cipher %s\n", fd,
+    debugs(83, 3, "clientNegotiateSSL: FD %d negotiated cipher %s", fd,
 	SSL_get_cipher(ssl));
 
     client_cert = SSL_get_peer_certificate(ssl);
     if (client_cert != NULL) {
-	debug(83, 3) ("clientNegotiateSSL: FD %d client certificate: subject: %s\n", fd,
+	debugs(83, 3, "clientNegotiateSSL: FD %d client certificate: subject: %s", fd,
 	    X509_NAME_oneline(X509_get_subject_name(client_cert), 0, 0));
 
-	debug(83, 3) ("clientNegotiateSSL: FD %d client certificate: issuer: %s\n", fd,
+	debugs(83, 3, "clientNegotiateSSL: FD %d client certificate: issuer: %s", fd,
 	    X509_NAME_oneline(X509_get_issuer_name(client_cert), 0, 0));
 
 	X509_free(client_cert);
     } else {
-	debug(83, 5) ("clientNegotiateSSL: FD %d has no certificate.\n", fd);
+	debugs(83, 5, "clientNegotiateSSL: FD %d has no certificate.", fd);
     }
     clientReadRequest(fd, conn);
 }
@@ -2693,7 +2695,7 @@ httpsAcceptSSL(ConnStateData * connState, SSL_CTX * sslContext)
     int fd = connState->fd;
     if ((ssl = SSL_new(sslContext)) == NULL) {
 	int ssl_error = ERR_get_error();
-	debug(83, 1) ("httpsAcceptSSL: Error allocating handle: %s\n",
+	debugs(83, 1, "httpsAcceptSSL: Error allocating handle: %s",
 	    ERR_error_string(ssl_error, NULL));
 	comm_close(fd);
 	return;
@@ -2703,7 +2705,7 @@ httpsAcceptSSL(ConnStateData * connState, SSL_CTX * sslContext)
     F->ssl = ssl;
     F->read_method = &ssl_read_method;
     F->write_method = &ssl_write_method;
-    debug(50, 5) ("httpsAcceptSSL: FD %d: starting SSL negotiation.\n", fd);
+    debugs(50, 5, "httpsAcceptSSL: FD %d: starting SSL negotiation.", fd);
     fd_note_static(fd, "client https connect");
 
     commSetSelect(fd, COMM_SELECT_READ, clientNegotiateSSL, connState, 0);
@@ -2730,14 +2732,14 @@ httpsAccept(int sock, void *data)
 	sqinet_init(&me);
 	if ((fd = comm_accept(sock, &peer, &me)) < 0) {
 	    if (!ignoreErrno(errno))
-		debug(50, 1) ("httpsAccept: FD %d: accept failure: %s\n",
+		debugs(50, 1, "httpsAccept: FD %d: accept failure: %s",
 		    sock, xstrerror());
             sqinet_done(&peer);
             sqinet_done(&me);
 	    break;
 	}
         if (sqinet_get_family(&peer) != AF_INET) {
-            debug(1, 1) ("httpsAccept: FD %d: (%s:%d) is not an IPv4 socket!\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
+            debugs(1, 1, "httpsAccept: FD %d: (%s:%d) is not an IPv4 socket!", fd, fd_table[fd].ipaddrstr, fd_table[fd].local_port);
             comm_close(fd);
             sqinet_done(&peer);
             sqinet_done(&me);
@@ -2745,7 +2747,7 @@ httpsAccept(int sock, void *data)
        }
 
 	F = &fd_table[fd];
-	debug(33, 4) ("httpsAccept: FD %d: accepted port %d client %s:%d\n", fd, F->local_port, F->ipaddrstr, F->remote_port);
+	debugs(33, 4, "httpsAccept: FD %d: accepted port %d client %s:%d", fd, F->local_port, F->ipaddrstr, F->remote_port);
 	connState = connStateCreate(fd, &peer, &me);
 	connState->port = (http_port_list *) s;
 	cbdataLock(connState->port);
@@ -2892,55 +2894,58 @@ checkFailureRatio(err_type etype, hier_code hcode)
 	return;
     if (request_failure_ratio < 1.0)
 	return;
-    debug(33, 0) ("Failure Ratio at %4.2f\n", request_failure_ratio);
-    debug(33, 0) ("Going into hit-only-mode for %d minutes...\n",
+    debugs(33, 0, "Failure Ratio at %4.2f", request_failure_ratio);
+    debugs(33, 0, "Going into hit-only-mode for %d minutes...",
 	FAILURE_MODE_TIME / 60);
     hit_only_mode_until = squid_curtime + FAILURE_MODE_TIME;
     request_failure_ratio = 0.8;	/* reset to something less than 1.0 */
 }
 
-static void
-clientHttpConnectionsOpen(void)
+
+/// check FD after clientHttp[s]ConnectionOpened, adjust HttpSockets as needed
+static int OpenedHttpSocket(int fd, int fdnote)
 {
-    http_port_list *s;
-    int fd;
-    int comm_flags;
-    for (s = Config.Sockaddr.http; s; s = s->next) {
-	comm_flags = COMM_NONBLOCKING;
-	if (s->tproxy)
-		comm_flags |= COMM_TPROXY_LCL;
+    if (fd < 0) {
+        assert(NHttpSockets > 0); // we tried to open some
+        --NHttpSockets; // there will be fewer sockets than planned
+        assert(HttpSockets[NHttpSockets] < 0); // no extra fds received
+
+        if (!NHttpSockets) // we could not open any listen sockets at all
+            fatalf("Unable to open %s",IpcFdNote(fdnote));
+
+        return 0;
+    }
+    return 1;
+}
+
+/// find any unused HttpSockets[] slot and store fd there or return false
+static int
+AddOpenedHttpSocket(int fd)
+{
+    int found = 0;
+    int i = 0;
+    for (; i < NHttpSockets && !found; ++i) {
+        if ((found = HttpSockets[i] < 0))
+            HttpSockets[i] = fd;
+    }
+    return found;
+}
+
+static void
+clientHttpConnectionsOpened(int fd, void* data)
+{
+    http_port_list *s = data;
+
+	debugs(33, 1, "clientHttpConnectionsOpened, fd:%d, %s:%d", fd, inet_ntoa(s->s.sin_addr), (int)ntohs(s->s.sin_port));
+
+	if(!OpenedHttpSocket(fd, fdnHttpSocket)) return;
+	
 	if (MAXHTTPPORTS == NHttpSockets) {
-	    debug(1, 1) ("WARNING: You have too many 'http_port' lines.\n");
-	    debug(1, 1) ("         The limit is %d\n", MAXHTTPPORTS);
-	    continue;
-	}
-	if ((NHttpSockets == 0) && opt_stdin_overrides_http_port) {
-	    fd = 0;
-	    if (reconfiguring) {
-		/* this one did not get closed, just reuse it */
-		HttpSockets[NHttpSockets++] = fd;
-		continue;
-	    }
-	    comm_fdopen(fd,
-		SOCK_STREAM,
-		no_addr,
-		ntohs(s->s.sin_port),
-		comm_flags,
-		COMM_TOS_DEFAULT,
-		"HTTP Socket");
-	} else {
-	    enter_suid();
-	    fd = comm_open(SOCK_STREAM,
-		IPPROTO_TCP,
-		s->s.sin_addr,
-		ntohs(s->s.sin_port),
-		comm_flags,
-		COMM_TOS_DEFAULT,
-		"HTTP Socket");
-	    leave_suid();
-	}
-	if (fd < 0)
-	    continue;
+	    debugs(1, 1, "WARNING: You have too many 'http_port' lines.");
+	    debugs(1, 1, "         The limit is %d", MAXHTTPPORTS);
+	    return;
+	}	
+	
 	comm_listen(fd);
 	commSetSelect(fd, COMM_SELECT_READ, httpAccept, s, 0);
 	/*
@@ -2948,7 +2953,7 @@ clientHttpConnectionsOpen(void)
 	 * peg the CPU with select() when we hit the FD limit.
 	 */
 	commSetDefer(fd, httpAcceptDefer, NULL);
-	debug(1, 1) ("Accepting %s %sHTTP connections at %s, port %d, FD %d.\n",
+	debugs(1, 1, "Accepting %s %sHTTP connections at %s, port %d, FD %d.",
 	    s->transparent ? "transparently proxied" :
 	    s->accel ? "accelerated" :
 	    "proxy",
@@ -2956,46 +2961,169 @@ clientHttpConnectionsOpen(void)
 	    inet_ntoa(s->s.sin_addr),
 	    (int) ntohs(s->s.sin_port),
 	    fd);
-	HttpSockets[NHttpSockets++] = fd;
+		
+	assert(AddOpenedHttpSocket(fd));
+}
+
+static void
+clientHttpConnectionsSMPOpen(void)
+{
+    http_port_list *s;
+	
+	int comm_flags;
+	
+	comm_flags = COMM_NONBLOCKING;
+
+    for (s = Config.Sockaddr.http; s; s = s->next) {
+		
+		debugs(1, 1, "StrandStartListen port %d at %s", (int)ntohs(s->s.sin_port), inet_ntoa(s->s.sin_addr));
+		
+		if (s->tproxy)
+		  comm_flags |= COMM_TPROXY_LCL;
+			  
+		StrandStartListenRequest(SOCK_STREAM, IPPROTO_TCP, fdnHttpSocket, comm_flags, NULL, 0, (void*)s, clientHttpConnectionsOpened);
+
+        HttpSockets[NHttpSockets] = -1; // set in clientHttpConnectionsOpened
+        
+        ++NHttpSockets;
     }
+}
+
+static void
+clientHttpConnectionsOpen(void)
+{
+	if(UsingSmp())
+	{
+		clientHttpConnectionsSMPOpen();
+	}
+	else
+	{
+	    http_port_list *s;
+	    int fd;
+	    int comm_flags;
+			
+	    for (s = Config.Sockaddr.http; s; s = s->next) {
+		comm_flags = COMM_NONBLOCKING;
+		if (s->tproxy)
+			comm_flags |= COMM_TPROXY_LCL;
+		if (MAXHTTPPORTS == NHttpSockets) {
+		    debugs(1, 1, "WARNING: You have too many 'http_port' lines.\n");
+		    debugs(1, 1, "         The limit is %d\n", MAXHTTPPORTS);
+		    continue;
+		}
+		    enter_suid();
+		    fd = comm_open(SOCK_STREAM,
+			IPPROTO_TCP,
+			s->s.sin_addr,
+			ntohs(s->s.sin_port),
+			comm_flags,
+			COMM_TOS_DEFAULT,
+			"HTTP Socket");
+		    leave_suid();
+
+		if (fd < 0)
+		    continue;
+		comm_listen(fd);
+		commSetSelect(fd, COMM_SELECT_READ, httpAccept, s, 0);
+		/*
+		 * We need to set a defer handler here so that we don't
+		 * peg the CPU with select() when we hit the FD limit.
+		 */
+		commSetDefer(fd, httpAcceptDefer, NULL);
+		debugs(1, 1, "Accepting %s %sHTTP connections at %s, port %d, FD %d.\n",
+		    s->transparent ? "transparently proxied" :
+		    s->accel ? "accelerated" :
+		    "proxy",
+		    s->tproxy ? "and tproxy'ied " : "",
+		    inet_ntoa(s->s.sin_addr),
+		    (int) ntohs(s->s.sin_port),
+		    fd);
+		HttpSockets[NHttpSockets++] = fd;
+	}
+   }
 }
 
 #if USE_SSL
 static void
-clientHttpsConnectionsOpen(void)
+clientHttpsConnectionsOpened(int fd, void* data)
 {
-    https_port_list *s;
-    int fd;
-    for (s = Config.Sockaddr.https; s; s = (https_port_list *) s->http.next) {
+    https_port_list *s = (https_port_list *)data;
+
+    if(!OpenedHttpSocket()) return;
+   
 	if (MAXHTTPPORTS == NHttpSockets) {
-	    debug(1, 1) ("WARNING: You have too many 'https_port' lines.\n");
-	    debug(1, 1) ("         The limit is %d\n", MAXHTTPPORTS);
+	    debugs(1, 1, "WARNING: You have too many 'https_port' lines.");
+	    debugs(1, 1, "         The limit is %d", MAXHTTPPORTS);
 	    continue;
 	}
 	if (!s->sslContext)
-	    continue;
-	enter_suid();
-	fd = comm_open(SOCK_STREAM,
-	    IPPROTO_TCP,
-	    s->http.s.sin_addr,
-	    ntohs(s->http.s.sin_port),
-	    COMM_NONBLOCKING,
-	    COMM_TOS_DEFAULT,
-	    "HTTPS Socket");
-	leave_suid();
-	if (fd < 0)
-	    continue;
+	    return;
+	
 	comm_listen(fd);
 	commSetSelect(fd, COMM_SELECT_READ, httpsAccept, s, 0);
 	commSetDefer(fd, httpAcceptDefer, NULL);
-	debug(1, 1) ("Accepting HTTPS connections at %s, port %d, FD %d.\n",
+	debugs(1, 1, "Accepting HTTPS connections at %s, port %d, FD %d.",
 	    inet_ntoa(s->http.s.sin_addr),
 	    (int) ntohs(s->http.s.sin_port),
 	    fd);
-	HttpSockets[NHttpSockets++] = fd;
-    }
+	
+	assert(AddOpenedHttpSocket(fd));
+
 }
 
+static void clientHttpsConnectionsSMPOpen()
+{
+	https_port_list *s;
+	for (s = Config.Sockaddr.https; s; s = (https_port_list *) s->http.next) {
+
+		StrandStartListenRequest(SOCK_STREAM, IPPROTO_TCP, fdnHttpsSocket, COMM_NONBLOCKING, NULL, 0, (void*)s, clientHttpsConnectionsOpened);
+		
+        HttpSockets[NHttpSockets] = -1; // set in clientHttpsConnectionsOpened
+        ++NHttpSockets;			
+	}
+}
+
+static void
+clientHttpsConnectionsOpen(void)
+{
+	if(UsingSmp())
+	{
+		clientHttpsConnectionsSMPOpen();
+	}
+	else
+	{
+	    https_port_list *s;
+	    int fd;
+	    for (s = Config.Sockaddr.https; s; s = (https_port_list *) s->http.next) {
+		if (MAXHTTPPORTS == NHttpSockets) {
+		    debug(1, 1) ("WARNING: You have too many 'https_port' lines.\n");
+		    debug(1, 1) ("         The limit is %d\n", MAXHTTPPORTS);
+		    continue;
+		}
+		if (!s->sslContext)
+		    continue;
+		enter_suid();
+		fd = comm_open(SOCK_STREAM,
+		    IPPROTO_TCP,
+		    s->http.s.sin_addr,
+		    ntohs(s->http.s.sin_port),
+		    COMM_NONBLOCKING,
+		    COMM_TOS_DEFAULT,
+		    "HTTPS Socket");
+		leave_suid();
+		if (fd < 0)
+		    continue;
+		comm_listen(fd);
+		commSetSelect(fd, COMM_SELECT_READ, httpsAccept, s, 0);
+		commSetDefer(fd, httpAcceptDefer, NULL);
+		debug(1, 1) ("Accepting HTTPS connections at %s, port %d, FD %d.\n",
+		    inet_ntoa(s->http.s.sin_addr),
+		    (int) ntohs(s->http.s.sin_port),
+		    fd);
+		HttpSockets[NHttpSockets++] = fd;
+	    }
+	}
+}
 #endif
 
 void
@@ -3012,11 +3140,9 @@ void
 clientHttpConnectionsClose(void)
 {
     int i = 0;
-    if (opt_stdin_overrides_http_port && reconfiguring)
-	i++;			/* skip closing & reopening first port because it is overridden */
     for (; i < NHttpSockets; i++) {
 	if (HttpSockets[i] >= 0) {
-	    debug(1, 1) ("FD %d Closing HTTP connection\n", HttpSockets[i]);
+	    debugs(1, 1, "FD %d Closing HTTP connection", HttpSockets[i]);
 	    comm_close(HttpSockets[i]);
 	    HttpSockets[i] = -1;
 	}
@@ -3035,7 +3161,7 @@ varyEvaluateMatch(StoreEntry * entry, request_t * request)
     if (!has_vary || !entry->mem_obj->vary_headers) {
 	if (vary) {
 	    /* Oops... something odd is going on here.. */
-	    debug(33, 1) ("varyEvaluateMatch: Oops. Not a Vary object on second attempt, '%s' '%s'\n",
+	    debugs(33, 1, "varyEvaluateMatch: Oops. Not a Vary object on second attempt, '%s' '%s'",
 		entry->mem_obj->url, vary);
 	    safe_free(request->vary_headers);
 	    return VARY_CANCEL;

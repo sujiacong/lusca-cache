@@ -108,7 +108,7 @@ httpHdrRangeRespSpecParseInit(HttpHdrRangeSpec * spec, const char *field, int fl
 	return 1;
     /* check format, must be %d-%d */
     if (!((p = strchr(field, '-')) && (p - field < flen))) {
-	debug(68, 2) ("invalid (no '-') resp-range-spec near: '%s'\n", field);
+	debugs(68, 2, "invalid (no '-') resp-range-spec near: '%s'", field);
 	return 0;
     }
     /* parse offset */
@@ -124,7 +124,7 @@ httpHdrRangeRespSpecParseInit(HttpHdrRangeSpec * spec, const char *field, int fl
     }
     /* we managed to parse, check if the result makes sence */
     if (known_spec(spec->length) && !spec->length) {
-	debug(68, 2) ("invalid range (%ld += %ld) in resp-range-spec near: '%s'\n",
+	debugs(68, 2, "invalid range (%ld += %ld) in resp-range-spec near: '%s'",
 	    (long int) spec->offset, (long int) spec->length, field);
 	return 0;
     }
@@ -161,7 +161,7 @@ httpHdrContRangeParseInit(HttpHdrContRange * range, const char *str)
 {
     const char *p;
     assert(range && str);
-    debug(68, 8) ("parsing content-range field: '%s'\n", str);
+    debugs(68, 8, "parsing content-range field: '%s'", str);
     /* check range type */
     if (strncasecmp(str, "bytes ", 6))
 	return 0;
@@ -178,7 +178,7 @@ httpHdrContRangeParseInit(HttpHdrContRange * range, const char *str)
 	range->elength = range_spec_unknown;
     else if (!httpHeaderParseSize(p, &range->elength))
 	return 0;
-    debug(68, 8) ("parsed content-range field: %" PRINTF_OFF_T "-%" PRINTF_OFF_T " / %" PRINTF_OFF_T "\n",
+    debugs(68, 8, "parsed content-range field: %" PRINTF_OFF_T "-%" PRINTF_OFF_T " / %" PRINTF_OFF_T "",
 	range->spec.offset, range->spec.offset + range->spec.length - 1,
 	range->elength);
     return 1;

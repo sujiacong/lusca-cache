@@ -11,7 +11,7 @@ void
 clientPackTermBound(String boundary, MemBuf * mb)
 {
     memBufPrintf(mb, "\r\n--%.*s--\r\n", strLen2(boundary), strBuf2(boundary));
-    debug(33, 6) ("clientPackTermBound: buf offset: %ld\n", (long int) mb->size);
+    debugs(33, 6, "clientPackTermBound: buf offset: %ld", (long int) mb->size);
 }
 
 /* appends a "part" HTTP header (as in a multi-part/range reply) to the buffer */
@@ -24,7 +24,7 @@ clientPackRangeHdr(const HttpReply * rep, const HttpHdrRangeSpec * spec, String 
     assert(spec);
 
     /* put boundary */
-    debug(33, 5) ("clientPackRangeHdr: appending boundary: %.*s\n", strLen2(boundary), strBuf2(boundary));
+    debugs(33, 5, "clientPackRangeHdr: appending boundary: %.*s", strLen2(boundary), strBuf2(boundary));
     /* rfc2046 requires to _prepend_ boundary with <crlf>! */
     memBufPrintf(mb, "\r\n--%.*s\r\n", strLen2(boundary), strBuf2(boundary));
 
@@ -78,7 +78,7 @@ clientPackRange(clientHttpRequest * http,
     /*
      * append content
      */
-    debug(33, 3) ("clientPackRange: appending %ld bytes\n", (long int) copy_sz);
+    debugs(33, 3, "clientPackRange: appending %ld bytes", (long int) copy_sz);
     memBufAppend(mb, *buf, copy_sz);
     /*
      * update offsets
@@ -126,9 +126,9 @@ clientPackMoreRanges(clientHttpRequest * http, const char *buf, size_t size, Mem
 	squid_off_t start;	/* offset of still missing data */
 	assert(i->spec);
 	start = i->spec->offset + i->spec->length - i->debt_size;
-	debug(33, 3) ("clientPackMoreRanges: in:  offset: %ld size: %ld\n",
+	debugs(33, 3, "clientPackMoreRanges: in:  offset: %ld size: %ld",
 	    (long int) body_off, (long int) size);
-	debug(33, 3) ("clientPackMoreRanges: out: start: %ld spec[%ld]: [%ld, %ld), len: %ld debt: %ld\n",
+	debugs(33, 3, "clientPackMoreRanges: out: start: %ld spec[%ld]: [%ld, %ld), len: %ld debt: %ld",
 	    (long int) start, (long int) i->pos, (long int) i->spec->offset, (long int) (i->spec->offset + i->spec->length), (long int) i->spec->length, (long int) i->debt_size);
 	assert(body_off <= start);	/* we did not miss it */
 	/* skip up to start */
@@ -151,10 +151,10 @@ clientPackMoreRanges(clientHttpRequest * http, const char *buf, size_t size, Mem
 	}
     }
     assert(!i->debt_size == !i->spec);	/* paranoid sync condition */
-    debug(33, 3) ("clientPackMoreRanges: buf exhausted: in:  offset: %ld size: %ld need_more: %ld\n",
+    debugs(33, 3, "clientPackMoreRanges: buf exhausted: in:  offset: %ld size: %ld need_more: %ld",
 	(long int) body_off, (long int) size, (long int) i->debt_size);
     if (i->debt_size) {
-	debug(33, 3) ("clientPackMoreRanges: need more: spec[%ld]: [%ld, %ld), len: %ld\n",
+	debugs(33, 3, "clientPackMoreRanges: need more: spec[%ld]: [%ld, %ld), len: %ld",
 	    (long int) i->pos, (long int) i->spec->offset, (long int) (i->spec->offset + i->spec->length), (long int) i->spec->length);
 	/* skip the data we do not need if possible */
 	if (i->debt_size == i->spec->length)	/* at the start of the cur. spec */
@@ -196,7 +196,7 @@ clientMRangeCLen(clientHttpRequest * http)
         /* account for range content */
         clen += spec->length;
 
-        debug(33, 6) ("clientMRangeCLen: (clen += %ld + %" PRINTF_OFF_T ") == %" PRINTF_OFF_T "\n",
+        debugs(33, 6, "clientMRangeCLen: (clen += %ld + %" PRINTF_OFF_T ") == %" PRINTF_OFF_T "",
             (long int) mb.size, spec->length, clen);
     }
     /* account for the terminating boundary */
@@ -221,12 +221,12 @@ clientIfRangeMatch(clientHttpRequest * http, HttpReply * rep)
     /* got an ETag? */
     if (spec.tag) {
         const char *rep_tag = httpHeaderGetStr(&rep->header, HDR_ETAG);
-        debug(33, 3) ("clientIfRangeMatch: ETags: %s and %s\n",
+        debugs(33, 3, "clientIfRangeMatch: ETags: %s and %s",
             spec.tag, rep_tag ? rep_tag : "<none>");
         if (!rep_tag)
             return 0;           /* entity has no etag to compare with! */
         if (spec.tag[0] == 'W' || rep_tag[0] == 'W') {
-            debug(33, 1) ("clientIfRangeMatch: Weak ETags are not allowed in If-Range: %s ? %s\n",
+            debugs(33, 1, "clientIfRangeMatch: Weak ETags are not allowed in If-Range: %s ? %s",
                 spec.tag, rep_tag);
             return 0;           /* must use strong validator for sub-range requests */
         }
@@ -271,14 +271,14 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
         range_err = "range outside range_offset_limit";
     /* get rid of our range specs on error */
     if (range_err) {
-        debug(33, 3) ("clientBuildRangeHeader: will not do ranges: %s.\n", range_err);
+        debugs(33, 3, "clientBuildRangeHeader: will not do ranges: %s.", range_err);
         httpHdrRangeDestroy(http->request->range);
         http->request->range = NULL;   
     } else {
         const int spec_count = http->request->range->specs.count;
         squid_off_t actual_clen = -1;
             
-        debug(33, 3) ("clientBuildRangeHeader: range spec count: %d virgin clen: %" PRINTF_OFF_T "\n",
+        debugs(33, 3, "clientBuildRangeHeader: range spec count: %d virgin clen: %" PRINTF_OFF_T "",
             spec_count, rep->content_length); 
         assert(spec_count > 0);
         /* append appropriate header(s) */
@@ -311,7 +311,7 @@ clientBuildRangeHeader(clientHttpRequest * http, HttpReply * rep)
         httpHeaderDelById(hdr, HDR_CONTENT_LENGTH);
         httpHeaderPutSize(hdr, HDR_CONTENT_LENGTH, actual_clen);
         rep->content_length = actual_clen;
-        debug(33, 3) ("clientBuildRangeHeader: actual content length: %" PRINTF_OFF_T "\n", actual_clen);
+        debugs(33, 3, "clientBuildRangeHeader: actual content length: %" PRINTF_OFF_T "", actual_clen);
     }
 }
 

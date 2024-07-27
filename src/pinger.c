@@ -222,7 +222,7 @@ pingerOpen(void)
     x = read(0, buf, sizeof(wpi));
     if (x < sizeof(wpi)) {
 	getCurrentTime();
-	debug(42, 0) ("pingerOpen: read: FD 0: %s\n", xstrerror());
+	debugs(42, 0, "pingerOpen: read: FD 0: %s", xstrerror());
 	write(1, "ERR\n", 4);
 	exit(1);
     }
@@ -232,37 +232,37 @@ pingerOpen(void)
     x = read(0, buf, sizeof(PS));
     if (x < sizeof(PS)) {
 	getCurrentTime();
-	debug(42, 0) ("pingerOpen: read: FD 0: %s\n", xstrerror());
+	debugs(42, 0, "pingerOpen: read: FD 0: %s", xstrerror());
 	write(1, "ERR\n", 4);
 	exit(1);
     }
     xmemcpy(&PS, buf, sizeof(PS));
 #endif
     if ((proto = getprotobyname("icmp")) == 0) {
-	debug(42, 0) ("pingerOpen: unknown protocol: icmp\n");
+	debugs(42, 0, "pingerOpen: unknown protocol: icmp");
 	exit(1);
     }
     icmp_sock = socket(PF_INET, SOCK_RAW, proto->p_proto);
     if (icmp_sock < 0) {
-	debug(42, 0) ("pingerOpen: icmp_sock: %s\n", xstrerror());
+	debugs(42, 0, "pingerOpen: icmp_sock: %s", xstrerror());
 	exit(1);
     }
     icmp_ident = getpid() & 0xffff;
-    debug(42, 0) ("pingerOpen: ICMP socket opened\n");
+    debugs(42, 0, "pingerOpen: ICMP socket opened");
 #ifdef _SQUID_MSWIN_
     socket_to_squid =
 	WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO,
 	&wpi, 0, 0);
     if (socket_to_squid == -1) {
 	getCurrentTime();
-	debug(42, 0) ("pingerOpen: WSASocket: %s\n", xstrerror());
+	debugs(42, 0, "pingerOpen: WSASocket: %s", xstrerror());
 	write(1, "ERR\n", 4);
 	exit(1);
     }
     x = connect(socket_to_squid, (struct sockaddr *) &PS, sizeof(PS));
     if (SOCKET_ERROR == x) {
 	getCurrentTime();
-	debug(42, 0) ("pingerOpen: connect: %s\n", xstrerror());
+	debugs(42, 0, "pingerOpen: connect: %s", xstrerror());
 	write(1, "ERR\n", 4);
 	exit(1);
     }
@@ -270,16 +270,16 @@ pingerOpen(void)
     memset(buf, 0, sizeof(buf));
     x = recv(socket_to_squid, buf, sizeof(buf), 0);
     if (x < 3) {
-	debug(42, 0) ("pingerOpen: recv: %s\n", xstrerror());
+	debugs(42, 0, "pingerOpen: recv: %s", xstrerror());
 	exit(1);
     }
     x = send(socket_to_squid, buf, strlen(buf), 0);
     if (x < 3 || strncmp("OK\n", buf, 3)) {
-	debug(42, 0) ("pingerOpen: recv: %s\n", xstrerror());
+	debugs(42, 0, "pingerOpen: recv: %s", xstrerror());
 	exit(1);
     }
     getCurrentTime();
-    debug(42, 0) ("pingerOpen: Squid socket opened\n");
+    debugs(42, 0, "pingerOpen: Squid socket opened");
 #endif
 }
 
@@ -375,7 +375,7 @@ pingerRecv(void)
 #else
     gettimeofday(&now, NULL);
 #endif
-    debug(42, 9) ("pingerRecv: %d bytes from %s\n", n, inet_ntoa(from.sin_addr));
+    debugs(42, 9, "pingerRecv: %d bytes from %s", n, inet_ntoa(from.sin_addr));
     ip = (struct iphdr *) (void *) pkt;
 #if HAVE_IP_HL
     iphdrlen = ip->ip_hl << 2;
@@ -428,7 +428,7 @@ in_cksum(unsigned short *ptr, int size)
 static void
 pingerLog(struct icmphdr *icmp, struct in_addr addr, int rtt, int hops)
 {
-    debug(42, 2) ("pingerLog: %9d.%06d %-16s %d %-15.15s %dms %d hops\n",
+    debugs(42, 2, "pingerLog: %9d.%06d %-16s %d %-15.15s %dms %d hops",
 	(int) current_time.tv_sec,
 	(int) current_time.tv_usec,
 	inet_ntoa(addr),
@@ -463,7 +463,7 @@ pingerReadRequest(void)
     memset(&pecho, '\0', sizeof(pecho));
     n = read(socket_from_squid, (char *) &pecho, sizeof(pecho));
     if (n < 0) {
-        debug(42, 0) ("pingerReadRequest: socket %d: read() failed; errno %d\n", socket_from_squid, errno);
+        debugs(42, 0, "pingerReadRequest: socket %d: read() failed; errno %d", socket_from_squid, errno);
 	return n;
     }
     if (0 == n) {
@@ -491,7 +491,7 @@ pingerSendtoSquid(pingerReplyData * preply)
 {
     int len = sizeof(pingerReplyData) - MAX_PKT_SZ + preply->psize;
     if (send(socket_to_squid, (char *) preply, len, 0) < 0) {
-	debug(42, 0) ("pingerSendtoSquid: send: %s\n", xstrerror());
+	debugs(42, 0, "pingerSendtoSquid: send: %s", xstrerror());
 	pingerClose();
 	exit(1);
     }
@@ -537,20 +537,20 @@ main(int argc, char *argv[])
 	}
 	if (FD_ISSET(socket_from_squid, &R))
 	    if (pingerReadRequest() < 0) {
-		debug(42, 0) ("Pinger exiting.\n");
+		debugs(42, 0, "Pinger exiting.");
 		pingerClose();
 		exit(1);
 	    }
 	if (FD_ISSET(icmp_sock, &R))
 	    pingerRecv();
 	if (PINGER_TIMEOUT + last_check_time < squid_curtime) {
-	    debug(42, 2) ("pinger: timeout occured\n");
+	    debugs(42, 2, "pinger: timeout occured");
 	    if (send(socket_to_squid, (char *) &tv, 0, 0) < 0) {
-		debug(42, 0) ("Pinger: send socket_to_squid failed\n");
+		debugs(42, 0, "Pinger: send socket_to_squid failed");
 		pingerClose();
 		exit(1);
 	    } else {
-		debug(42, 2) ("Pinger: send socket_to_squid OK\n");
+		debugs(42, 2, "Pinger: send socket_to_squid OK");
 	    }
 	    last_check_time = squid_curtime;
 	}

@@ -72,7 +72,6 @@ extern int opt_dns_tests;	/* 1 */
 extern int opt_foreground_rebuild;	/* 0 */
 extern forwarded_for_mode opt_forwarded_for;	/* FORWARDED_FOR_ON */
 extern int opt_reload_hit_only;	/* 0 */
-extern int opt_stdin_overrides_http_port;	/* 0 */
 extern int opt_udp_hit_obj;	/* 0 */
 extern int opt_create_swap_dirs;	/* 0 */
 extern int opt_store_doublecheck;	/* 0 */

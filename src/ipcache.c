@@ -40,9 +40,9 @@ static void ipcacheStatPrint(ipcache_entry *, StoreEntry *);
 void
 ipcache_local_params(void)
 {
-	namecache_dns_skiptests = opt_dns_tests;
-	namecache_dns_positive_ttl = Config.negativeDnsTtl;
-	namecache_dns_negative_ttl = Config.positiveDnsTtl;
+	//namecache_dns_skiptests = opt_dns_tests;
+	namecache_dns_positive_ttl = Config.positiveDnsTtl;
+	namecache_dns_negative_ttl = Config.negativeDnsTtl;
 
 	namecache_ipcache_size = Config.ipcache.size;
 	namecache_ipcache_high = Config.ipcache.high;
@@ -56,7 +56,7 @@ ipcache_init_local(void)
         static int registered = 0;
         if (! registered) {
                 registered = 1;
-		cachemgrRegister("ipcache", "IP Cache Stats and Contents", stat_ipcache_get, 0, 1);
+		cachemgrRegister("ipcache", "IP Cache Stats and Contents", stat_ipcache_get,  NULL, NULL, 0, 1, 0);
 	}
 }
 
@@ -81,7 +81,7 @@ ipcacheStatPrint(ipcache_entry * i, StoreEntry * sentry)
 
 /* process objects list */
 void
-stat_ipcache_get(StoreEntry * sentry)
+stat_ipcache_get(StoreEntry * sentry, void* data)
 {
     dlink_node *m;
     assert(ip_table != NULL);
@@ -121,7 +121,7 @@ variable_list *
 snmp_netIpFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_netIpFn: Processing request:\n");
+    debugs(49, 5, "snmp_netIpFn: Processing request:");
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_NET + 1]) {

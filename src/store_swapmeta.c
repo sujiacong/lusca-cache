@@ -49,7 +49,7 @@ storeSwapMetaBuild(StoreEntry * e)
     assert(e->mem_obj != NULL);
     assert(e->swap_status == SWAPOUT_WRITING);
     url = storeUrl(e);
-    debug(20, 3) ("storeSwapMetaBuild: %s\n", url);
+    debugs(20, 3, "storeSwapMetaBuild: %s", url);
     T = tlv_add(STORE_META_KEY, e->hash.key, SQUID_MD5_DIGEST_LENGTH, T);
 #if SIZEOF_SQUID_FILE_SZ == SIZEOF_SIZE_T
     T = tlv_add(STORE_META_STD, &e->timestamp, STORE_HDR_METASIZE, T);

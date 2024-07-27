@@ -52,7 +52,7 @@ static const char valid_hostname_chars[] =
 void
 urlInitialize(void)
 {
-    debug(23, 5) ("urlInitialize: Initializing...\n");
+    debugs(23, 5, "urlInitialize: Initializing...");
 #if 0
     assert(sizeof(ProtocolStr) == (PROTO_MAX + 1) * sizeof(char *));
 #endif
@@ -109,7 +109,7 @@ urlParse(method_t * method, char *url)
     if ((l = strlen(url)) + Config.appendDomainLen > (MAX_URL - 1)) {
 	/* terminate so it doesn't overflow other buffers */
 	*(url + (MAX_URL >> 1)) = '\0';
-	debug(23, 1) ("urlParse: URL too large (%d bytes)\n", l);
+	debugs(23, 1, "urlParse: URL too large (%d bytes)", l);
 	return NULL;
     }
     if (method->code == METHOD_CONNECT) {
@@ -194,7 +194,7 @@ urlParse(method_t * method, char *url)
 	}
     }
     if (Config.onoff.check_hostnames && strspn(host, Config.onoff.allow_underscore ? valid_hostname_chars_u : valid_hostname_chars) != strlen(host)) {
-	debug(23, 1) ("urlParse: Illegal character in hostname '%s'\n", host);
+	debugs(23, 1, "urlParse: Illegal character in hostname '%s'", host);
 	return NULL;
     }
     if (Config.appendDomain && !strchr(host, '.'))
@@ -204,23 +204,23 @@ urlParse(method_t * method, char *url)
 	host[l] = '\0';
     /* reject duplicate or leading dots */
     if (strstr(host, "..") || *host == '.') {
-	debug(23, 1) ("urlParse: Illegal hostname '%s'\n", host);
+	debugs(23, 1, "urlParse: Illegal hostname '%s'", host);
 	return NULL;
     }
     if (port < 1 || port > 65535) {
-	debug(23, 3) ("urlParse: Invalid port '%d'\n", port);
+	debugs(23, 3, "urlParse: Invalid port '%d'", port);
 	return NULL;
     }
 #ifdef HARDCODE_DENY_PORTS
     /* These ports are filtered in the default squid.conf, but
      * maybe someone wants them hardcoded... */
     if (port == 7 || port == 9 || port == 19) {
-	debug(23, 0) ("urlParse: Deny access to port %d\n", port);
+	debugs(23, 0, "urlParse: Deny access to port %d", port);
 	return NULL;
     }
 #endif
     if (stringHasWhitespace(urlpath)) {
-	debug(23, 2) ("urlParse: URI has whitespace: {%s}\n", url);
+	debugs(23, 2, "urlParse: URI has whitespace: {%s}", url);
 	switch (Config.uri_whitespace) {
 	case URI_WHITESPACE_DENY:
 	    return NULL;
@@ -254,7 +254,7 @@ urlParse(method_t * method, char *url)
 static request_t *
 urnParse(method_t * method, char *urn)
 {
-    debug(50, 5) ("urnParse: %s\n", urn);
+    debugs(50, 5, "urnParse: %s", urn);
     return requestCreate(method, PROTO_URN, urn + 4);
 }
 

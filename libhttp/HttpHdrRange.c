@@ -130,7 +130,7 @@ httpHdrRangeSpecParseCreate(const char *field, int flen)
     } else
 	/* must have a '-' somewhere in _this_ field */
     if (!((p = strchr(field, '-')) || (p - field >= flen))) {
-	debug(64, 2) ("ignoring invalid (missing '-') range-spec near: '%s'\n", field);
+	debugs(64, 2, "ignoring invalid (missing '-') range-spec near: '%s'", field);
 	return NULL;
     } else {
 	if (!httpHeaderParseSize(field, &spec.offset))
@@ -146,7 +146,7 @@ httpHdrRangeSpecParseCreate(const char *field, int flen)
     }
     /* we managed to parse, check if the result makes sence */
     if (known_spec(spec.length) && !spec.length) {
-	debug(64, 2) ("ignoring invalid (zero length) range-spec near: '%s'\n", field);
+	debugs(64, 2, "ignoring invalid (zero length) range-spec near: '%s'", field);
 	return NULL;
     }
     return httpHdrRangeSpecDup(&spec);
@@ -175,7 +175,7 @@ httpHdrRangeSpecDup(const HttpHdrRangeSpec * spec)
 static int
 httpHdrRangeSpecCanonize(HttpHdrRangeSpec * spec, squid_off_t clen)
 {
-    debug(64, 5) ("httpHdrRangeSpecCanonize: have: [%" PRINTF_OFF_T ", %" PRINTF_OFF_T ") len: %" PRINTF_OFF_T "\n",
+    debugs(64, 5, "httpHdrRangeSpecCanonize: have: [%" PRINTF_OFF_T ", %" PRINTF_OFF_T ") len: %" PRINTF_OFF_T "",
 	spec->offset, spec->offset + spec->length, spec->length);
     if (!known_spec(spec->offset))	/* suffix */
 	spec->offset = size_diff(clen, spec->length);
@@ -186,7 +186,7 @@ httpHdrRangeSpecCanonize(HttpHdrRangeSpec * spec, squid_off_t clen)
     assert(known_spec(spec->offset));
     spec->length = size_min(size_diff(clen, spec->offset), spec->length);
     /* check range validity */
-    debug(64, 5) ("httpHdrRangeSpecCanonize: done: [%" PRINTF_OFF_T ", %" PRINTF_OFF_T ") len: %" PRINTF_OFF_T "\n",
+    debugs(64, 5, "httpHdrRangeSpecCanonize: done: [%" PRINTF_OFF_T ", %" PRINTF_OFF_T ") len: %" PRINTF_OFF_T "",
 	spec->offset, spec->offset + spec->length, spec->length);
     return spec->length > 0;
 }
@@ -261,7 +261,7 @@ httpHdrRangeParseInit(HttpHdrRange * range, const String * str)
     int count = 0;
     assert(range && str);
     RangeParsedCount++;
-    debug(64, 8) ("parsing range field: '%.*s'\n", strLen2(*str), strBuf2(*str));
+    debugs(64, 8, "parsing range field: '%.*s'", strLen2(*str), strBuf2(*str));
     /* check range type */
     if (strNCaseCmp(*str, "bytes=", 6))
 	return 0;
@@ -278,7 +278,7 @@ httpHdrRangeParseInit(HttpHdrRange * range, const String * str)
 	    stackPush(&range->specs, spec);
 	count++;
     }
-    debug(64, 8) ("parsed range range count: %d\n", range->specs.count);
+    debugs(64, 8, "parsed range range count: %d", range->specs.count);
     return range->specs.count;
 }
 
@@ -323,7 +323,7 @@ httpHdrRangeCanonize(HttpHdrRange * range, squid_off_t clen)
     assert(range);
     assert(clen >= 0);
     stackInit(&goods);
-    debug(64, 3) ("httpHdrRangeCanonize: started with %d specs, clen: %" PRINTF_OFF_T "\n", range->specs.count, clen);
+    debugs(64, 3, "httpHdrRangeCanonize: started with %d specs, clen: %" PRINTF_OFF_T "", range->specs.count, clen);
 
     /* canonize each entry and destroy bad ones if any */
     while ((spec = httpHdrRangeGetSpec(range, &pos))) {
@@ -332,7 +332,7 @@ httpHdrRangeCanonize(HttpHdrRange * range, squid_off_t clen)
 	else
 	    httpHdrRangeSpecDestroy(spec);
     }
-    debug(64, 3) ("httpHdrRangeCanonize: found %d bad specs\n",
+    debugs(64, 3, "httpHdrRangeCanonize: found %d bad specs",
 	range->specs.count - goods.count);
     /* reset old array */
     stackClean(&range->specs);
@@ -358,9 +358,9 @@ httpHdrRangeCanonize(HttpHdrRange * range, squid_off_t clen)
     }
     if (spec)			/* last "merge" may not be pushed yet */
 	stackPush(&range->specs, spec);
-    debug(64, 3) ("httpHdrRangeCanonize: had %d specs, merged %d specs\n",
+    debugs(64, 3, "httpHdrRangeCanonize: had %d specs, merged %d specs",
 	goods.count, goods.count - range->specs.count);
-    debug(64, 3) ("httpHdrRangeCanonize: finished with %d specs\n",
+    debugs(64, 3, "httpHdrRangeCanonize: finished with %d specs",
 	range->specs.count);
     stackClean(&goods);
     return range->specs.count > 0;

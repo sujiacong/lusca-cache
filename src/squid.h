@@ -455,6 +455,8 @@ struct rusage {
 
 #include "../libsqurl/proto.h"
 
+#include "../libmutiprocess/multiprocess.h"
+
 #include "defines.h"
 #include "enums.h"
 #include "typedefs.h"
@@ -547,7 +549,9 @@ extern MemPool * pool_storeentry;
 extern MemPool * pool_memobject;
 extern MemPool * pool_swap_tlv;
 extern MemPool * pool_swap_log_data;
-   
+
+extern int DebugSignal; 
+
 CBDATA_GLOBAL_TYPE(RemovalPolicy);
 CBDATA_GLOBAL_TYPE(RemovalPolicyWalker);
 CBDATA_GLOBAL_TYPE(RemovalPurgeWalker);

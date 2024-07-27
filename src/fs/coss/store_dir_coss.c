@@ -122,7 +122,7 @@ storeCossDirInit(SwapDir * sd)
     squidaio_init();
     cs->fd = file_open(stripePath(sd), O_RDWR | O_CREAT | O_BINARY);
     if (cs->fd < 0) {
-	debug(79, 1) ("%s: %s\n", stripePath(sd), xstrerror());
+	debugs(79, 1, "%s: %s", stripePath(sd), xstrerror());
 	fatal("storeCossDirInit: Failed to open a COSS file.");
     }
     storeCossDirRebuild(sd);
@@ -144,7 +144,7 @@ storeCossRemove(SwapDir * sd, StoreEntry * e)
     CossInfo *cs = (CossInfo *) sd->fsdata;
     int stripe;
 #if 0
-    debug(1, 1) ("storeCossRemove: %x: %d/%d\n", e, (int) e->swap_dirn, (e) e->swap_filen);
+    debugs(1, 1, "storeCossRemove: %x: %d/%d", e, (int) e->swap_dirn, (e) e->swap_filen);
 #endif
     CossIndexNode *coss_node = e->repl.data;
     /* Do what the LRU and HEAP repl policies do.. */
@@ -183,7 +183,7 @@ storeCossCreateStripe(SwapDir * SD, const char *path)
     int i;
     CossInfo *cs = (CossInfo *) SD->fsdata;
 
-    debug(47, 1) ("Creating COSS stripe %s\n", path);
+    debugs(47, 1, "Creating COSS stripe %s", path);
     swap = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0600);
     block = (char *) xcalloc(COSS_MEMBUF_SZ, 1);
     for (i = 0; i < cs->numstripes; ++i) {
@@ -234,7 +234,7 @@ storeCossDirShutdown(SwapDir * SD)
     CossInfo *cs = (CossInfo *) SD->fsdata;
     if (cs->fd == -1)
 	return;
-    debug(47, 1) ("COSS: %s: syncing\n", stripePath(SD));
+    debugs(47, 1, "COSS: %s: syncing", stripePath(SD));
 
     storeCossSync(SD);		/* This'll call a_file_syncqueue() or a aioSync() */
     /* XXX how should one close the pending ops on a given asyncio fd? */
@@ -313,7 +313,7 @@ storeCossDirCheckLoadAv(SwapDir * SD, store_op_t op)
     if (cs->numfullstripes > cs->hitonlyfullstripes)
 	loadav += MAX_LOAD_VALUE;
 
-    debug(47, 9) ("storeAufsDirCheckObj: load=%d\n", loadav);
+    debugs(47, 9, "storeAufsDirCheckObj: load=%d", loadav);
     return loadav;
 }
 
@@ -453,13 +453,13 @@ storeCossDirParse(SwapDir * sd, int index, char *path)
      */
     max_offset = (off_t) 0xFFFFFF << cs->blksz_bits;
     if ((sd->max_size + (cs->nummemstripes * (COSS_MEMBUF_SZ >> 10))) > (unsigned long) (max_offset >> 10)) {
-	debug(47, 1) ("COSS block-size = %d bytes\n", 1 << cs->blksz_bits);
-	debug(47, 1) ("COSS largest file offset = %lu KB\n", (unsigned long) max_offset >> 10);
-	debug(47, 1) ("COSS cache_dir size = %d KB\n", sd->max_size);
+	debugs(47, 1, "COSS block-size = %d bytes", 1 << cs->blksz_bits);
+	debugs(47, 1, "COSS largest file offset = %lu KB", (unsigned long) max_offset >> 10);
+	debugs(47, 1, "COSS cache_dir size = %d KB", sd->max_size);
 	fatal("COSS cache_dir size exceeds largest offset\n");
     }
     cs->max_disk_nf = ((off_t) sd->max_size << 10) >> cs->blksz_bits;
-    debug(47, 2) ("COSS: max disk fileno is %d\n", cs->max_disk_nf);
+    debugs(47, 2, "COSS: max disk fileno is %d", cs->max_disk_nf);
 
     /* XXX todo checks */
 
@@ -468,7 +468,7 @@ storeCossDirParse(SwapDir * sd, int index, char *path)
     /* Ensure that the max size IS a multiple of the membuf size, or things
      * will get very fruity near the end of the disk. */
     cs->numstripes = (off_t) (((off_t) sd->max_size) << 10) / COSS_MEMBUF_SZ;
-    debug(47, 2) ("COSS: number of stripes: %d of %d bytes each\n", cs->numstripes, COSS_MEMBUF_SZ);
+    debugs(47, 2, "COSS: number of stripes: %d of %d bytes each", cs->numstripes, COSS_MEMBUF_SZ);
     cs->stripes = xcalloc(cs->numstripes, sizeof(struct _cossstripe));
     for (i = 0; i < cs->numstripes; i++) {
 	cs->stripes[i].id = i;
@@ -486,7 +486,7 @@ storeCossDirParse(SwapDir * sd, int index, char *path)
      */
     cs->hitonlyfullstripes = cs->maxfullstripes - HITONLY_BUFS;
 
-    debug(47, 2) ("COSS: number of memory-only stripes %d of %d bytes each\n", cs->nummemstripes, COSS_MEMBUF_SZ);
+    debugs(47, 2, "COSS: number of memory-only stripes %d of %d bytes each", cs->nummemstripes, COSS_MEMBUF_SZ);
     cs->memstripes = xcalloc(cs->nummemstripes, sizeof(struct _cossstripe));
     for (i = 0; i < cs->nummemstripes; i++) {
 	cs->memstripes[i].id = i;
@@ -511,9 +511,9 @@ storeCossDirReconfigure(SwapDir * sd, int index, char *path)
 	fatal("storeCossDirParse: invalid size value");
 
     if (size == sd->max_size)
-	debug(3, 1) ("Cache COSS dir '%s' size remains unchanged at %d KB\n", path, size);
+	debugs(3, 1, "Cache COSS dir '%s' size remains unchanged at %d KB", path, size);
     else {
-	debug(3, 1) ("Cache COSS dir '%s' size changed to %d KB\n", path, size);
+	debugs(3, 1, "Cache COSS dir '%s' size changed to %d KB", path, size);
 	sd->max_size = size;
     }
     parse_cachedir_options(sd, options, 1);
@@ -547,7 +547,7 @@ storeCossDirParseMemOnlyBufs(SwapDir * sd, const char *name, const char *value, 
     CossInfo *cs = sd->fsdata;
     int membufs = atoi(value);
     if (reconfiguring) {
-	debug(47, 0) ("WARNING: cannot change COSS memory bufs Squid is running\n");
+	debugs(47, 0, "WARNING: cannot change COSS memory bufs Squid is running");
 	return;
     }
     if (membufs < 2)
@@ -566,7 +566,7 @@ storeCossDirParseMaxWaste(SwapDir * sd, const char *name, const char *value, int
     if (waste < 8192)
 	fatal("COSS max-stripe-waste must be > 8192\n");
     if (waste > sd->max_objsize)
-	debug(47, 1) ("storeCossDirParseMaxWaste: COSS max-stripe-waste can not be bigger than the max object size (%" PRINTF_OFF_T ")\n", sd->max_objsize);
+	debugs(47, 1, "storeCossDirParseMaxWaste: COSS max-stripe-waste can not be bigger than the max object size (%" PRINTF_OFF_T ")", sd->max_objsize);
     cs->sizerange_min = waste;
 }
 
@@ -595,7 +595,7 @@ storeCossDirParseBlkSize(SwapDir * sd, const char *name, const char *value, int 
 	/* no change */
 	return;
     if (reconfiguring) {
-	debug(47, 0) ("WARNING: cannot change COSS block-size while Squid is running\n");
+	debugs(47, 0, "WARNING: cannot change COSS block-size while Squid is running");
 	return;
     }
     nbits = 0;
@@ -694,7 +694,7 @@ storeCossDirDone(void)
 }
 
 static void
-storeCossStats(StoreEntry * sentry)
+storeCossStats(StoreEntry * sentry, void* data)
 {
     const char *tbl_fmt = "%10s %10d %10d %10d\n";
     storeAppendPrintf(sentry, "\n                   OPS     SUCCESS        FAIL\n");
@@ -737,6 +737,6 @@ storeFsSetup_coss(storefs_entry_t * storefs)
     coss_index_pool = memPoolCreate("COSS index data", sizeof(CossIndexNode));
     coss_realloc_pool = memPoolCreate("COSS pending realloc", sizeof(CossPendingReloc));
     coss_op_pool = memPoolCreate("COSS pending operation", sizeof(CossReadOp));
-    cachemgrRegister(SWAPDIR_COSS, "COSS Stats", storeCossStats, 0, 1);
+    cachemgrRegister(SWAPDIR_COSS, "COSS Stats", storeCossStats, NULL, NULL, 0, 1, 0);
     coss_initialised = 1;
 }

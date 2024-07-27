@@ -153,6 +153,7 @@ usage(const char *program_name)
     exit(1);
 }
 
+int KidIdentifier = 0;
 int
 main(int argc, char *argv[])
 {
@@ -552,7 +553,7 @@ gen_parse(Entry * head, FILE * fp)
 	"{\n"
 	"\tint\tresult = 1;\n"
 	"\tchar\t*token;\n"
-	"\tdebug(0,10)(\"parse_line: %%s\\n\", buff);\n"
+	"\tdebugs(0,10,\"parse_line: %%s\\n\", buff);"
 	"\tif ((token = strtok(buff, w_space)) == NULL)\n"
 	"\t\t(void) 0;\t/* ignore empty lines */\n"
 	);
@@ -602,7 +603,7 @@ gen_dump(Entry * head, FILE * fp)
     Entry *entry;
     fprintf(fp,
 	"static void\n"
-	"dump_config(StoreEntry *entry)\n"
+	"dump_config(StoreEntry *entry,void* data)\n"
 	"{\n"
 	);
     for (entry = head; entry != NULL; entry = entry->next) {

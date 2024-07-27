@@ -83,7 +83,7 @@ httpHeaderGetInt(const HttpHeader * hdr, http_hdr_type id)
     int value = -1;
     int ok;
     assert_eid(id);
-    assert(Headers[id].type == ftInt);  /* must be of an appropriate type */
+    assert(Headers[id].type == ftInt || Headers[id].type == ftInt64);  /* must be of an appropriate type */
     if ((e = httpHeaderFindEntry(hdr, id))) {
         ok = httpHeaderParseInt(strBuf(e->value), &value);
         httpHeaderNoteParsedEntry(e->id, e->value, !ok);
@@ -98,7 +98,7 @@ httpHeaderGetSize(const HttpHeader * hdr, http_hdr_type id)
     squid_off_t value = -1;
     int ok;
     assert_eid(id);
-    assert(Headers[id].type == ftSize);         /* must be of an appropriate type */
+    assert(Headers[id].type == ftInt64);         /* must be of an appropriate type */
     if ((e = httpHeaderFindEntry(hdr, id))) {
         ok = httpHeaderParseSize(strBuf(e->value), &value);
         httpHeaderNoteParsedEntry(e->id, e->value, !ok);
@@ -126,7 +126,7 @@ httpHeaderGetStr(const HttpHeader * hdr, http_hdr_type id)
 {   
     HttpHeaderEntry *e;
     assert_eid(id);
-    assert(Headers[id].type == ftStr);  /* must be of an appropriate type */
+    assert(Headers[id].type == ftStr || Headers[id].type == ftETag);  /* must be of an appropriate type */
     if ((e = httpHeaderFindEntry(hdr, id))) {
         httpHeaderNoteParsedEntry(e->id, e->value, 0);  /* no errors are possible */
         return strBuf(e->value);

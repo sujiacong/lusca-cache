@@ -79,7 +79,7 @@ mime_get_header_field(const char *mime, const char *name, const char *prefix)
 	return NULL;
     assert(NULL != name);
 
-    debug(25, 5) ("mime_get_header_field: looking for '%s'\n", name);
+    debugs(25, 5, "mime_get_header_field: looking for '%s'", name);
 
     for (p = mime; *p; p += strcspn(p, "\n\r")) {
 	if (strcmp(p, "\r\n\r\n") == 0 || strcmp(p, "\n\n") == 0)
@@ -94,7 +94,7 @@ mime_get_header_field(const char *mime, const char *name, const char *prefix)
 	if (l > GET_HDR_SZ)
 	    l = GET_HDR_SZ;
 	xstrncpy(header, p, l);
-	debug(25, 5) ("mime_get_header_field: checking '%s'\n", header);
+	debugs(25, 5, "mime_get_header_field: checking '%s'", header);
 	q = header;
 	q += namelen;
 	if (*q == ':')
@@ -107,7 +107,7 @@ mime_get_header_field(const char *mime, const char *name, const char *prefix)
 	    got = !strncasecmp(q, prefix, preflen) && !xisalpha(q[preflen]);
 	}
 	if (got) {
-	    debug(25, 5) ("mime_get_header_field: returning '%s'\n", q);
+	    debugs(25, 5, "mime_get_header_field: returning '%s'", q);
 	    return q;
 	}
     }
@@ -264,7 +264,7 @@ mimeInit(char *filename)
     if (filename == NULL)
 	return;
     if ((fp = fopen(filename, "r")) == NULL) {
-	debug(25, 1) ("mimeInit: %s: %s\n", filename, xstrerror());
+	debugs(25, 1, "mimeInit: %s: %s", filename, xstrerror());
 	return;
     }
 #ifdef _SQUID_WIN32_
@@ -282,23 +282,23 @@ mimeInit(char *filename)
 	    continue;
 	xstrncpy(chopbuf, buf, BUFSIZ);
 	if ((pattern = strtok(chopbuf, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
+	    debugs(25, 1, "mimeInit: parse error: '%s'", buf);
 	    continue;
 	}
 	if ((type = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
+	    debugs(25, 1, "mimeInit: parse error: '%s'", buf);
 	    continue;
 	}
 	if ((icon = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
+	    debugs(25, 1, "mimeInit: parse error: '%s'", buf);
 	    continue;
 	}
 	if ((encoding = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
+	    debugs(25, 1, "mimeInit: parse error: '%s'", buf);
 	    continue;
 	}
 	if ((mode = strtok(NULL, w_space)) == NULL) {
-	    debug(25, 1) ("mimeInit: parse error: '%s'\n", buf);
+	    debugs(25, 1, "mimeInit: parse error: '%s'", buf);
 	    continue;
 	}
 	download_option = 0;
@@ -309,10 +309,10 @@ mimeInit(char *filename)
 	    else if (!strcmp(option, "+view"))
 		view_option = 1;
 	    else
-		debug(25, 1) ("mimeInit: unknown option: '%s' (%s)\n", buf, option);
+		debugs(25, 1, "mimeInit: unknown option: '%s' (%s)", buf, option);
 	}
 	if (regcomp(&re, pattern, re_flags) != 0) {
-	    debug(25, 1) ("mimeInit: regcomp error: '%s'\n", buf);
+	    debugs(25, 1, "mimeInit: regcomp error: '%s'", buf);
 	    continue;
 	}
 	m = xcalloc(1, sizeof(mimeEntry));
@@ -331,7 +331,7 @@ mimeInit(char *filename)
 	m->download_option = download_option;
 	*MimeTableTail = m;
 	MimeTableTail = &m->next;
-	debug(25, 5) ("mimeInit: added '%s'\n", buf);
+	debugs(25, 5, "mimeInit: added '%s'", buf);
     }
     fclose(fp);
     /*
@@ -339,7 +339,7 @@ mimeInit(char *filename)
      */
     for (m = MimeTable; m != NULL; m = m->next)
 	mimeLoadIconFile(m->icon);
-    debug(25, 1) ("Loaded Icons.\n");
+    debugs(25, 1, "Loaded Icons.");
 }
 
 void
@@ -383,11 +383,11 @@ mimeLoadIconFile(const char *icon)
     snprintf(path, MAXPATHLEN, "%s/%s", Config.icons.directory, icon);
     fd = file_open(path, O_RDONLY | O_BINARY);
     if (fd < 0) {
-	debug(25, 0) ("mimeLoadIconFile: %s: %s\n", path, xstrerror());
+	debugs(25, 0, "mimeLoadIconFile: %s: %s", path, xstrerror());
 	return;
     }
     if (fstat(fd, &sb) < 0) {
-	debug(25, 0) ("mimeLoadIconFile: FD %d: fstat: %s\n", fd, xstrerror());
+	debugs(25, 0, "mimeLoadIconFile: FD %d: fstat: %s", fd, xstrerror());
 	file_close(fd);
 	return;
     }
@@ -417,7 +417,7 @@ mimeLoadIconFile(const char *icon)
     storeBufferFlush(e);
     storeComplete(e);
     storeTimestampsSet(e);
-    debug(25, 3) ("Loaded icon %s\n", url);
+    debugs(25, 3, "Loaded icon %s", url);
     storeUnlockObject(e);
     memFree(buf, MEM_4K_BUF);
 }

@@ -62,10 +62,10 @@ send_announce(const ipcache_addrs * ia, void *junk)
     int fd;
     int x;
     if (ia == NULL) {
-	debug(27, 1) ("send_announce: Unknown host '%s'\n", host);
+	debugs(27, 1, "send_announce: Unknown host '%s'", host);
 	return;
     }
-    debug(27, 1) ("Sending Announcement to %s\n", host);
+    debugs(27, 1, "Sending Announcement to %s", host);
     sndbuf[0] = '\0';
     snprintf(tbuf, 256, "cache_version SQUID/%s\n", version_string);
     strcat(sndbuf, tbuf);
@@ -92,7 +92,7 @@ send_announce(const ipcache_addrs * ia, void *junk)
 	    sndbuf[l] = '\0';
 	    file_close(fd);
 	} else {
-	    debug(50, 1) ("send_announce: %s: %s\n", file, xstrerror());
+	    debugs(50, 1, "send_announce: %s: %s", file, xstrerror());
 	}
     }
     memset(&S, '\0', sizeof(S));
@@ -104,6 +104,6 @@ send_announce(const ipcache_addrs * ia, void *junk)
 	&S, sizeof(S),
 	sndbuf, strlen(sndbuf) + 1);
     if (x < 0)
-	debug(27, 1) ("send_announce: FD %d: %s\n", theOutIcpConnection,
+	debugs(27, 1, "send_announce: FD %d: %s", theOutIcpConnection,
 	    xstrerror());
 }

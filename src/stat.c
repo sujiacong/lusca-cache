@@ -62,17 +62,31 @@ static double statMedianSvc(int, int);
 static void statStoreEntry(MemBuf * mb, StoreEntry * e);
 static double statCPUUsage(int minutes);
 static OBJH stat_io_get;
+static ADD AddIoStats;
+static COL GetIoStats;
+static OBJH stat_io_getex;
 static OBJH stat_objects_get;
 static OBJH stat_vmobjects_get;
 static OBJH statOpenfdObj;
 static EVH statObjects;
 static OBJH info_get;
+static ADD add_info;
+static COL get_info;
+static OBJH info_getex;
 static OBJH statFiledescriptors;
 static OBJH statCountersDump;
+static COL GetCountersStats;
+static ADD AddCountersStats;
+static OBJH statCountersDumpEx;
 static OBJH statPeerSelect;
 static OBJH statDigestBlob;
 static OBJH statAvg5min;
+static COL getAvg5min;
+static ADD addAvgStat;
+static OBJH statAvg5minEx;
 static OBJH statAvg60min;
+static COL getAvg60min;
+static OBJH statAvg60minEx;
 static OBJH statUtilization;
 static OBJH statCountersHistograms;
 static OBJH statClientRequests;
@@ -92,7 +106,7 @@ static int NCountHourHist = 0;
 CBDATA_TYPE(StatObjectsState);
 
 static void
-statUtilization(StoreEntry * e)
+statUtilization(StoreEntry * e, void* data)
 {
     storeAppendPrintf(e, "Cache Utilisation:\n");
     storeAppendPrintf(e, "\n");
@@ -133,11 +147,114 @@ statUtilization(StoreEntry * e)
 	storeAppendPrintf(e, "(no values recorded yet)\n");
     storeAppendPrintf(e, "\n");
     storeAppendPrintf(e, "Totals since cache startup:\n");
-    statCountersDump(e);
+    statCountersDump(e,NULL);
 }
 
+
+int 
+AddIoStats(void* A, void* B)
+{
+	if(!A || !B) return sizeof(IoActionData);
+	int i;
+	IoActionData* stats = (IoActionData*)A;
+	IoActionData* statsB = (IoActionData*)B;
+
+    stats->http_reads += statsB->http_reads;
+
+    for (i = 0; i < 16; ++i) {
+        stats->http_read_hist[i] += statsB->http_read_hist[i];
+    }
+
+    stats->ftp_reads += statsB->ftp_reads;
+
+    for (i = 0; i < 16; ++i) {
+        stats->ftp_read_hist[i] += statsB->ftp_read_hist[i];
+    }
+
+    stats->gopher_reads += statsB->gopher_reads;
+
+    for (i = 0; i < 16; ++i) {
+        stats->gopher_read_hist[i] += statsB->gopher_read_hist[i];
+    }	
+	return sizeof(IoActionData);
+}
+
+
+void* GetIoStats()
+{
+    IoActionData* stats = (IoActionData*)xcalloc(1,sizeof(IoActionData));
+	 
+    int i;
+
+    stats->http_reads = IOStats.Http.reads;
+
+    for (i = 0; i < 16; ++i) {
+        stats->http_read_hist[i] = IOStats.Http.read_hist[i];
+    }
+
+    stats->ftp_reads = IOStats.Ftp.reads;
+
+    for (i = 0; i < 16; ++i) {
+        stats->ftp_read_hist[i] = IOStats.Ftp.read_hist[i];
+    }
+
+    stats->gopher_reads = IOStats.Gopher.reads;
+
+    for (i = 0; i < 16; ++i) {
+        stats->gopher_read_hist[i] = IOStats.Gopher.read_hist[i];
+    }
+    return (void*)stats;
+}
+
+void
+DumpIoStats(StoreEntry* sentry, IoActionData* stats)
+{
+    int i;
+
+    storeAppendPrintf(sentry, "HTTP I/O\n");
+    storeAppendPrintf(sentry, "number of reads: %.0f\n", stats->http_reads);
+    storeAppendPrintf(sentry, "Read Histogram:\n");
+
+    for (i = 0; i < 16; ++i) {
+        storeAppendPrintf(sentry, "%5d-%5d: %9.0f %2.0f%%\n",
+                          i ? (1 << (i - 1)) + 1 : 1,
+                          1 << i,
+                          stats->http_read_hist[i],
+                          dpercent(stats->http_read_hist[i], stats->http_reads));
+    }
+
+    storeAppendPrintf(sentry, "\n");
+    storeAppendPrintf(sentry, "FTP I/O\n");
+    storeAppendPrintf(sentry, "number of reads: %.0f\n", stats->ftp_reads);
+    storeAppendPrintf(sentry, "Read Histogram:\n");
+
+    for (i = 0; i < 16; ++i) {
+        storeAppendPrintf(sentry, "%5d-%5d: %9.0f %2.0f%%\n",
+                          i ? (1 << (i - 1)) + 1 : 1,
+                          1 << i,
+                          stats->ftp_read_hist[i],
+                          dpercent(stats->ftp_read_hist[i], stats->ftp_reads));
+    }
+
+    storeAppendPrintf(sentry, "\n");
+    storeAppendPrintf(sentry, "Gopher I/O\n");
+    storeAppendPrintf(sentry, "number of reads: %.0f\n", stats->gopher_reads);
+    storeAppendPrintf(sentry, "Read Histogram:\n");
+
+    for (i = 0; i < 16; ++i) {
+        storeAppendPrintf(sentry, "%5d-%5d: %9.0f %2.0f%%\n",
+                          i ? (1 << (i - 1)) + 1 : 1,
+                          1 << i,
+                          stats->gopher_read_hist[i],
+                          dpercent(stats->gopher_read_hist[i], stats->gopher_reads));
+    }
+
+    storeAppendPrintf(sentry, "\n");
+}
+
+
 static void
-stat_io_get(StoreEntry * sentry)
+stat_io_get(StoreEntry * sentry, void* data)
 {
     int i;
 
@@ -177,6 +294,21 @@ stat_io_get(StoreEntry * sentry)
     }
 
     storeAppendPrintf(sentry, "\n");
+}
+
+
+static void stat_io_getex(StoreEntry * sentry, void* data)
+{
+	if(data)
+	{
+		IoActionData* stats = (IoActionData*)data;
+		
+		DumpIoStats(sentry,stats);
+	}
+	else
+	{
+		stat_io_get(sentry,data);
+	}
 }
 
 static const char *
@@ -314,7 +446,7 @@ statObjects(void *data)
 	eventAdd("statObjects", statObjects, state, 0.1, 1);
 	return;
     }
-    debug(49, 3) ("statObjects: Bucket #%d\n", state->bucket);
+    debugs(49, 3, "statObjects: Bucket #%d", state->bucket);
     link_next = hash_get_bucket(store_table, state->bucket);
     if (link_next) {
 	MemBuf mb;
@@ -345,7 +477,7 @@ statObjectsStart(StoreEntry * sentry, STOBJFLT * filter)
 }
 
 static void
-stat_objects_get(StoreEntry * sentry)
+stat_objects_get(StoreEntry * sentry, void* data)
 {
     statObjectsStart(sentry, NULL);
 }
@@ -357,7 +489,7 @@ statObjectsVmFilter(const StoreEntry * e)
 }
 
 static void
-stat_vmobjects_get(StoreEntry * sentry)
+stat_vmobjects_get(StoreEntry * sentry, void* data)
 {
     statObjectsStart(sentry, statObjectsVmFilter);
 }
@@ -373,7 +505,7 @@ statObjectsOpenfdFilter(const StoreEntry * e)
 }
 
 static void
-statOpenfdObj(StoreEntry * sentry)
+statOpenfdObj(StoreEntry * sentry, void* data)
 {
     statObjectsStart(sentry, statObjectsOpenfdFilter);
 }
@@ -387,7 +519,7 @@ statObjectsPendingFilter(const StoreEntry * e)
 }
 
 static void
-statPendingObj(StoreEntry * sentry)
+statPendingObj(StoreEntry * sentry, void* data)
 {
     statObjectsStart(sentry, statObjectsPendingFilter);
 }
@@ -403,7 +535,7 @@ statObjectsClientsFilter(const StoreEntry * e)
 }
 
 static void
-statClientsObj(StoreEntry * sentry)
+statClientsObj(StoreEntry * sentry, void* data)
 {
     statObjectsStart(sentry, statObjectsClientsFilter);
 }
@@ -439,7 +571,7 @@ fdRemoteAddr(const fde * f)
 }
 
 static void
-statFiledescriptors(StoreEntry * sentry)
+statFiledescriptors(StoreEntry * sentry, void* data)
 {
     int i;
     fde *f;
@@ -486,8 +618,417 @@ statFiledescriptors(StoreEntry * sentry)
     }
 }
 
+int add_info(void* A, void* B)
+{
+	if(!A || !B) return sizeof(InfoActionData);
+	
+	InfoActionData* stats = (InfoActionData*)A;
+	InfoActionData* statsB = (InfoActionData*)B;
+	
+    if (!timerisset(&squid_start) || timercmp(&squid_start, &statsB->squid_start, >))
+        stats->squid_start = statsB->squid_start;
+    if (timercmp(&current_time, &statsB->current_time, <))
+        stats->current_time = statsB->current_time;
+	
+	stats->client_http_clients	+= statsB->client_http_clients;
+	stats->client_http_requests  += statsB->client_http_requests;
+	stats->icp_pkts_recv  += statsB->icp_pkts_recv;
+	stats->icp_pkts_sent  += statsB->icp_pkts_sent;
+	stats->icp_replies_queued  += statsB->icp_replies_queued;
+#if USE_HTCP
+	stats->htcp_pkts_recv  += statsB->htcp_pkts_recv;
+	stats->htcp_pkts_sent  += statsB->htcp_pkts_sent;
+#endif
+	stats->request_failure_ratio  += statsB->request_failure_ratio;
+	stats->avg_client_http_requests  += statsB->avg_client_http_requests;
+	stats->avg_icp_messages  += statsB->avg_icp_messages;
+	stats->select_loops  += statsB->select_loops;
+	stats->avg_loop_time  += statsB->avg_loop_time;
+	stats->request_hit_ratio5  += statsB->request_hit_ratio5;
+	stats->request_hit_ratio60	+= statsB->request_hit_ratio60;
+	stats->byte_hit_ratio5	+= statsB->byte_hit_ratio5;
+	stats->byte_hit_ratio60  += statsB->byte_hit_ratio60;
+	stats->request_hit_mem_ratio5  += statsB->request_hit_mem_ratio5;
+	stats->request_hit_mem_ratio60	+= statsB->request_hit_mem_ratio60;
+	stats->request_hit_disk_ratio5	+= statsB->request_hit_disk_ratio5;
+	stats->request_hit_disk_ratio60  += statsB->request_hit_disk_ratio60;
+	stats->storeswapsize  +=	statsB->storeswapsize;
+	stats->storememsize  += 	statsB->storememsize;
+	stats->meanobjectsize  +=	statsB->meanobjectsize;
+	stats->unlink_requests	+= statsB->unlink_requests;
+	stats->http_requests5  += statsB->http_requests5;
+	stats->http_requests60	+= statsB->http_requests60;
+	stats->cache_misses5  += statsB->cache_misses5;
+	stats->cache_misses60  += statsB->cache_misses60;
+	stats->cache_hits5	+= statsB->cache_hits5;
+	stats->cache_hits60  += statsB->cache_hits60;
+	stats->near_hits5  += statsB->near_hits5;
+	stats->near_hits60	+= statsB->near_hits60;
+	stats->not_modified_replies5  += statsB->not_modified_replies5;
+	stats->not_modified_replies60  += statsB->not_modified_replies60;
+	stats->dns_lookups5  += statsB->dns_lookups5;
+	stats->dns_lookups60  += statsB->dns_lookups60;
+	stats->icp_queries5  += statsB->icp_queries5;
+	stats->icp_queries60  += statsB->icp_queries60;
+	
+    if (statsB->up_time > stats->up_time)
+        stats->up_time = statsB->up_time;
+
+	stats->cpu_time  += statsB->cpu_time;
+	stats->cpu_usage  += statsB->cpu_usage;
+	stats->cpu_usage5  += statsB->cpu_usage5;
+	stats->cpu_usage60	+= statsB->cpu_usage60;
+	stats->maxrss  += statsB->maxrss;
+	stats->page_faults	+= statsB->page_faults;
+#if HAVE_MSTATS && HAVE_GNUMALLOC_H
+	ms	+=	   ms;
+	stats->ms_bytes_total  += statsB->ms_bytes_total;
+	stats->ms_bytes_free  += statsB->ms_bytes_free;
+	stats->ms_free_percent	+=	statsB->ms_free_percent;
+#endif
+	stats->total_accounted	+= statsB->total_accounted;
+	stats->alloc_calls	+= statsB->alloc_calls;
+	stats->total_accounted  += statsB->total_accounted;
+	stats->free_calls  += statsB->free_calls;
+	stats->max_fd  += statsB->max_fd;
+	stats->biggest_fd  += statsB->biggest_fd;
+	stats->number_fd  += statsB->number_fd;
+	stats->opening_fd  += statsB->opening_fd;
+	stats->num_fd_free	+= statsB->num_fd_free;
+	stats->reserved_fd	+= statsB->reserved_fd;
+	stats->open_disk_fd  += statsB->open_disk_fd;
+
+	stats->store_entry_count  +=	stats->store_entry_count;
+	stats->store_mem_object_count  +=	stats->store_mem_object_count;
+	stats->store_mem_count	+=	stats->store_mem_count;
+	stats->store_swap_count   +=	stats->store_swap_count;
+
+	++stats->count;
+
+	return sizeof(InfoActionData);
+}
+
+void* get_info()
+{
+	InfoActionData* stats = xcalloc(1, sizeof(InfoActionData));
+    struct rusage rusage;
+    double cputime;
+    double runtime;
+#if HAVE_MSTATS && HAVE_GNUMALLOC_H
+    struct mstats ms;
+#endif
+
+    runtime = tvSubDsec(squid_start, current_time);
+
+    if (runtime == 0.0)
+        runtime = 1.0;
+
+    stats->squid_start = squid_start;
+
+    stats->current_time = current_time;
+
+    stats->client_http_clients = statCounter.client_http.clients;
+
+    stats->client_http_requests = statCounter.client_http.requests;
+
+    stats->icp_pkts_recv = statCounter.icp.pkts_recv;
+
+    stats->icp_pkts_sent = statCounter.icp.pkts_sent;
+
+    stats->icp_replies_queued = statCounter.icp.replies_queued;
+
+#if USE_HTCP
+
+    stats->htcp_pkts_recv = statCounter.htcp.pkts_recv;
+
+    stats->htcp_pkts_sent = statCounter.htcp.pkts_sent;
+
+#endif
+
+    stats->request_failure_ratio = request_failure_ratio;
+
+    stats->avg_client_http_requests = statCounter.client_http.requests / (runtime / 60.0);
+
+    stats->avg_icp_messages = (statCounter.icp.pkts_sent + statCounter.icp.pkts_recv) / (runtime / 60.0);
+
+    stats->select_loops = CommStats.select_loops;
+    stats->avg_loop_time = 1000.0 * runtime / CommStats.select_loops;
+
+    stats->request_hit_ratio5 = statRequestHitRatio(5);
+    stats->request_hit_ratio60 = statRequestHitRatio(60);
+
+    stats->byte_hit_ratio5 = statByteHitRatio(5);
+    stats->byte_hit_ratio60 = statByteHitRatio(60);
+
+    stats->request_hit_mem_ratio5 = statRequestHitMemoryRatio(5);
+    stats->request_hit_mem_ratio60 = statRequestHitMemoryRatio(60);
+
+    stats->request_hit_disk_ratio5 = statRequestHitDiskRatio(5);
+    stats->request_hit_disk_ratio60 = statRequestHitDiskRatio(60);
+
+	stats->storeswapsize = store_swap_size;
+	stats->storememsize = store_mem_size;
+	stats->meanobjectsize = (n_disk_objects ? (double) store_swap_size / n_disk_objects : 0.0);
+    stats->unlink_requests = statCounter.unlink.requests;
+
+    stats->http_requests5 = statMedianSvc(5, MEDIAN_HTTP);
+    stats->http_requests60 = statMedianSvc(60, MEDIAN_HTTP);
+
+    stats->cache_misses5 = statMedianSvc(5, MEDIAN_MISS);
+    stats->cache_misses60 = statMedianSvc(60, MEDIAN_MISS);
+
+    stats->cache_hits5 = statMedianSvc(5, MEDIAN_HIT);
+    stats->cache_hits60 = statMedianSvc(60, MEDIAN_HIT);
+
+    stats->near_hits5 = statMedianSvc(5, MEDIAN_NH);
+    stats->near_hits60 = statMedianSvc(60, MEDIAN_NH);
+
+    stats->not_modified_replies5 = statMedianSvc(5, MEDIAN_NM);
+    stats->not_modified_replies60 = statMedianSvc(60, MEDIAN_NM);
+
+    stats->dns_lookups5 = statMedianSvc(5, MEDIAN_DNS);
+    stats->dns_lookups60 = statMedianSvc(60, MEDIAN_DNS);
+
+    stats->icp_queries5 = statMedianSvc(5, MEDIAN_ICP_QUERY);
+    stats->icp_queries60 = statMedianSvc(60, MEDIAN_ICP_QUERY);
+
+    squid_getrusage(&rusage);
+    cputime = rusage_cputime(&rusage);
+
+    stats->up_time = runtime;
+    stats->cpu_time = cputime;
+    stats->cpu_usage = dpercent(cputime, runtime);
+    stats->cpu_usage5 = statCPUUsage(5);
+    stats->cpu_usage60 = statCPUUsage(60);
+
+    stats->maxrss = rusage_maxrss(&rusage);
+    stats->page_faults = rusage_pagefaults(&rusage);
+
+#if HAVE_MSTATS && HAVE_GNUMALLOC_H
+    ms = mstats();
+    stats->ms_bytes_total = (double) (ms.bytes_total);
+    stats->ms_bytes_free = (double) (ms.bytes_free);
+	stats->ms_free_percent = percent(ms.bytes_free, ms.bytes_total);
+#endif
+    stats->total_accounted = statMemoryAccounted();
+    stats->alloc_calls = MemPoolStats.alloc_calls;
+    stats->free_calls = MemPoolStats.free_calls;
+
+    stats->max_fd = Squid_MaxFD;
+    stats->biggest_fd = Biggest_FD;
+    stats->number_fd = Number_FD;
+    stats->opening_fd = Opening_FD;
+    stats->num_fd_free = fdNFree();
+    stats->reserved_fd = RESERVED_FD;
+
+    stats->open_disk_fd = store_open_disk_fd;
+	
+	stats->store_entry_count = memPoolInUseCount(pool_storeentry);
+	stats->store_mem_object_count = memPoolInUseCount(pool_memobject);
+	stats->store_mem_count = hot_obj_count;
+	stats->store_swap_count  = n_disk_objects;
+
+	stats->count = 1;
+	
+	return (void*)stats;
+}
+
+
 static void
-info_get(StoreEntry * sentry)
+DumpInfo(StoreEntry * sentry, void* data)
+{
+	InfoActionData* stats = (InfoActionData*)data;
+	
+	storeAppendPrintf(sentry, "Squid Object Cache: Version %s\n",
+					  version_string);
+#if _SQUID_WIN32_
+    if (WIN32_run_mode == _WIN_SQUID_RUN_MODE_SERVICE) {
+	storeAppendPrintf(sentry, "\nRunning as %s Windows System Service on %s\n",
+	    WIN32_Service_name, WIN32_OS_string);
+	storeAppendPrintf(sentry, "Service command line is: %s\n", WIN32_Service_Command_Line);
+    } else
+	storeAppendPrintf(sentry, "Running on %s\n", WIN32_OS_string);
+#endif
+
+	storeAppendPrintf(sentry, "Start Time:\t%s\n",
+					  mkrfc1123(stats->squid_start.tv_sec));
+
+	storeAppendPrintf(sentry, "Current Time:\t%s\n",
+					  mkrfc1123(stats->current_time.tv_sec));
+
+	storeAppendPrintf(sentry, "Connection information for %s:\n",APP_SHORTNAME);
+
+	if (Config.onoff.client_db)
+		storeAppendPrintf(sentry, "\tNumber of clients accessing cache:\t%.0f\n", stats->client_http_clients);
+	else
+		storeAppendPrintf(sentry,"%s","\tNumber of clients accessing cache:\t(client_db off)\n");
+
+	storeAppendPrintf(sentry, "\tNumber of HTTP requests received:\t%.0f\n",
+					  stats->client_http_requests);
+
+	storeAppendPrintf(sentry, "\tNumber of ICP messages received:\t%.0f\n",
+					  stats->icp_pkts_recv);
+
+	storeAppendPrintf(sentry, "\tNumber of ICP messages sent:\t%.0f\n",
+					  stats->icp_pkts_sent);
+
+	storeAppendPrintf(sentry, "\tNumber of queued ICP replies:\t%.0f\n",
+					  stats->icp_replies_queued);
+
+#if USE_HTCP
+
+	storeAppendPrintf(sentry, "\tNumber of HTCP messages received:\t%.0f\n",
+					  stats->htcp_pkts_recv);
+
+	storeAppendPrintf(sentry, "\tNumber of HTCP messages sent:\t%.0f\n",
+					  stats->htcp_pkts_sent);
+
+#endif
+
+	double fct = stats->count > 1 ? stats->count : 1.0;
+	storeAppendPrintf(sentry, "\tRequest failure ratio:\t%5.2f\n",
+					  stats->request_failure_ratio / fct);
+
+	storeAppendPrintf(sentry, "\tAverage HTTP requests per minute since start:\t%.1f\n",
+					  stats->avg_client_http_requests);
+
+	storeAppendPrintf(sentry, "\tAverage ICP messages per minute since start:\t%.1f\n",
+					  stats->avg_icp_messages);
+
+	storeAppendPrintf(sentry, "\tSelect loop called: %.0f times, %0.3f ms avg\n",
+					  stats->select_loops, stats->avg_loop_time / fct);
+
+	storeAppendPrintf(sentry, "Cache information for %s:\n",APP_SHORTNAME);
+
+	storeAppendPrintf(sentry, "\tHits as %% of all requests:\t5min: %3.1f%%, 60min: %3.1f%%\n",
+					  stats->request_hit_ratio5 / fct,
+					  stats->request_hit_ratio60 / fct);
+
+	storeAppendPrintf(sentry, "\tHits as %% of bytes sent:\t5min: %3.1f%%, 60min: %3.1f%%\n",
+					  stats->byte_hit_ratio5 / fct,
+					  stats->byte_hit_ratio60 / fct);
+
+	storeAppendPrintf(sentry, "\tMemory hits as %% of hit requests:\t5min: %3.1f%%, 60min: %3.1f%%\n",
+					  stats->request_hit_mem_ratio5 / fct,
+					  stats->request_hit_mem_ratio60 / fct);
+
+	storeAppendPrintf(sentry, "\tDisk hits as %% of hit requests:\t5min: %3.1f%%, 60min: %3.1f%%\n",
+					  stats->request_hit_disk_ratio5 / fct,
+					  stats->request_hit_disk_ratio60 / fct);
+
+	storeAppendPrintf(sentry, "\tStorage Swap size:\t%.0f KB\n",
+					  stats->storeswapsize / 1024);
+	storeAppendPrintf(sentry, "\tStorage Mem size:\t%.0f KB\n",
+					  stats->storememsize / 1024);
+	storeAppendPrintf(sentry, "\tMean Object Size:\t%0.2f KB\n",
+					  stats->meanobjectsize / 1024);
+	storeAppendPrintf(sentry, "\tRequests given to unlinkd:\t%.0f\n",
+					  stats->unlink_requests);
+
+	storeAppendPrintf(sentry, "Median Service Times (seconds)  5 min	60 min:\n");
+	fct = stats->count > 1 ? stats->count * 1000.0 : 1000.0;
+	storeAppendPrintf(sentry, "\tHTTP Requests (All):  %8.5f %8.5f\n",
+					  stats->http_requests5 / fct,
+					  stats->http_requests60 / fct);
+
+	storeAppendPrintf(sentry, "\tCache Misses:		   %8.5f %8.5f\n",
+					  stats->cache_misses5 / fct,
+					  stats->cache_misses60 / fct);
+
+	storeAppendPrintf(sentry, "\tCache Hits:		   %8.5f %8.5f\n",
+					  stats->cache_hits5 / fct,
+					  stats->cache_hits60 / fct);
+
+	storeAppendPrintf(sentry, "\tNear Hits: 		   %8.5f %8.5f\n",
+					  stats->near_hits5 / fct,
+					  stats->near_hits60 / fct);
+
+	storeAppendPrintf(sentry, "\tNot-Modified Replies: %8.5f %8.5f\n",
+					  stats->not_modified_replies5 / fct,
+					  stats->not_modified_replies60 / fct);
+
+	storeAppendPrintf(sentry, "\tDNS Lookups:		   %8.5f %8.5f\n",
+					  stats->dns_lookups5 / fct,
+					  stats->dns_lookups60 / fct);
+
+	fct = stats->count > 1 ? stats->count * 1000000.0 : 1000000.0;
+	storeAppendPrintf(sentry, "\tICP Queries:		   %8.5f %8.5f\n",
+					  stats->icp_queries5 / fct,
+					  stats->icp_queries60 / fct);
+
+	storeAppendPrintf(sentry, "Resource usage for %s:\n", APP_SHORTNAME);
+
+	storeAppendPrintf(sentry, "\tUP Time:\t%.3f seconds\n", stats->up_time);
+
+	storeAppendPrintf(sentry, "\tCPU Time:\t%.3f seconds\n", stats->cpu_time);
+
+	storeAppendPrintf(sentry, "\tCPU Usage:\t%.2f%%\n",
+					  stats->cpu_usage);
+
+	storeAppendPrintf(sentry, "\tCPU Usage, 5 minute avg:\t%.2f%%\n",
+					  stats->cpu_usage5);
+
+	storeAppendPrintf(sentry, "\tCPU Usage, 60 minute avg:\t%.2f%%\n",
+					  stats->cpu_usage60);
+
+	storeAppendPrintf(sentry, "\tMaximum Resident Size: %.0f KB\n",
+					  stats->maxrss);
+
+	storeAppendPrintf(sentry, "\tPage faults with physical i/o: %.0f\n",
+					  stats->page_faults);
+
+#if HAVE_MSTATS && HAVE_GNUMALLOC_H
+
+	storeAppendPrintf(sentry, "Memory usage for %s via mstats():\n",APP_SHORTNAME);
+
+	storeAppendPrintf(sentry, "\tTotal space in arena:	%6.0f KB\n",
+					  stats->ms_bytes_total / 1024);
+
+	storeAppendPrintf(sentry, "\tTotal free:			%6.0f KB %.0f%%\n",
+					  stats->ms_bytes_free / 1024,
+					  stats->ms_free_percent);
+
+#endif
+
+	storeAppendPrintf(sentry, "Memory accounted for:\n");
+	storeAppendPrintf(sentry, "\tTotal accounted:		%6.0f KB\n",
+					  stats->total_accounted / 1024);
+	
+	storeAppendPrintf(sentry, "\tmemPoolAlloc calls: %9.0f\n",
+					  stats->alloc_calls);
+	storeAppendPrintf(sentry, "\tmemPoolFree calls:  %9.0f\n",
+					  stats->free_calls);
+	
+	storeAppendPrintf(sentry, "File descriptor usage for %s:\n", APP_SHORTNAME);
+	storeAppendPrintf(sentry, "\tMaximum number of file descriptors:   %4.0f\n",
+					  stats->max_fd);
+	storeAppendPrintf(sentry, "\tLargest file desc currently in use:   %4.0f\n",
+					  stats->biggest_fd);
+	storeAppendPrintf(sentry, "\tNumber of file desc currently in use: %4.0f\n",
+					  stats->number_fd);
+	storeAppendPrintf(sentry, "\tFiles queued for open: 			   %4.0f\n",
+					  stats->opening_fd);
+	storeAppendPrintf(sentry, "\tAvailable number of file descriptors: %4.0f\n",
+					  stats->num_fd_free);
+	storeAppendPrintf(sentry, "\tReserved number of file descriptors:  %4.0f\n",
+					  stats->reserved_fd);
+	storeAppendPrintf(sentry, "\tStore Disk files open: 			   %4.0f\n",
+					  stats->open_disk_fd);
+
+	storeAppendPrintf(sentry, "Internal Data Structures:\n");
+	storeAppendPrintf(sentry, "\t%6.0f StoreEntries\n",
+					  stats->store_entry_count);
+	storeAppendPrintf(sentry, "\t%6.0f StoreEntries with MemObjects\n",
+					  stats->store_mem_object_count);
+	storeAppendPrintf(sentry, "\t%6.0f Hot Object Cache Items\n",
+					  stats->store_mem_count);
+	storeAppendPrintf(sentry, "\t%6.0f on-disk objects\n",
+					  stats->store_swap_count);
+
+}
+
+static void
+info_get(StoreEntry * sentry, void* data)
 {
     struct rusage rusage;
     double cputime;
@@ -559,6 +1100,7 @@ info_get(StoreEntry * sentry)
     storeAppendPrintf(sentry, "\tRequest Disk Hit Ratios:\t5min: %3.1f%%, 60min: %3.1f%%\n",
 	statRequestHitDiskRatio(5),
 	statRequestHitDiskRatio(60));
+	
     storeAppendPrintf(sentry, "\tStorage Swap size:\t%d KB\n",
 	store_swap_size);
     storeAppendPrintf(sentry, "\tStorage Mem size:\t%d KB\n",
@@ -657,6 +1199,7 @@ info_get(StoreEntry * sentry)
 	mp.treeoverhead);
 #endif /* HAVE_EXT_MALLINFO */
 #endif /* HAVE_MALLINFO */
+
     storeAppendPrintf(sentry, "Memory accounted for:\n");
     storeAppendPrintf(sentry, "\tTotal accounted:       %6d KB\n",
 	(int) (statMemoryAccounted() >> 10));
@@ -701,6 +1244,21 @@ info_get(StoreEntry * sentry)
 #endif
 }
 
+
+static void
+info_getex(StoreEntry * sentry, void* data)
+{
+	if(data)
+	{
+		DumpInfo(sentry, data);
+	}
+	else
+	{
+		info_get(sentry, data);
+	}
+}
+
+
 #define XAVG(X) (dt ? (f->X > l->X ? ((double) (f->X - l->X) / dt) : 0.0) : 0.0)
 static void
 statAvgDump(StoreEntry * sentry, int minutes, int hours)
@@ -725,7 +1283,7 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 	    hours = N_COUNT_HOUR_HIST - 1;
 	l = &CountHourHist[hours];
     } else {
-	debug(18, 1) ("statAvgDump: Invalid args, minutes=%d, hours=%d\n",
+	debugs(18, 1, "statAvgDump: Invalid args, minutes=%d, hours=%d",
 	    minutes, hours);
 	return;
     }
@@ -897,11 +1455,399 @@ statAvgDump(StoreEntry * sentry, int minutes, int hours)
 }
 
 
+int addAvgStat(void* A, void* B)
+{
+	if(!A || !B) return sizeof(IntervalActionData);
+	IntervalActionData* stats = (IntervalActionData*)A;
+	IntervalActionData* statsB = (IntervalActionData*)B;
+	
+    if (!timerisset(&stats->sample_start_time) || timercmp(&stats->sample_start_time, &statsB->sample_start_time, >))
+        stats->sample_start_time = statsB->sample_start_time;
+    if (timercmp(&stats->sample_end_time, &statsB->sample_end_time, <))
+        stats->sample_end_time = statsB->sample_end_time;
+
+	stats->client_http_requests  += statsB->client_http_requests;
+	stats->client_http_hits  += statsB->client_http_hits;
+	stats->client_http_errors  += statsB->client_http_errors;
+	stats->client_http_kbytes_in  += statsB->client_http_kbytes_in;
+	stats->client_http_kbytes_out  += statsB->client_http_kbytes_out;
+	stats->client_http_all_median_svc_time  += statsB->client_http_all_median_svc_time;
+	stats->client_http_miss_median_svc_time  += statsB->client_http_miss_median_svc_time;
+	stats->client_http_nm_median_svc_time  += statsB->client_http_nm_median_svc_time;
+	stats->client_http_nh_median_svc_time  += statsB->client_http_nh_median_svc_time;
+	stats->client_http_hit_median_svc_time  += statsB->client_http_hit_median_svc_time;
+	stats->server_all_requests  += statsB->server_all_requests;
+	stats->server_all_errors  += statsB->server_all_errors;
+	stats->server_all_kbytes_in  += statsB->server_all_kbytes_in;
+	stats->server_all_kbytes_out  += statsB->server_all_kbytes_out;
+	stats->server_http_requests  += statsB->server_http_requests;
+	stats->server_http_errors  += statsB->server_http_errors;
+	stats->server_http_kbytes_in  += statsB->server_http_kbytes_in;
+	stats->server_http_kbytes_out  += statsB->server_http_kbytes_out;
+	stats->server_ftp_requests  += statsB->server_ftp_requests;
+	stats->server_ftp_errors  += statsB->server_ftp_errors;
+	stats->server_ftp_kbytes_in  += statsB->server_ftp_kbytes_in;
+	stats->server_ftp_kbytes_out  += statsB->server_ftp_kbytes_out;
+	stats->server_other_requests  += statsB->server_other_requests;
+	stats->server_other_errors  += statsB->server_other_errors;
+	stats->server_other_kbytes_in  += statsB->server_other_kbytes_in;
+	stats->server_other_kbytes_out  += statsB->server_other_kbytes_out;
+	stats->icp_pkts_sent  += statsB->icp_pkts_sent;
+	stats->icp_pkts_recv  += statsB->icp_pkts_recv;
+	stats->icp_queries_sent  += statsB->icp_queries_sent;
+	stats->icp_replies_sent  += statsB->icp_replies_sent;
+	stats->icp_queries_recv  += statsB->icp_queries_recv;
+	stats->icp_replies_recv  += statsB->icp_replies_recv;
+	stats->icp_replies_queued  += statsB->icp_replies_queued;
+	stats->icp_query_timeouts  += statsB->icp_query_timeouts;
+	stats->icp_kbytes_sent  += statsB->icp_kbytes_sent;
+	stats->icp_kbytes_recv  += statsB->icp_kbytes_recv;
+	stats->icp_q_kbytes_sent  += statsB->icp_q_kbytes_sent;
+	stats->icp_r_kbytes_sent  += statsB->icp_r_kbytes_sent;
+	stats->icp_q_kbytes_recv  += statsB->icp_q_kbytes_recv;
+	stats->icp_r_kbytes_recv  += statsB->icp_r_kbytes_recv;
+	stats->icp_query_median_svc_time  += statsB->icp_query_median_svc_time;
+	stats->icp_reply_median_svc_time  += statsB->icp_reply_median_svc_time;
+	stats->dns_median_svc_time  += statsB->dns_median_svc_time;
+	stats->unlink_requests  += statsB->unlink_requests;
+	stats->page_faults  += statsB->page_faults;
+#if 0	
+	stats->select_loops  += statsB->select_loops;
+	stats->select_fds  += statsB->select_fds;
+	stats->average_select_fd_period  += statsB->average_select_fd_period;
+#endif
+	stats->median_select_fds  += statsB->median_select_fds;
+	stats->swap_outs  += statsB->swap_outs;
+	stats->swap_ins  += statsB->swap_ins;
+	stats->swap_files_cleaned  += statsB->swap_files_cleaned;
+	stats->aborted_requests  += statsB->aborted_requests;
+#if 0
+	stats->syscalls_disk_opens  += statsB->syscalls_disk_opens;
+	stats->syscalls_disk_closes  += statsB->syscalls_disk_closes;
+	stats->syscalls_disk_reads  += statsB->syscalls_disk_reads;
+	stats->syscalls_disk_writes  += statsB->syscalls_disk_writes;
+	stats->syscalls_disk_seeks  += statsB->syscalls_disk_seeks;
+	stats->syscalls_disk_unlinks  += statsB->syscalls_disk_unlinks;
+	stats->syscalls_sock_accepts  += statsB->syscalls_sock_accepts;
+	stats->syscalls_sock_sockets  += statsB->syscalls_sock_sockets;
+	stats->syscalls_sock_connects  += statsB->syscalls_sock_connects;
+	stats->syscalls_sock_binds  += statsB->syscalls_sock_binds;
+	stats->syscalls_sock_closes  += statsB->syscalls_sock_closes;
+	stats->syscalls_sock_reads  += statsB->syscalls_sock_reads;
+	stats->syscalls_sock_writes  += statsB->syscalls_sock_writes;
+	stats->syscalls_sock_recvfroms  += statsB->syscalls_sock_recvfroms;
+	stats->syscalls_sock_sendtos  += statsB->syscalls_sock_sendtos;
+	stats->syscalls_selects  += statsB->syscalls_selects;
+	stats->cpu_time  += statsB->cpu_time;
+	stats->wall_time  += statsB->wall_time;	
+#endif	
+	++stats->count;
+	return sizeof(IntervalActionData);
+}
+
+
+void* getAvgStat(int minutes, int hours)
+{
+	IntervalActionData* stats = xcalloc(1, sizeof(IntervalActionData));
+	StatCounters *f;
+	StatCounters *l;
+	double dt;
+	double ct;
+	assert(N_COUNT_HIST > 1);
+	assert(minutes > 0 || hours > 0);
+	f = &CountHist[0];
+	l = f;
+
+	if (minutes > 0 && hours == 0) {
+	 /* checking minute readings ... */
+
+	 if (minutes > N_COUNT_HIST - 1)
+		 minutes = N_COUNT_HIST - 1;
+
+	 l = &CountHist[minutes];
+	} else if (minutes == 0 && hours > 0) {
+	 /* checking hour readings ... */
+
+	 if (hours > N_COUNT_HOUR_HIST - 1)
+		 hours = N_COUNT_HOUR_HIST - 1;
+
+	 l = &CountHourHist[hours];
+	} else {
+	 debugs(18, DBG_IMPORTANT, "statAvgDump: Invalid args, minutes=%d, hours=%d",minutes, hours);
+	 return NULL;
+	}
+
+	dt = tvSubDsec(l->timestamp, f->timestamp);
+	ct = f->cputime - l->cputime;
+
+	stats->sample_start_time = l->timestamp;
+	stats->sample_end_time = f->timestamp;
+
+	stats->client_http_requests = XAVG(client_http.requests);
+	stats->client_http_hits = XAVG(client_http.hits);
+	stats->client_http_errors = XAVG(client_http.errors);
+	stats->client_http_kbytes_in = XAVG(client_http.kbytes_in.kb);
+	stats->client_http_kbytes_out = XAVG(client_http.kbytes_out.kb);
+
+	stats->client_http_all_median_svc_time = statHistDeltaMedian(&l->client_http.all_svc_time,
+										 &f->client_http.all_svc_time) / 1000.0;
+	stats->client_http_miss_median_svc_time = statHistDeltaMedian(&l->client_http.miss_svc_time,
+		 &f->client_http.miss_svc_time) / 1000.0;
+	stats->client_http_nm_median_svc_time = statHistDeltaMedian(&l->client_http.nm_svc_time,
+										&f->client_http.nm_svc_time) / 1000.0;
+	stats->client_http_nh_median_svc_time = statHistDeltaMedian(&l->client_http.nh_svc_time,
+										&f->client_http.nh_svc_time) / 1000.0;
+	stats->client_http_hit_median_svc_time = statHistDeltaMedian(&l->client_http.hit_svc_time,
+										 &f->client_http.hit_svc_time) / 1000.0;
+
+	stats->server_all_requests = XAVG(server.all.requests);
+	stats->server_all_errors = XAVG(server.all.errors);
+	stats->server_all_kbytes_in = XAVG(server.all.kbytes_in.kb);
+	stats->server_all_kbytes_out = XAVG(server.all.kbytes_out.kb);
+
+	stats->server_http_requests = XAVG(server.http.requests);
+	stats->server_http_errors = XAVG(server.http.errors);
+	stats->server_http_kbytes_in = XAVG(server.http.kbytes_in.kb);
+	stats->server_http_kbytes_out = XAVG(server.http.kbytes_out.kb);
+
+	stats->server_ftp_requests = XAVG(server.ftp.requests);
+	stats->server_ftp_errors = XAVG(server.ftp.errors);
+	stats->server_ftp_kbytes_in = XAVG(server.ftp.kbytes_in.kb);
+	stats->server_ftp_kbytes_out = XAVG(server.ftp.kbytes_out.kb);
+
+	stats->server_other_requests = XAVG(server.other.requests);
+	stats->server_other_errors = XAVG(server.other.errors);
+	stats->server_other_kbytes_in = XAVG(server.other.kbytes_in.kb);
+	stats->server_other_kbytes_out = XAVG(server.other.kbytes_out.kb);
+
+	stats->icp_pkts_sent = XAVG(icp.pkts_sent);
+	stats->icp_pkts_recv = XAVG(icp.pkts_recv);
+	stats->icp_queries_sent = XAVG(icp.queries_sent);
+	stats->icp_replies_sent = XAVG(icp.replies_sent);
+	stats->icp_queries_recv = XAVG(icp.queries_recv);
+	stats->icp_replies_recv = XAVG(icp.replies_recv);
+	stats->icp_replies_queued = XAVG(icp.replies_queued);
+	stats->icp_query_timeouts = XAVG(icp.query_timeouts);
+	stats->icp_kbytes_sent = XAVG(icp.kbytes_sent.kb);
+	stats->icp_kbytes_recv = XAVG(icp.kbytes_recv.kb);
+	stats->icp_q_kbytes_sent = XAVG(icp.q_kbytes_sent.kb);
+	stats->icp_r_kbytes_sent = XAVG(icp.r_kbytes_sent.kb);
+	stats->icp_q_kbytes_recv = XAVG(icp.q_kbytes_recv.kb);
+	stats->icp_r_kbytes_recv = XAVG(icp.r_kbytes_recv.kb);
+
+	stats->icp_query_median_svc_time = statHistDeltaMedian(&l->icp.query_svc_time,
+								   &f->icp.query_svc_time) / 1000000.0;
+	stats->icp_reply_median_svc_time = statHistDeltaMedian(&l->icp.reply_svc_time,
+								   &f->icp.reply_svc_time) / 1000000.0;
+	stats->dns_median_svc_time = statHistDeltaMedian(&l->dns.svc_time,
+							 &f->dns.svc_time) / 1000.0;
+
+	stats->unlink_requests = XAVG(unlink.requests);
+	stats->page_faults = XAVG(page_faults);
+
+#if 0	
+	stats->select_loops = XAVG(select_loops);
+	stats->select_fds = XAVG(select_fds);	
+	stats->average_select_fd_period = f->select_fds > l->select_fds ?
+								  (f->select_time - l->select_time) / (f->select_fds - l->select_fds) : 0.0;
+#endif	
+	stats->median_select_fds = statHistDeltaMedian(&l->select_fds_hist, &f->select_fds_hist);
+	stats->swap_outs = XAVG(swap.outs);
+	stats->swap_ins = XAVG(swap.ins);
+	stats->swap_files_cleaned = XAVG(swap.files_cleaned);
+	stats->aborted_requests = XAVG(aborted_requests);
+
+#if 0	
+	stats->syscalls_disk_opens = XAVG(syscalls.disk.opens);
+	stats->syscalls_disk_closes = XAVG(syscalls.disk.closes);
+	stats->syscalls_disk_reads = XAVG(syscalls.disk.reads);
+	stats->syscalls_disk_writes = XAVG(syscalls.disk.writes);
+	stats->syscalls_disk_seeks = XAVG(syscalls.disk.seeks);
+	stats->syscalls_disk_unlinks = XAVG(syscalls.disk.unlinks);
+	stats->syscalls_sock_accepts = XAVG(syscalls.sock.accepts);
+	stats->syscalls_sock_sockets = XAVG(syscalls.sock.sockets);
+	stats->syscalls_sock_connects = XAVG(syscalls.sock.connects);
+	stats->syscalls_sock_binds = XAVG(syscalls.sock.binds);
+	stats->syscalls_sock_closes = XAVG(syscalls.sock.closes);
+	stats->syscalls_sock_reads = XAVG(syscalls.sock.reads);
+	stats->syscalls_sock_writes = XAVG(syscalls.sock.writes);
+	stats->syscalls_sock_recvfroms = XAVG(syscalls.sock.recvfroms);
+	stats->syscalls_sock_sendtos = XAVG(syscalls.sock.sendtos);
+	stats->syscalls_selects = XAVG(syscalls.selects);*/
+#endif
+
+	stats->cpu_time = ct;
+	stats->wall_time = dt;
+
+	stats->count = 1;
+	
+	return (void*)stats;
+}
+
+void
+DumpAvgStat(StoreEntry* sentry, void* data)
+{
+	IntervalActionData* stats = (IntervalActionData*)data;
+		
+    storeAppendPrintf(sentry, "sample_start_time = %d.%d (%s)\n",
+                      (int)stats->sample_start_time.tv_sec,
+                      (int)stats->sample_start_time.tv_usec,
+                      mkrfc1123(stats->sample_start_time.tv_sec));
+    storeAppendPrintf(sentry, "sample_end_time = %d.%d (%s)\n",
+                      (int)stats->sample_end_time.tv_sec,
+                      (int)stats->sample_end_time.tv_usec,
+                      mkrfc1123(stats->sample_end_time.tv_sec));
+
+    storeAppendPrintf(sentry, "client_http.requests = %f/sec\n",
+                      stats->client_http_requests);
+    storeAppendPrintf(sentry, "client_http.hits = %f/sec\n",
+                      stats->client_http_hits);
+    storeAppendPrintf(sentry, "client_http.errors = %f/sec\n",
+                      stats->client_http_errors);
+    storeAppendPrintf(sentry, "client_http.kbytes_in = %f/sec\n",
+                      stats->client_http_kbytes_in);
+    storeAppendPrintf(sentry, "client_http.kbytes_out = %f/sec\n",
+                      stats->client_http_kbytes_out);
+
+    double fct = stats->count > 1 ? stats->count : 1.0;
+    storeAppendPrintf(sentry, "client_http.all_median_svc_time = %f seconds\n",
+                      stats->client_http_all_median_svc_time / fct);
+    storeAppendPrintf(sentry, "client_http.miss_median_svc_time = %f seconds\n",
+                      stats->client_http_miss_median_svc_time / fct);
+    storeAppendPrintf(sentry, "client_http.nm_median_svc_time = %f seconds\n",
+                      stats->client_http_nm_median_svc_time / fct);
+    storeAppendPrintf(sentry, "client_http.nh_median_svc_time = %f seconds\n",
+                      stats->client_http_nh_median_svc_time / fct);
+    storeAppendPrintf(sentry, "client_http.hit_median_svc_time = %f seconds\n",
+                      stats->client_http_hit_median_svc_time / fct);
+
+    storeAppendPrintf(sentry, "server.all.requests = %f/sec\n",
+                      stats->server_all_requests);
+    storeAppendPrintf(sentry, "server.all.errors = %f/sec\n",
+                      stats->server_all_errors);
+    storeAppendPrintf(sentry, "server.all.kbytes_in = %f/sec\n",
+                      stats->server_all_kbytes_in);
+    storeAppendPrintf(sentry, "server.all.kbytes_out = %f/sec\n",
+                      stats->server_all_kbytes_out);
+
+    storeAppendPrintf(sentry, "server.http.requests = %f/sec\n",
+                      stats->server_http_requests);
+    storeAppendPrintf(sentry, "server.http.errors = %f/sec\n",
+                      stats->server_http_errors);
+    storeAppendPrintf(sentry, "server.http.kbytes_in = %f/sec\n",
+                      stats->server_http_kbytes_in);
+    storeAppendPrintf(sentry, "server.http.kbytes_out = %f/sec\n",
+                      stats->server_http_kbytes_out);
+
+    storeAppendPrintf(sentry, "server.ftp.requests = %f/sec\n",
+                      stats->server_ftp_requests);
+    storeAppendPrintf(sentry, "server.ftp.errors = %f/sec\n",
+                      stats->server_ftp_errors);
+    storeAppendPrintf(sentry, "server.ftp.kbytes_in = %f/sec\n",
+                      stats->server_ftp_kbytes_in);
+    storeAppendPrintf(sentry, "server.ftp.kbytes_out = %f/sec\n",
+                      stats->server_ftp_kbytes_out);
+
+    storeAppendPrintf(sentry, "server.other.requests = %f/sec\n",
+                      stats->server_other_requests);
+    storeAppendPrintf(sentry, "server.other.errors = %f/sec\n",
+                      stats->server_other_errors);
+    storeAppendPrintf(sentry, "server.other.kbytes_in = %f/sec\n",
+                      stats->server_other_kbytes_in);
+    storeAppendPrintf(sentry, "server.other.kbytes_out = %f/sec\n",
+                      stats->server_other_kbytes_out);
+
+    storeAppendPrintf(sentry, "icp.pkts_sent = %f/sec\n",
+                      stats->icp_pkts_sent);
+    storeAppendPrintf(sentry, "icp.pkts_recv = %f/sec\n",
+                      stats->icp_pkts_recv);
+    storeAppendPrintf(sentry, "icp.queries_sent = %f/sec\n",
+                      stats->icp_queries_sent);
+    storeAppendPrintf(sentry, "icp.replies_sent = %f/sec\n",
+                      stats->icp_replies_sent);
+    storeAppendPrintf(sentry, "icp.queries_recv = %f/sec\n",
+                      stats->icp_queries_recv);
+    storeAppendPrintf(sentry, "icp.replies_recv = %f/sec\n",
+                      stats->icp_replies_recv);
+    storeAppendPrintf(sentry, "icp.replies_queued = %f/sec\n",
+                      stats->icp_replies_queued);
+    storeAppendPrintf(sentry, "icp.query_timeouts = %f/sec\n",
+                      stats->icp_query_timeouts);
+    storeAppendPrintf(sentry, "icp.kbytes_sent = %f/sec\n",
+                      stats->icp_kbytes_sent);
+    storeAppendPrintf(sentry, "icp.kbytes_recv = %f/sec\n",
+                      stats->icp_kbytes_recv);
+    storeAppendPrintf(sentry, "icp.q_kbytes_sent = %f/sec\n",
+                      stats->icp_q_kbytes_sent);
+    storeAppendPrintf(sentry, "icp.r_kbytes_sent = %f/sec\n",
+                      stats->icp_r_kbytes_sent);
+    storeAppendPrintf(sentry, "icp.q_kbytes_recv = %f/sec\n",
+                      stats->icp_q_kbytes_recv);
+    storeAppendPrintf(sentry, "icp.r_kbytes_recv = %f/sec\n",
+                      stats->icp_r_kbytes_recv);
+    storeAppendPrintf(sentry, "icp.query_median_svc_time = %f seconds\n",
+                      stats->icp_query_median_svc_time / fct);
+    storeAppendPrintf(sentry, "icp.reply_median_svc_time = %f seconds\n",
+                      stats->icp_reply_median_svc_time / fct);
+    storeAppendPrintf(sentry, "dns.median_svc_time = %f seconds\n",
+                      stats->dns_median_svc_time / fct);
+    storeAppendPrintf(sentry, "unlink.requests = %f/sec\n",
+                      stats->unlink_requests);
+    storeAppendPrintf(sentry, "page_faults = %f/sec\n",
+                      stats->page_faults);
+#if 0
+    storeAppendPrintf(sentry, "select_loops = %f/sec\n",
+                      stats->select_loops);
+    storeAppendPrintf(sentry, "select_fds = %f/sec\n",
+                      stats->select_fds);
+    storeAppendPrintf(sentry, "average_select_fd_period = %f/fd\n",
+                      stats->average_select_fd_period / fct);
+#endif	
+    storeAppendPrintf(sentry, "median_select_fds = %f\n",
+                      stats->median_select_fds / fct);
+    storeAppendPrintf(sentry, "swap.outs = %f/sec\n",
+                      stats->swap_outs);
+    storeAppendPrintf(sentry, "swap.ins = %f/sec\n",
+                      stats->swap_ins);
+    storeAppendPrintf(sentry, "swap.files_cleaned = %f/sec\n",
+                      stats->swap_files_cleaned);
+    storeAppendPrintf(sentry, "aborted_requests = %f/sec\n",
+                      stats->aborted_requests);
+
+#if USE_POLL
+    storeAppendPrintf(sentry, "syscalls.polls = %f/sec\n", stats->syscalls_selects);
+#elif defined(USE_SELECT) || defined(USE_SELECT_WIN32)
+    storeAppendPrintf(sentry, "syscalls.selects = %f/sec\n", stats->syscalls_selects);
+#endif
+
+#if 0	
+    storeAppendPrintf(sentry, "syscalls.disk.opens = %f/sec\n", stats->syscalls_disk_opens);
+    storeAppendPrintf(sentry, "syscalls.disk.closes = %f/sec\n", stats->syscalls_disk_closes);
+    storeAppendPrintf(sentry, "syscalls.disk.reads = %f/sec\n", stats->syscalls_disk_reads);
+    storeAppendPrintf(sentry, "syscalls.disk.writes = %f/sec\n", stats->syscalls_disk_writes);
+    storeAppendPrintf(sentry, "syscalls.disk.seeks = %f/sec\n", stats->syscalls_disk_seeks);
+    storeAppendPrintf(sentry, "syscalls.disk.unlinks = %f/sec\n", stats->syscalls_disk_unlinks);
+    storeAppendPrintf(sentry, "syscalls.sock.accepts = %f/sec\n", stats->syscalls_sock_accepts);
+    storeAppendPrintf(sentry, "syscalls.sock.sockets = %f/sec\n", stats->syscalls_sock_sockets);
+    storeAppendPrintf(sentry, "syscalls.sock.connects = %f/sec\n", stats->syscalls_sock_connects);
+    storeAppendPrintf(sentry, "syscalls.sock.binds = %f/sec\n", stats->syscalls_sock_binds);
+    storeAppendPrintf(sentry, "syscalls.sock.closes = %f/sec\n", stats->syscalls_sock_closes);
+    storeAppendPrintf(sentry, "syscalls.sock.reads = %f/sec\n", stats->syscalls_sock_reads);
+    storeAppendPrintf(sentry, "syscalls.sock.writes = %f/sec\n", stats->syscalls_sock_writes);
+    storeAppendPrintf(sentry, "syscalls.sock.recvfroms = %f/sec\n", stats->syscalls_sock_recvfroms);
+    storeAppendPrintf(sentry, "syscalls.sock.sendtos = %f/sec\n", stats->syscalls_sock_sendtos);
+#endif
+
+    storeAppendPrintf(sentry, "cpu_time = %f seconds\n", stats->cpu_time);
+    storeAppendPrintf(sentry, "wall_time = %f seconds\n", stats->wall_time);
+    storeAppendPrintf(sentry, "cpu_usage = %f%%\n", dpercent(stats->cpu_time, stats->wall_time));
+}
+
 void
 statInit(void)
 {
     int i;
-    debug(18, 5) ("statInit: Initializing...\n");
+    debugs(18, 5, "statInit: Initializing...");
     CBDATA_INIT_TYPE(StatObjectsState);
     for (i = 0; i < N_COUNT_HIST; i++)
 	statCountersInit(&CountHist[i]);
@@ -911,62 +1857,62 @@ statInit(void)
     eventAdd("statAvgTick", statAvgTick, NULL, (double) COUNT_INTERVAL, 1);
     cachemgrRegister("info",
 	"General Runtime Information",
-	info_get, 0, 1);
+	info_getex, add_info, get_info, 0, 1, 1);
     cachemgrRegister("filedescriptors",
 	"Process Filedescriptor Allocation",
-	statFiledescriptors, 0, 1);
+	statFiledescriptors, NULL, NULL, 0, 1, 0);
     cachemgrRegister("objects",
 	"All Cache Objects",
-	stat_objects_get, 0, 0);
+	stat_objects_get, NULL, NULL, 0, 0, 0);
     cachemgrRegister("vm_objects",
 	"In-Memory and In-Transit Objects",
-	stat_vmobjects_get, 0, 0);
+	stat_vmobjects_get, NULL, NULL, 0, 0, 0);
     cachemgrRegister("openfd_objects",
 	"Objects with Swapout files open",
-	statOpenfdObj, 0, 0);
+	statOpenfdObj, NULL, NULL, 0, 0, 0);
     cachemgrRegister("pending_objects",
 	"Objects being retreived from the network",
-	statPendingObj, 0, 0);
+	statPendingObj, NULL, NULL, 0, 0, 0);
     cachemgrRegister("client_objects",
 	"Objects being sent to clients",
-	statClientsObj, 0, 0);
+	statClientsObj, NULL, NULL, 0, 0, 0);
     cachemgrRegister("io",
 	"Server-side network read() size histograms",
-	stat_io_get, 0, 1);
+	stat_io_getex, AddIoStats, GetIoStats, 0, 1, 1);
     cachemgrRegister("counters",
 	"Traffic and Resource Counters",
-	statCountersDump, 0, 1);
+	statCountersDumpEx, AddCountersStats, GetCountersStats, 0, 1, 1);
     cachemgrRegister("peer_select",
 	"Peer Selection Algorithms",
-	statPeerSelect, 0, 1);
+	statPeerSelect, NULL, NULL, 0, 1, 0);
     cachemgrRegister("digest_stats",
 	"Cache Digest and ICP blob",
-	statDigestBlob, 0, 1);
+	statDigestBlob, NULL, NULL, 0, 1, 0);
     cachemgrRegister("5min",
 	"5 Minute Average of Counters",
-	statAvg5min, 0, 1);
+	statAvg5minEx, addAvgStat, getAvg5min, 0, 1, 1);
     cachemgrRegister("60min",
 	"60 Minute Average of Counters",
-	statAvg60min, 0, 1);
+	statAvg60minEx, addAvgStat, getAvg60min, 0, 1, 1);
     cachemgrRegister("utilization",
 	"Cache Utilization",
-	statUtilization, 0, 1);
+	statUtilization, NULL, NULL, 0, 1, 0);
 #if STAT_GRAPHS
     cachemgrRegister("graph_variables",
 	"Display cache metrics graphically",
-	statGraphDump, 0, 1);
+	statGraphDump, NULL, NULL, 0, 1, 0);
 #endif
     cachemgrRegister("histograms",
 	"Full Histogram Counts",
-	statCountersHistograms, 0, 1);
+	statCountersHistograms, NULL, NULL, 0, 1, 0);
     ClientActiveRequests.head = NULL;
     ClientActiveRequests.tail = NULL;
     cachemgrRegister("active_requests",
 	"Client-side Active Requests",
-	statClientRequests, 0, 1);
-    cachemgrRegister("iapp_stats", "libiapp statistics", statIappStats, 0, 1);
-    cachemgrRegister("curcounters", "current high level counters", statCurrentStuff, 0, 1);
-    cachemgrRegister("squidaio_counts", "Async IO Function Counters", aioStats, 0, 1);
+	statClientRequests, NULL, NULL, 0, 1, 0);
+    cachemgrRegister("iapp_stats", "libiapp statistics", statIappStats, NULL, NULL, 0, 1, 0);
+    cachemgrRegister("curcounters", "current high level counters", statCurrentStuff, NULL, NULL, 0, 1, 0);
+    cachemgrRegister("squidaio_counts", "Async IO Function Counters", aioStats, NULL, NULL, 0, 1, 0);
 }
 
 static void
@@ -1000,7 +1946,7 @@ statAvgTick(void *notused)
     if (Config.warnings.high_rptm > 0) {
 	int i = (int) statMedianSvc(20, MEDIAN_HTTP);
 	if (Config.warnings.high_rptm < i)
-	    debug(18, 0) ("WARNING: Median response time is %d milliseconds\n", i);
+	    debugs(18, 0, "WARNING: Median response time is %d milliseconds", i);
     }
     if (Config.warnings.high_pf) {
 	int i = (CountHist[0].page_faults - CountHist[1].page_faults);
@@ -1008,7 +1954,7 @@ statAvgTick(void *notused)
 	if (i > 0 && dt > 0.0) {
 	    i /= (int) dt;
 	    if (Config.warnings.high_pf < i)
-		debug(18, 0) ("WARNING: Page faults occuring at %d/sec\n", i);
+		debugs(18, 0, "WARNING: Page faults occuring at %d/sec", i);
 	}
     }
     if (Config.warnings.high_memory) {
@@ -1023,7 +1969,7 @@ statAvgTick(void *notused)
 	i = (size_t) ((char *) sbrk(0) - (char *) sbrk_start);
 #endif
 	if (Config.warnings.high_memory < i)
-	    debug(18, 0) ("WARNING: Memory usage at %d MB\n", i >> 20);
+	    debugs(18, 0, "WARNING: Memory usage at %d MB", i >> 20);
     }
 }
 
@@ -1110,7 +2056,7 @@ statCountersCopy(StatCounters * dest, const StatCounters * orig)
 }
 
 static void
-statCountersHistograms(StoreEntry * sentry)
+statCountersHistograms(StoreEntry * sentry, void* data)
 {
     StatCounters *f = &statCounter;
     storeAppendPrintf(sentry, "client_http.all_svc_time histogram:\n");
@@ -1131,8 +2077,285 @@ statCountersHistograms(StoreEntry * sentry)
     statHistDump(&f->dns.svc_time, sentry, NULL);
 }
 
+int AddCountersStats(void* A, void* B)
+{
+	if(!A || !B) return sizeof(CountersActionData);
+	CountersActionData* stats = (CountersActionData*)A;
+	
+	CountersActionData* statsB = (CountersActionData*)B;
+	
+	if (timercmp(&stats->sample_time, &statsB->sample_time, <))
+		 stats->sample_time = statsB->sample_time;
+	
+	stats->client_http_requests += statsB->client_http_requests;
+	stats->client_http_hits += statsB->client_http_hits;
+	stats->client_http_errors = statsB->client_http_errors;
+	stats->client_http_kbytes_in = statsB->client_http_kbytes_in;
+	stats->client_http_kbytes_out = statsB->client_http_kbytes_out;
+	stats->client_http_hit_kbytes_out = statsB->client_http_hit_kbytes_out;
+
+	stats->server_all_requests	+=	statsB->server_all_requests;
+	stats->server_all_errors  +=	statsB->server_all_errors;
+	stats->server_all_kbytes_in  += 	statsB->server_all_kbytes_in;
+	stats->server_all_kbytes_out  +=	statsB->server_all_kbytes_out;
+	stats->server_http_requests  += 	statsB->server_http_requests;
+	stats->server_http_errors  +=	statsB->server_http_errors;
+	stats->server_http_kbytes_in  +=	statsB->server_http_kbytes_in;
+	stats->server_http_kbytes_out  +=	statsB->server_http_kbytes_out;
+	stats->server_ftp_requests	+=	statsB->server_ftp_requests;
+	stats->server_ftp_errors  +=	statsB->server_ftp_errors;
+	stats->server_ftp_kbytes_in  += 	statsB->server_ftp_kbytes_in;
+	stats->server_ftp_kbytes_out  +=	statsB->server_ftp_kbytes_out;
+	stats->server_other_requests  +=	statsB->server_other_requests;
+	stats->server_other_errors	+=	statsB->server_other_errors;
+	stats->server_other_kbytes_in  +=	statsB->server_other_kbytes_in;
+	stats->server_other_kbytes_out	+=	statsB->server_other_kbytes_out;
+	stats->icp_pkts_sent  +=	statsB->icp_pkts_sent;
+	stats->icp_pkts_recv  +=	statsB->icp_pkts_recv;
+	stats->icp_queries_sent  += 	statsB->icp_queries_sent;
+	stats->icp_replies_sent  += 	statsB->icp_replies_sent;
+	stats->icp_queries_recv  += 	statsB->icp_queries_recv;
+	stats->icp_replies_recv  += 	statsB->icp_replies_recv;
+	stats->icp_query_timeouts  +=	statsB->icp_query_timeouts;
+	stats->icp_replies_queued  +=	statsB->icp_replies_queued;
+	stats->icp_kbytes_sent	+=	statsB->icp_kbytes_sent;
+	stats->icp_kbytes_recv	+=	statsB->icp_kbytes_recv;
+	stats->icp_q_kbytes_sent  +=	statsB->icp_q_kbytes_sent;
+	stats->icp_r_kbytes_sent  +=	statsB->icp_r_kbytes_sent;
+	stats->icp_q_kbytes_recv  +=	statsB->icp_q_kbytes_recv;
+	stats->icp_r_kbytes_recv  +=	statsB->icp_r_kbytes_recv;
+#if USE_CACHE_DIGESTS
+	stats->icp_times_used  +=	statsB->icp_times_used;
+	stats->cd_times_used  +=	statsB->cd_times_used;
+	stats->cd_msgs_sent  += 	statsB->cd_msgs_sent;
+	stats->cd_msgs_recv  += 	statsB->cd_msgs_recv;
+	stats->cd_memory  +=	statsB->cd_memory;
+	stats->cd_local_memory	+=	statsB->cd_local_memory;
+	stats->cd_kbytes_sent  +=	statsB->cd_kbytes_sent;
+	stats->cd_kbytes_recv  +=	statsB->cd_kbytes_recv;
+#endif
+	stats->unlink_requests	+=	statsB->unlink_requests;
+	stats->page_faults	+=	statsB->page_faults;
+
+	stats->cpu_time  += 	statsB->cpu_time;
+	stats->wall_time  +=	statsB->wall_time;
+	stats->swap_outs  +=	statsB->swap_outs; 
+	stats->swap_ins  += 	statsB->swap_ins;
+	stats->swap_files_cleaned  +=	statsB->swap_files_cleaned;
+	stats->aborted_requests  += 	statsB->aborted_requests;
+
+	return sizeof(CountersActionData);
+}
+
+void* GetCountersStats()
+{
+	CountersActionData* stats = xcalloc(1, sizeof(CountersActionData));
+	
+    StatCounters *f = &statCounter;
+
+    struct rusage rusage;
+    squid_getrusage(&rusage);
+    f->page_faults = rusage_pagefaults(&rusage);
+    f->cputime = rusage_cputime(&rusage);
+
+    stats->sample_time = f->timestamp;
+    stats->client_http_requests = f->client_http.requests;
+    stats->client_http_hits = f->client_http.hits;
+    stats->client_http_errors = f->client_http.errors;
+    stats->client_http_kbytes_in = f->client_http.kbytes_in.kb;
+    stats->client_http_kbytes_out = f->client_http.kbytes_out.kb;
+    stats->client_http_hit_kbytes_out = f->client_http.hit_kbytes_out.kb;
+
+    stats->server_all_requests = f->server.all.requests;
+    stats->server_all_errors = f->server.all.errors;
+    stats->server_all_kbytes_in = f->server.all.kbytes_in.kb;
+    stats->server_all_kbytes_out = f->server.all.kbytes_out.kb;
+
+    stats->server_http_requests = f->server.http.requests;
+    stats->server_http_errors = f->server.http.errors;
+    stats->server_http_kbytes_in = f->server.http.kbytes_in.kb;
+    stats->server_http_kbytes_out = f->server.http.kbytes_out.kb;
+
+    stats->server_ftp_requests = f->server.ftp.requests;
+    stats->server_ftp_errors = f->server.ftp.errors;
+    stats->server_ftp_kbytes_in = f->server.ftp.kbytes_in.kb;
+    stats->server_ftp_kbytes_out = f->server.ftp.kbytes_out.kb;
+
+    stats->server_other_requests = f->server.other.requests;
+    stats->server_other_errors = f->server.other.errors;
+    stats->server_other_kbytes_in = f->server.other.kbytes_in.kb;
+    stats->server_other_kbytes_out = f->server.other.kbytes_out.kb;
+
+    stats->icp_pkts_sent = f->icp.pkts_sent;
+    stats->icp_pkts_recv = f->icp.pkts_recv;
+    stats->icp_queries_sent = f->icp.queries_sent;
+    stats->icp_replies_sent = f->icp.replies_sent;
+    stats->icp_queries_recv = f->icp.queries_recv;
+    stats->icp_replies_recv = f->icp.replies_recv;
+    stats->icp_query_timeouts = f->icp.query_timeouts;
+    stats->icp_replies_queued = f->icp.replies_queued;
+    stats->icp_kbytes_sent = f->icp.kbytes_sent.kb;
+    stats->icp_kbytes_recv = f->icp.kbytes_recv.kb;
+    stats->icp_q_kbytes_sent = f->icp.q_kbytes_sent.kb;
+    stats->icp_r_kbytes_sent = f->icp.r_kbytes_sent.kb;
+    stats->icp_q_kbytes_recv = f->icp.q_kbytes_recv.kb;
+    stats->icp_r_kbytes_recv = f->icp.r_kbytes_recv.kb;
+
+#if USE_CACHE_DIGESTS
+
+    stats->icp_times_used = f->icp.times_used;
+    stats->cd_times_used = f->cd.times_used;
+    stats->cd_msgs_sent = f->cd.msgs_sent;
+    stats->cd_msgs_recv = f->cd.msgs_recv;
+    stats->cd_memory = f->cd.memory.kb;
+    stats->cd_local_memory = store_digest ? store_digest->mask_size / 1024 : 0;
+    stats->cd_kbytes_sent = f->cd.kbytes_sent.kb;
+    stats->cd_kbytes_recv = f->cd.kbytes_recv.kb;
+#endif
+
+    stats->unlink_requests = f->unlink.requests;
+    stats->page_faults = f->page_faults;
+    stats->cpu_time = f->cputime;
+    stats->wall_time = tvSubDsec(f->timestamp, current_time);
+    stats->swap_outs = f->swap.outs;
+    stats->swap_ins = f->swap.ins;
+    stats->swap_files_cleaned = f->swap.files_cleaned;
+    stats->aborted_requests = f->aborted_requests;
+	return (void*)stats;
+}
+
+
+void
+DumpCountersStats(StoreEntry* sentry, void* data)
+{
+	CountersActionData* stats = (CountersActionData*)data;
+	
+    storeAppendPrintf(sentry, "sample_time = %d.%d (%s)\n",
+                      (int) stats->sample_time.tv_sec,
+                      (int) stats->sample_time.tv_usec,
+                      mkrfc1123(stats->sample_time.tv_sec));
+    storeAppendPrintf(sentry, "client_http.requests = %.0f\n",
+                      stats->client_http_requests);
+    storeAppendPrintf(sentry, "client_http.hits = %.0f\n",
+                      stats->client_http_hits);
+    storeAppendPrintf(sentry, "client_http.errors = %.0f\n",
+                      stats->client_http_errors);
+    storeAppendPrintf(sentry, "client_http.kbytes_in = %.0f\n",
+                      stats->client_http_kbytes_in);
+    storeAppendPrintf(sentry, "client_http.kbytes_out = %.0f\n",
+                      stats->client_http_kbytes_out);
+    storeAppendPrintf(sentry, "client_http.hit_kbytes_out = %.0f\n",
+                      stats->client_http_hit_kbytes_out);
+
+    storeAppendPrintf(sentry, "server.all.requests = %.0f\n",
+                      stats->server_all_requests);
+    storeAppendPrintf(sentry, "server.all.errors = %.0f\n",
+                      stats->server_all_errors);
+    storeAppendPrintf(sentry, "server.all.kbytes_in = %.0f\n",
+                      stats->server_all_kbytes_in);
+    storeAppendPrintf(sentry, "server.all.kbytes_out = %.0f\n",
+                      stats->server_all_kbytes_out);
+
+    storeAppendPrintf(sentry, "server.http.requests = %.0f\n",
+                      stats->server_http_requests);
+    storeAppendPrintf(sentry, "server.http.errors = %.0f\n",
+                      stats->server_http_errors);
+    storeAppendPrintf(sentry, "server.http.kbytes_in = %.0f\n",
+                      stats->server_http_kbytes_in);
+    storeAppendPrintf(sentry, "server.http.kbytes_out = %.0f\n",
+                      stats->server_http_kbytes_out);
+
+    storeAppendPrintf(sentry, "server.ftp.requests = %.0f\n",
+                      stats->server_ftp_requests);
+    storeAppendPrintf(sentry, "server.ftp.errors = %.0f\n",
+                      stats->server_ftp_errors);
+    storeAppendPrintf(sentry, "server.ftp.kbytes_in = %.0f\n",
+                      stats->server_ftp_kbytes_in);
+    storeAppendPrintf(sentry, "server.ftp.kbytes_out = %.0f\n",
+                      stats->server_ftp_kbytes_out);
+
+    storeAppendPrintf(sentry, "server.other.requests = %.0f\n",
+                      stats->server_other_requests);
+    storeAppendPrintf(sentry, "server.other.errors = %.0f\n",
+                      stats->server_other_errors);
+    storeAppendPrintf(sentry, "server.other.kbytes_in = %.0f\n",
+                      stats->server_other_kbytes_in);
+    storeAppendPrintf(sentry, "server.other.kbytes_out = %.0f\n",
+                      stats->server_other_kbytes_out);
+
+    storeAppendPrintf(sentry, "icp.pkts_sent = %.0f\n",
+                      stats->icp_pkts_sent);
+    storeAppendPrintf(sentry, "icp.pkts_recv = %.0f\n",
+                      stats->icp_pkts_recv);
+    storeAppendPrintf(sentry, "icp.queries_sent = %.0f\n",
+                      stats->icp_queries_sent);
+    storeAppendPrintf(sentry, "icp.replies_sent = %.0f\n",
+                      stats->icp_replies_sent);
+    storeAppendPrintf(sentry, "icp.queries_recv = %.0f\n",
+                      stats->icp_queries_recv);
+    storeAppendPrintf(sentry, "icp.replies_recv = %.0f\n",
+                      stats->icp_replies_recv);
+    storeAppendPrintf(sentry, "icp.query_timeouts = %.0f\n",
+                      stats->icp_query_timeouts);
+    storeAppendPrintf(sentry, "icp.replies_queued = %.0f\n",
+                      stats->icp_replies_queued);
+    storeAppendPrintf(sentry, "icp.kbytes_sent = %.0f\n",
+                      stats->icp_kbytes_sent);
+    storeAppendPrintf(sentry, "icp.kbytes_recv = %.0f\n",
+                      stats->icp_kbytes_recv);
+    storeAppendPrintf(sentry, "icp.q_kbytes_sent = %.0f\n",
+                      stats->icp_q_kbytes_sent);
+    storeAppendPrintf(sentry, "icp.r_kbytes_sent = %.0f\n",
+                      stats->icp_r_kbytes_sent);
+    storeAppendPrintf(sentry, "icp.q_kbytes_recv = %.0f\n",
+                      stats->icp_q_kbytes_recv);
+    storeAppendPrintf(sentry, "icp.r_kbytes_recv = %.0f\n",
+                      stats->icp_r_kbytes_recv);
+
+#if USE_CACHE_DIGESTS
+
+    storeAppendPrintf(sentry, "icp.times_used = %.0f\n",
+                      stats->icp_times_used);
+    storeAppendPrintf(sentry, "cd.times_used = %.0f\n",
+                      stats->cd_times_used);
+    storeAppendPrintf(sentry, "cd.msgs_sent = %.0f\n",
+                      stats->cd_msgs_sent);
+    storeAppendPrintf(sentry, "cd.msgs_recv = %.0f\n",
+                      stats->cd_msgs_recv);
+    storeAppendPrintf(sentry, "cd.memory = %.0f\n",
+                      stats->cd_memory);
+    storeAppendPrintf(sentry, "cd.local_memory = %.0f\n",
+                      stats->cd_local_memory);
+    storeAppendPrintf(sentry, "cd.kbytes_sent = %.0f\n",
+                      stats->cd_kbytes_sent);
+    storeAppendPrintf(sentry, "cd.kbytes_recv = %.0f\n",
+                      stats->cd_kbytes_recv);
+#endif
+
+    storeAppendPrintf(sentry, "unlink.requests = %.0f\n",
+                      stats->unlink_requests);
+    storeAppendPrintf(sentry, "page_faults = %.0f\n",
+                      stats->page_faults);
+#if 0	
+    storeAppendPrintf(sentry, "select_loops = %.0f\n",
+                      stats->select_loops);
+#endif	
+    storeAppendPrintf(sentry, "cpu_time = %f\n",
+                      stats->cpu_time);
+    storeAppendPrintf(sentry, "wall_time = %f\n",
+                      stats->wall_time);
+    storeAppendPrintf(sentry, "swap.outs = %.0f\n",
+                      stats->swap_outs);
+    storeAppendPrintf(sentry, "swap.ins = %.0f\n",
+                      stats->swap_ins);
+    storeAppendPrintf(sentry, "swap.files_cleaned = %.0f\n",
+                      stats->swap_files_cleaned);
+    storeAppendPrintf(sentry, "aborted_requests = %.0f\n",
+                      stats->aborted_requests);
+}
+
 static void
-statCountersDump(StoreEntry * sentry)
+statCountersDump(StoreEntry * sentry, void* data)
 {
     StatCounters *f = &statCounter;
     struct rusage rusage;
@@ -1263,6 +2486,19 @@ statCountersDump(StoreEntry * sentry)
 	f->aborted_requests);
 }
 
+static void
+statCountersDumpEx(StoreEntry * sentry, void* data)
+{
+	if(data)
+	{
+		DumpCountersStats(sentry, data);
+	}
+	else
+	{
+		statCountersDump(sentry,data);
+	}
+}
+
 void
 statFreeMemory(void)
 {
@@ -1274,7 +2510,7 @@ statFreeMemory(void)
 }
 
 static void
-statPeerSelect(StoreEntry * sentry)
+statPeerSelect(StoreEntry * sentry, void* data)
 {
 #if USE_CACHE_DIGESTS
     StatCounters *f = &statCounter;
@@ -1306,22 +2542,22 @@ statPeerSelect(StoreEntry * sentry)
 }
 
 static void
-statDigestBlob(StoreEntry * sentry)
+statDigestBlob(StoreEntry * sentry, void* data)
 {
     storeAppendPrintf(sentry, "\nCounters:\n");
-    statCountersDump(sentry);
+    statCountersDump(sentry,data);
     storeAppendPrintf(sentry, "\n5 Min Averages:\n");
     statAvgDump(sentry, 5, 0);
     storeAppendPrintf(sentry, "\nHistograms:\n");
-    statCountersHistograms(sentry);
+    statCountersHistograms(sentry,data);
     storeAppendPrintf(sentry, "\nPeer Digests:\n");
-    statPeerSelect(sentry);
+    statPeerSelect(sentry,data);
     storeAppendPrintf(sentry, "\nLocal Digest:\n");
-    storeDigestReport(sentry);
+    storeDigestReport(sentry,data);
 }
 
 static void
-statCurrentStuff(StoreEntry *e)
+statCurrentStuff(StoreEntry *e, void* data)
 {
 	storeAppendPrintf(e, "info.client_side.conn_count=%d\n", connStateGetCount());
 	storeAppendPrintf(e, "info.http.conn_count=%d\n", httpGetCount());
@@ -1354,16 +2590,57 @@ statCurrentStuff(StoreEntry *e)
 }
 
 static void
-statAvg5min(StoreEntry * e)
+statAvg5min(StoreEntry * e, void* data)
 {
     statAvgDump(e, 5, 0);
 }
 
+
 static void
-statAvg60min(StoreEntry * e)
+statAvg60min(StoreEntry * e, void* data)
 {
     statAvgDump(e, 60, 0);
 }
+
+static void*
+getAvg5min()
+{
+	return getAvgStat(5,0);
+}
+
+static void*	
+getAvg60min()
+{
+	return getAvgStat(60,0);
+}
+
+
+static void
+statAvg5minEx(StoreEntry * e, void* data)
+{
+	if(data)
+	{
+		DumpAvgStat(e,data);
+	}
+	else
+	{
+		statAvgDump(e, 5, 0);
+	}
+}
+
+static void
+statAvg60minEx(StoreEntry * e, void* data)
+{
+	if(data)
+	{
+		DumpAvgStat(e,data);
+	}
+	else
+	{
+    	statAvgDump(e, 60, 0);
+	}
+}
+
 
 static double
 statMedianSvc(int interval, int which)
@@ -1401,7 +2678,7 @@ statMedianSvc(int interval, int which)
 	x = statHistDeltaMedian(&l->dns.svc_time, &f->dns.svc_time);
 	break;
     default:
-	debug(49, 5) ("statMedianSvc: unknown type.\n");
+	debugs(49, 5, "statMedianSvc: unknown type.");
 	x = 0;
     }
     return x;
@@ -1492,7 +2769,7 @@ statByteHitRatio(int minutes)
      */
     cd = CountHist[0].cd.kbytes_recv.kb - CountHist[minutes].cd.kbytes_recv.kb;
     if (s < cd)
-	debug(18, 1) ("STRANGE: srv_kbytes=%d, cd_kbytes=%d\n", (int) s, (int) cd);
+	debugs(18, 1, "STRANGE: srv_kbytes=%d, cd_kbytes=%d", (int) s, (int) cd);
     s -= cd;
 #endif
     if (c > s)
@@ -1502,7 +2779,7 @@ statByteHitRatio(int minutes)
 }
 
 static void
-statClientRequests(StoreEntry * s)
+statClientRequests(StoreEntry * s, void* data)
 {
     dlink_node *i;
     clientHttpRequest *http;
@@ -1609,7 +2886,7 @@ statClientRequests(StoreEntry * s)
     GRAPH_END
 
 static void
-statGraphDump(StoreEntry * e)
+statGraphDump(StoreEntry * e, void* data)
 {
     int i;
     double dt;
@@ -1668,7 +2945,7 @@ statMemoryAccounted(void)
  * Only if asyncio is compiled in
  */
 void
-aioStats(StoreEntry * sentry)
+aioStats(StoreEntry * sentry, void* data)
 {
     squidaio_thread_t *threadp;
     int i;
@@ -1695,3 +2972,4 @@ aioStats(StoreEntry * sentry)
         threadp = threadp->next;
     }
 }
+

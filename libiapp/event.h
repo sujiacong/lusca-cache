@@ -3,6 +3,8 @@
 
 typedef void EVH(void *);
 
+typedef int EVCDT(int, void *);
+
 /* The list of event processes */
 struct ev_entry {
     EVH *func;
@@ -22,6 +24,9 @@ extern void eventAddIsh(const char *name, EVH * func, void *arg, double delta_is
 extern void eventRun(void);
 extern int eventNextTime(void);
 extern void eventDelete(EVH * func, void *arg);
+void eventDeleteNoAssert(EVH * func, void *arg);
+void eventTravel(int fd, EVH * func, EVCDT* travel);
+extern void eventConditionDelete(int fd, EVH * func, EVCDT* condition);
 extern void eventInit(void);
 extern void eventCleanup(void);
 extern void eventFreeMemory(void);

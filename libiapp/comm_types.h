@@ -30,9 +30,11 @@ typedef enum {
         COMM_NONBLOCKING = 1,
         COMM_NOCLOEXEC = 2,
         COMM_REUSEADDR = 4,
-        COMM_TPROXY_LCL = 8,
-        COMM_TPROXY_REM = 16
+        COMM_DOBIND = 8,
+        COMM_TPROXY_LCL = 16,
+        COMM_TPROXY_REM = 32
 } comm_flags_t;
+
 
 /* The default "no TOS" value */
 #define COMM_TOS_DEFAULT        0

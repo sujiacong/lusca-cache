@@ -74,7 +74,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	int len;
 	struct stat sb;
 
-	debug(86, 3) ("read_file: %s\n", path);
+	debugs(86, 3, "read_file: %s", path);
 	fd = open(path, O_RDONLY | O_BINARY);
  	if (fd < 0) {
 		perror("open");
@@ -95,7 +95,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	}
 
 	len = read(fd, buf, BUFSIZE);
-	debug(86, 3) ("read_file: FILE: %s\n", path);
+	debugs(86, 3, "read_file: FILE: %s", path);
 
 	if (! parse_header(buf, len, re)) {
 		close(fd);
@@ -124,7 +124,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 	int i, j;
 
 	getCurrentTime();
-	debug(47, 1) ("ufs_rebuild: %s: beginning rebuild from directory\n", sd->path);
+	debugs(47, 1, "ufs_rebuild: %s: beginning rebuild from directory", sd->path);
 	for (i = 0; i < store_ufs_l1(sd); i++) {
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
@@ -132,7 +132,7 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 				return;
 
 			getCurrentTime();
-			debug(86, 2) ("ufs_rebuild: %s: read_dir: opening dir %s\n", sd->path, dir);
+			debugs(86, 2, "ufs_rebuild: %s: read_dir: opening dir %s", sd->path, dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");
@@ -145,23 +145,23 @@ rebuild_from_dir(store_ufs_dir_t *sd)
 
 				/* Verify that the given filename belongs in the given directory */
 				if (sscanf(de->d_name, "%x", &fn) != 1) {
-					debug(86, 1) ("read_dir: invalid %s\n", de->d_name);
+					debugs(86, 1, "read_dir: invalid %s", de->d_name);
 						continue;
 				}
 				if (! store_ufs_filenum_correct_dir(sd, fn, i, j)) {
-					debug(86, 1) ("read_dir: %s does not belong in %d/%d\n", de->d_name, i, j);
+					debugs(86, 1, "read_dir: %s does not belong in %d/%d", de->d_name, i, j);
 						continue;
 				}
 
 				snprintf(path, sizeof(path) - 1, "%s/%s", dir, de->d_name);
-				debug(86, 3) ("read_dir: opening %s\n", path);
+				debugs(86, 3, "read_dir: opening %s", path);
 
 				rebuild_entry_init(&re);
 				/* Only write out the swap entry if the file metadata was correctly read */
 				if (read_file(path, &re)) {
 					re.swap_filen = fn;
 					if (! write_swaplog_entry(stdout, &re)) {
-						debug(86, 1) ("read_dir: write() failed: (%d) %s\n", errno, xstrerror());
+						debugs(86, 1, "read_dir: write() failed: (%d) %s", errno, xstrerror());
 						rebuild_entry_done(&re);
 						return;
 					}

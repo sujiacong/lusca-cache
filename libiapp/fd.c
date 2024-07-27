@@ -137,7 +137,7 @@ fd_close(int fd)
 	assert(F->read_handler == NULL);
 	assert(F->write_handler == NULL);
     }
-    debug(51, 3) ("fd_close FD %d %s\n", fd, F->desc);
+    debugs(51, 3, "fd_close FD %d %s", fd, F->desc);
     commClose(fd);
     F->flags.open = 0;
 #if DELAY_POOLS
@@ -177,6 +177,20 @@ file_write_method(int fd, const char *buf, int len)
 #endif
 
 int
+msghdr_read_method(int fd, char *buf, int len)
+{
+    const int i = recvmsg(fd, (struct msghdr*)buf, MSG_DONTWAIT);
+    return i;
+}
+
+int
+msghdr_write_method(int fd, const char *buf, int len)
+{
+    const int i = sendmsg(fd, (struct msghdr*)buf, MSG_NOSIGNAL);
+    return i > 0 ? len : i; // len is imprecise but the caller expects a match
+}
+
+int
 default_read_method(int fd, char *buf, int len)
 {
     return (read(fd, buf, len));
@@ -195,11 +209,11 @@ fd_open(int fd, unsigned int type, const char *desc)
     assert(fd >= 0);
     F = &fd_table[fd];
     if (F->flags.open) {
-	debug(51, 1) ("WARNING: Closing open FD %4d\n", fd);
+	debugs(51, 1, "WARNING: Closing open FD %4d", fd);
 	fd_close(fd);
     }
     assert(!F->flags.open);
-    debug(51, 3) ("fd_open FD %d %s\n", fd, desc);
+    debugs(51, 3, "fd_open FD %d %s", fd, desc);
     F->type = type;
     F->flags.open = 1;
     commOpen(fd);
@@ -220,8 +234,16 @@ fd_open(int fd, unsigned int type, const char *desc)
 	libcore_fatalf("fd_open(): unknown FD type - FD#: %i, type: %u, desc %s\n", fd, type, desc);
     }
 #else
+	switch (type) {
+    case FD_MSGHDR:
+    F->read_method = &msghdr_read_method;
+    F->write_method = &msghdr_write_method;
+    break;
+	default:
     F->read_method = &default_read_method;
     F->write_method = &default_write_method;
+	break;
+	}
 #endif
     fdUpdateBiggest(fd, 1);
     if (desc)
@@ -284,7 +306,7 @@ fdDumpOpen(void)
 	if (i == fileno(debug_log))
 	    continue;
 #endif
-	debug(51, 1) ("Open FD %-10s %4d %s\n",
+	debugs(51, 1, "Open FD %-10s %4d %s",
 	    F->bytes_read && F->bytes_written ? "READ/WRITE" :
 	    F->bytes_read ? "READING" :
 	    F->bytes_written ? "WRITING" : "",
@@ -330,7 +352,7 @@ fdAdjustReserved(void)
     x = Squid_MaxFD - 20 - XMIN(25, Squid_MaxFD / 16);
     if (new > x) {
 	/* perhaps this should be fatal()? -DW */
-	debug(51, 0) ("WARNING: This machine has a serious shortage of filedescriptors.\n");
+	debugs(51, 0, "WARNING: This machine has a serious shortage of filedescriptors.");
 	new = x;
     }
     /* XXX this needs to be restored as soon a possible! -adrian */
@@ -338,7 +360,8 @@ fdAdjustReserved(void)
     if (Squid_MaxFD - new < XMIN(256, Squid_MaxFD / 2))
 	libcore_fatalf("Too few filedescriptors available in the system (%d usable of %d).\n", Squid_MaxFD - new, Squid_MaxFD);
 #endif
-    debug(51, 0) ("Reserved FD adjusted from %d to %d due to failures\n",
+    debugs(51, 0, "Reserved FD adjusted from %d to %d due to failures",
 	RESERVED_FD, new);
     RESERVED_FD = new;
 }
+

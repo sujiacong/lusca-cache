@@ -12,8 +12,8 @@ modifiedSince(StoreEntry * entry, request_t * request)
     squid_off_t object_length;
     MemObject *mem = entry->mem_obj;
     time_t mod_time = entry->lastmod;
-    debug(33, 3) ("modifiedSince: '%s'\n", storeLookupUrl(entry));
-    debug(33, 3) ("modifiedSince: mod_time = %ld\n", (long int) mod_time);
+    debugs(33, 3, "modifiedSince: '%s'", storeLookupUrl(entry));
+    debugs(33, 3, "modifiedSince: mod_time = %ld", (long int) mod_time);
     if (mod_time < 0)
         return 1;
     /* Find size of the object */
@@ -21,19 +21,19 @@ modifiedSince(StoreEntry * entry, request_t * request)
     if (object_length < 0)
         object_length = contentLen(entry);
     if (mod_time > request->ims) {
-        debug(33, 3) ("--> YES: entry newer than client\n");
+        debugs(33, 3, "--> YES: entry newer than client");
         return 1;
     } else if (mod_time < request->ims) {
-        debug(33, 3) ("-->  NO: entry older than client\n");
+        debugs(33, 3, "-->  NO: entry older than client");
         return 0;
     } else if (request->imslen < 0) {
-        debug(33, 3) ("-->  NO: same LMT, no client length\n");
+        debugs(33, 3, "-->  NO: same LMT, no client length");
         return 0;
     } else if (request->imslen == object_length) {
-        debug(33, 3) ("-->  NO: same LMT, same length\n");
+        debugs(33, 3, "-->  NO: same LMT, same length");
         return 0;
     } else {
-        debug(33, 3) ("--> YES: same LMT, different length\n");
+        debugs(33, 3, "--> YES: same LMT, different length");
         return 1;
     }  
 }
@@ -46,7 +46,7 @@ clientProcessExpired(clientHttpRequest * http)
     int hit = 0;
     const char *etag;
     const int can_revalidate = http->entry->mem_obj->reply->sline.status == HTTP_OK;
-    debug(33, 3) ("clientProcessExpired: '%s'\n", http->uri);
+    debugs(33, 3, "clientProcessExpired: '%s'", http->uri);
     /*
      * check if we are allowed to contact other servers
      * @?@: Instead of a 504 (Gateway Timeout) reply, we may want to return 
@@ -61,12 +61,12 @@ clientProcessExpired(clientHttpRequest * http)
     http->old_sc = http->sc;
     if (http->entry->mem_obj && http->entry->mem_obj->ims_entry) {
 	entry = http->entry->mem_obj->ims_entry;
-	debug(33, 5) ("clientProcessExpired: collapsed request\n");
+	debugs(33, 5, "clientProcessExpired: collapsed request");
 	if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
-	    debug(33, 1) ("clientProcessExpired: collapsed request ABORTED!\n");
+	    debugs(33, 1, "clientProcessExpired: collapsed request ABORTED!");
 	    entry = NULL;
 	} else if (http->entry->mem_obj->refresh_timestamp + Config.collapsed_forwarding_timeout < squid_curtime) {
-	    debug(33, 1) ("clientProcessExpired: collapsed request STALE!\n");
+	    debugs(33, 1, "clientProcessExpired: collapsed request STALE!");
 	    entry = NULL;
 	}
 	if (entry) {
@@ -106,7 +106,7 @@ clientProcessExpired(clientHttpRequest * http)
 	http->request->flags.cache_validation = 1;
     } else
 	http->request->lastmod = -1;
-    debug(33, 5) ("clientProcessExpired: lastmod %ld\n", (long int) entry->lastmod);
+    debugs(33, 5, "clientProcessExpired: lastmod %ld", (long int) entry->lastmod);
     /* NOTE, don't call storeLockObject(), storeCreateEntry() does it */
     http->entry = entry;
     http->out.offset = 0;
@@ -121,7 +121,7 @@ clientProcessExpired(clientHttpRequest * http)
 	fwdStart(http->conn->fd, http->entry, http->request);
     /* Register with storage manager to receive updates when data comes in. */
     if (EBIT_TEST(entry->flags, ENTRY_ABORTED))
-	debug(33, 0) ("clientProcessExpired: found ENTRY_ABORTED object\n");
+	debugs(33, 0, "clientProcessExpired: found ENTRY_ABORTED object");
     storeClientCopyHeaders(http->sc, entry,
 	clientHandleIMSReply,
 	http);
@@ -132,33 +132,33 @@ clientGetsOldEntry(StoreEntry * new_entry, StoreEntry * old_entry, request_t * r
 {
     const http_status status = new_entry->mem_obj->reply->sline.status;
     if (0 == status) {
-	debug(33, 5) ("clientGetsOldEntry: YES, broken HTTP reply\n");
+	debugs(33, 5, "clientGetsOldEntry: YES, broken HTTP reply");
 	return 1;
     }
     /* If the reply is a failure then send the old object as a last
      * resort */
     if (status >= 500 && status < 600) {
 	if (EBIT_TEST(new_entry->flags, ENTRY_NEGCACHED)) {
-	    debug(33, 3) ("clientGetsOldEntry: NO, negatively cached failure reply=%d\n", status);
+	    debugs(33, 3, "clientGetsOldEntry: NO, negatively cached failure reply=%d", status);
 	    return 0;
 	}
 	if (refreshCheckStaleOK(old_entry, request)) {
-	    debug(33, 3) ("clientGetsOldEntry: YES, failure reply=%d and old acceptable to send\n", status);
+	    debugs(33, 3, "clientGetsOldEntry: YES, failure reply=%d and old acceptable to send", status);
 	    return 1;
 	}
-	debug(33, 3) ("clientGetsOldEntry: NO, failure reply=%d and old NOT acceptable to send\n", status);
+	debugs(33, 3, "clientGetsOldEntry: NO, failure reply=%d and old NOT acceptable to send", status);
 	return 0;
     }
     /* If the reply is not to a cache validation conditional then
      * we should forward it to the client */
     if (!request->flags.cache_validation) {
-	debug(33, 5) ("clientGetsOldEntry: NO, not a cache validation\n");
+	debugs(33, 5, "clientGetsOldEntry: NO, not a cache validation");
 	return 0;
     }
     /* If the reply is anything but "Not Modified" then
      * we must forward it to the client */
     if (HTTP_NOT_MODIFIED != status) {
-	debug(33, 5) ("clientGetsOldEntry: NO, reply=%d\n", status);
+	debugs(33, 5, "clientGetsOldEntry: NO, reply=%d", status);
 	return 0;
     }
     /* If the ETag matches the clients If-None-Match, then return
@@ -171,24 +171,24 @@ clientGetsOldEntry(StoreEntry * new_entry, StoreEntry * old_entry, request_t * r
 	int etag_match = strListIsMember(&etags, etag, ',');
 	stringClean(&etags);
 	if (etag_match) {
-	    debug(33, 5) ("clientGetsOldEntry: NO, client If-None-Match\n");
+	    debugs(33, 5, "clientGetsOldEntry: NO, client If-None-Match");
 	    return 0;
 	}
     }
     /* If the client did not send IMS in the request, then it
      * must get the old object, not this "Not Modified" reply */
     if (!request->flags.ims) {
-	debug(33, 5) ("clientGetsOldEntry: YES, no client IMS\n");
+	debugs(33, 5, "clientGetsOldEntry: YES, no client IMS");
 	return 1;
     }
     /* If the client IMS time is prior to the entry LASTMOD time we
      * need to send the old object */
     if (modifiedSince(old_entry, request)) {
-	debug(33, 5) ("clientGetsOldEntry: YES, modified since %ld\n",
+	debugs(33, 5, "clientGetsOldEntry: YES, modified since %ld",
 	    (long int) request->ims);
 	return 1;
     }
-    debug(33, 5) ("clientGetsOldEntry: NO, new one is fine\n");
+    debugs(33, 5, "clientGetsOldEntry: NO, new one is fine");
     return 0;
 }
 
@@ -202,7 +202,7 @@ clientHandleIMSReply(void *data, HttpReply * rep)
     int unlink_request = 0;
     StoreEntry *oldentry;
     int recopy = 1;
-    debug(33, 3) ("clientHandleIMSReply: %s\n", url);
+    debugs(33, 3, "clientHandleIMSReply: %s", url);
     if (http->old_entry && http->old_entry->mem_obj && http->old_entry->mem_obj->ims_entry) {
 	storeUnlockObject(http->old_entry->mem_obj->ims_entry);
 	http->old_entry->mem_obj->ims_entry = NULL;
@@ -216,7 +216,7 @@ clientHandleIMSReply(void *data, HttpReply * rep)
     }
     mem = entry->mem_obj;
     if (!rep) {
-	debug(33, 3) ("clientHandleIMSReply: ABORTED '%s'\n", url);
+	debugs(33, 3, "clientHandleIMSReply: ABORTED '%s'", url);
 	/* We have an existing entry, but failed to validate it */
 	/* Its okay to send the old one anyway */
 	http->log_type = LOG_TCP_REFRESH_FAIL_HIT;

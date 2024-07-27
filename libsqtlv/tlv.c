@@ -62,7 +62,7 @@ tlv_unpack(const char *buf, int *hdr_len, int max_metaid)
     j += sizeof(int);
 
     if (buflen > (*hdr_len) - sizeof(char) - sizeof(int)) {
-        debug(20, 0) ("tlv_unpack: unable to unpack: passed buffer size %d bytes; TLV length %d bytes; header prefix size %d bytes\n", *hdr_len, buflen, (int) (sizeof(char) + sizeof(int)));
+        debugs(20, 0, "tlv_unpack: unable to unpack: passed buffer size %d bytes; TLV length %d bytes; header prefix size %d bytes", *hdr_len, buflen, (int) (sizeof(char) + sizeof(int)));
         return NULL;
     }
 
@@ -76,18 +76,18 @@ tlv_unpack(const char *buf, int *hdr_len, int max_metaid)
         type = buf[j++];
         /* 0 is reserved, but allow some slack for new types.. */
         if (type <= 0 || type > max_metaid) {
-            debug(20, 0) ("tlv_unpack: bad type (%d)!\n", type);
+            debugs(20, 0, "tlv_unpack: bad type (%d)!", type);
             break;
         }
         xmemcpy(&length, &buf[j], sizeof(int));
         if (length < 0 || length > (1 << 16)) {
-            debug(20, 0) ("tlv_unpack: insane length (%d)!\n", length);
+            debugs(20, 0, "tlv_unpack: insane length (%d)!", length);
             break;
         }
         j += sizeof(int);
         if (j + length > buflen) {
-            debug(20, 0) ("tlv_unpack: overflow!\n");
-            debug(20, 0) ("\ttype=%d, length=%d, buflen=%d, offset=%d\n",
+            debugs(20, 0, "tlv_unpack: overflow!");
+            debugs(20, 0, "\ttype=%d, length=%d, buflen=%d, offset=%d",
                 type, length, buflen, (int) j);
             break;
         }

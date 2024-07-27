@@ -67,12 +67,12 @@ static void
 storeAufsDirRebuildComplete(RebuildState * rb)
 {
     if (rb->log_fd) {
-	debug(47, 1) ("Done reading %s swaplog (%d entries)\n",
+	debugs(47, 1, "Done reading %s swaplog (%d entries)",
 	    rb->sd->path, rb->n_read);
 	file_close(rb->log_fd);
 	rb->log_fd = -1;
     } else {
-	debug(47, 1) ("Done scanning %s (%d entries)\n",
+	debugs(47, 1, "Done scanning %s (%d entries)",
 	    rb->sd->path, rb->counts.scancount);
     }
     store_dirs_rebuilding--;
@@ -99,7 +99,7 @@ storeAufsDirAddDiskRestore(SwapDir * SD, const cache_key * key,
     int clean)
 {
     StoreEntry *e = NULL;
-    debug(47, 5) ("storeAufsAddDiskRestore: %s, fileno=%08X\n", storeKeyText(key), file_number);
+    debugs(47, 5, "storeAufsAddDiskRestore: %s, fileno=%08X", storeKeyText(key), file_number);
     /* if you call this you'd better be sure file_number is not 
      * already in use! */
     e = new_StoreEntry(STORE_ENTRY_WITHOUT_MEMOBJ, NULL);
@@ -145,7 +145,7 @@ storeAufsDirRebuildFromSwapLogObject(RebuildState *rb, storeSwapLogData s)
 	 * to mask it off.
 	 */
 	s.swap_filen &= 0x00FFFFFF;
-	debug(47, 3) ("storeAufsDirRebuildFromSwapLog: %s %s %08X\n",
+	debugs(47, 3, "storeAufsDirRebuildFromSwapLog: %s %s %08X",
 	    swap_log_op_str[(int) s.op],
 	    storeKeyText(s.key),
 	    s.swap_filen);
@@ -168,7 +168,7 @@ storeAufsDirRebuildFromSwapLogObject(RebuildState *rb, storeSwapLogData s)
 	} else {
 	    x = log(++rb->counts.bad_log_op) / log(10.0);
 	    if (0.0 == x - (double) (int) x)
-		debug(47, 1) ("WARNING: %d invalid swap log entries found\n",
+		debugs(47, 1, "WARNING: %d invalid swap log entries found",
 		    rb->counts.bad_log_op);
 	    rb->counts.invalid++;
 	    return -1;
@@ -203,7 +203,7 @@ storeAufsDirRebuildFromSwapLogObject(RebuildState *rb, storeSwapLogData s)
 		storeAufsDirUnrefObj(SD, e);
 	    } else {
 		debug_trap("storeAufsDirRebuildFromSwapLog: bad condition");
-		debug(47, 1) ("\tSee %s:%d\n", __FILE__, __LINE__);
+		debugs(47, 1, "\tSee %s:%d", __FILE__, __LINE__);
 	    }
 	    return -1;
 	} else if (used) {
@@ -212,7 +212,7 @@ storeAufsDirRebuildFromSwapLogObject(RebuildState *rb, storeSwapLogData s)
 	     * point.  If the log is dirty, the filesize check should have
 	     * caught this.  If the log is clean, there should never be a
 	     * newer entry. */
-	    debug(47, 1) ("WARNING: newer swaplog entry for dirno %d, fileno %08X\n",
+	    debugs(47, 1, "WARNING: newer swaplog entry for dirno %d, fileno %08X",
 		SD->index, s.swap_filen);
 	    /* I'm tempted to remove the swapfile here just to be safe,
 	     * but there is a bad race condition in the NOVM version if
@@ -266,15 +266,16 @@ storeAufsRebuildHelperRead(int fd, void *data)
 	int t, p;
 
 	assert(fd == rb->helper.r_fd);
-	debug(47, 5) ("storeAufsRebuildHelperRead: %s: ready for helper read\n", sd->path);
+	debugs(47, 5, "storeAufsRebuildHelperRead: %s: ready for helper read", sd->path);
 
 	assert(rb->rbuf.size - rb->rbuf.used > 0);
-	debug(47, 8) ("storeAufsRebuildHelperRead: %s: trying to read %d bytes\n", sd->path, rb->rbuf.size - rb->rbuf.used);
+	debugs(47, 8, "storeAufsRebuildHelperRead: %s: trying to read %d bytes", sd->path, rb->rbuf.size - rb->rbuf.used);
 	r = FD_READ_METHOD(fd, rb->rbuf.buf + rb->rbuf.used, rb->rbuf.size - rb->rbuf.used);
-	debug(47, 8) ("storeAufsRebuildHelperRead: %s: read %d bytes\n", sd->path, r);
+	debugs(47, 8, "storeAufsRebuildHelperRead: %s: read %d bytes", sd->path, r);
 	if (r <= 0) {
 		/* Error or EOF */
-		debug(47, 1) ("storeAufsRebuildHelperRead: %s: read returned %d; error/eof?\n", sd->path, r);
+		debugs(47, 1, "storeAufsRebuildHelperRead: %s: read returned %d; error/eof?", sd->path, r);
+		if(!shutting_down)
 		storeAufsDirRebuildComplete(rb);
 		return;
 	}
@@ -290,11 +291,11 @@ storeAufsRebuildHelperRead(int fd, void *data)
 			case SWAP_LOG_PROGRESS:
 				t = ((storeSwapLogProgress *)(&s))->total;
 				p =  ((storeSwapLogProgress *)(&s))->progress;
-				debug(47, 3) ("storeAufsRebuildHelperRead: %s: SWAP_LOG_PROGRESS: total %d objects, progress %d objects\n", sd->path, t, p);
+				debugs(47, 3, "storeAufsRebuildHelperRead: %s: SWAP_LOG_PROGRESS: total %d objects, progress %d objects", sd->path, t, p);
 				storeRebuildProgress(rb->sd->index, t, p);
 				break;
 			case SWAP_LOG_COMPLETED:
-				debug(47, 1) ("  %s: completed rebuild\n", sd->path);
+				debugs(47, 1, "  %s: completed rebuild", sd->path);
 				storeAufsDirRebuildComplete(rb);
 				return;
 			default:
@@ -304,7 +305,7 @@ storeAufsRebuildHelperRead(int fd, void *data)
 		}
 		i += sizeof(storeSwapLogData);
 	}
-	debug(47, 5) ("storeAufsRebuildHelperRead: %s: read %d entries\n", sd->path, i / (int) sizeof(storeSwapLogData));
+	debugs(47, 5, "storeAufsRebuildHelperRead: %s: read %d entries", sd->path, i / (int) sizeof(storeSwapLogData));
 
 	/* Shuffle what is left to the beginning of the buffer */
 	if (i < rb->rbuf.used) {
@@ -372,6 +373,6 @@ storeAufsDirRebuild(SwapDir * sd)
     /* aaand we begin */
     log_fd = storeAufsDirOpenTmpSwapLog(sd, &clean, &zero);
     file_close(log_fd);	/* We don't need this open anyway..? */
-    debug(47, 1) ("Rebuilding storage in %s (%s)\n", sd->path, clean ? "CLEAN" : "DIRTY");
+    debugs(47, 1, "Rebuilding storage in %s (%s)", sd->path, clean ? "CLEAN" : "DIRTY");
     store_dirs_rebuilding++;
 }

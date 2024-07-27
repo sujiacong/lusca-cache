@@ -138,7 +138,7 @@ delayIdPtrHashCmp(const void *a, const void *b)
 }
 
 static void
-delayPoolsUpdateEvent(void *unused)
+delayPoolsUpdateEvent(void *unused, void* data)
 {
     delayPoolsUpdate(NULL);
     eventAdd("delayPoolsUpdateEvent", delayPoolsUpdateEvent, NULL, 1.0, 1);
@@ -149,9 +149,9 @@ delayPoolsInit(void)
 {
     delay_pools_last_update = getCurrentTime();
     delay_no_delay = xcalloc(1, Squid_MaxFD);
-    cachemgrRegister("delay", "Delay Pool Levels", delayPoolStats, 0, 1);
-    cachemgrRegister("delay2", "Delay Pool Statistics", delayPoolStatsNew, 0, 1);
-    eventAdd("delayPoolsUpdateEvent", delayPoolsUpdateEvent, NULL, 1.0, 1);
+    cachemgrRegister("delay", "Delay Pool Levels", delayPoolStats, NULL, NULL, 0, 1, 0);
+    cachemgrRegister("delay2", "Delay Pool Statistics", delayPoolStatsNew, NULL, NULL, 0, 1, 0);
+    eventAdd("delayPoolsUpdateEvent", delayPoolsUpdateEvent, NULL, 1.0, 1, 0);
 }
 
 void
@@ -289,7 +289,7 @@ delayFreeDelayPool(unsigned short pool)
 	memory_used -= sizeof(class3DelayPool);
 	break;
     default:
-	debug(77, 1) ("delayFreeDelayPool: bad class %d\n",
+	debugs(77, 1, "delayFreeDelayPool: bad class %d",
 	    delay_data[pool].class1->class);
     }
     safe_free(delay_data[pool].class1);
@@ -332,7 +332,7 @@ delayClient(clientHttpRequest * http)
     ch.conn = http->conn;
     ch.request = r;
     if (r->client_addr.s_addr == INADDR_BROADCAST) {
-	debug(77, 2) ("delayClient: WARNING: Called with 'allones' address, ignoring\n");
+	debugs(77, 2, "delayClient: WARNING: Called with 'allones' address, ignoring");
 	return delayId(0, 0);
     }
     for (pool = 0; pool < Config.Delay.pools; pool++) {
@@ -353,7 +353,7 @@ delayPoolClient(unsigned short pool, in_addr_t addr)
     unsigned short position;
     unsigned char class, net;
     class = Config.Delay.class[pool];
-    debug(77, 2) ("delayPoolClient: pool %u , class %u\n", pool, class);
+    debugs(77, 2, "delayPoolClient: pool %u , class %u", pool, class);
     if (class == 0)
 	return delayId(0, 0);
     if (class == 1)
@@ -939,7 +939,7 @@ delayPoolStats3(StoreEntry * sentry, int type, unsigned short pool)
 }
 
 static void
-delayPoolStats(StoreEntry * sentry)
+delayPoolStats(StoreEntry * sentry, void* data)
 {
     unsigned short i;
 
@@ -967,7 +967,7 @@ delayPoolStats(StoreEntry * sentry)
 }
 
 static void
-delayPoolStatsNew(StoreEntry * e)
+delayPoolStatsNew(StoreEntry * e, void* data)
 {
     unsigned short i;
 

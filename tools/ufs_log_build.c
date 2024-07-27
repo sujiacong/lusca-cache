@@ -103,26 +103,26 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
 	    case STORE_META_URL:
-		debug(47, 5) ("  STORE_META_URL\n");
+		debugs(47, 5, "  STORE_META_URL");
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
 		re->url = xstrdup( (char *) t->value );
 		parsed++;
 		break;
 	    case STORE_META_KEY_MD5:
-		debug(47, 5) ("  STORE_META_KEY_MD5\n");
+		debugs(47, 5, "  STORE_META_KEY_MD5");
 		/* XXX should double-check key length? */
 		re->md5_key = xmalloc(SQUID_MD5_DIGEST_LENGTH);
 		memcpy(re->md5_key, t->value, SQUID_MD5_DIGEST_LENGTH);
 		parsed++;
 		break;
 	    case STORE_META_STD_LFS:
-		debug(47, 5) ("  STORE_META_STD_LFS\n");
+		debugs(47, 5, "  STORE_META_STD_LFS");
 		/* XXX should double-check lengths match? */
 		memcpy(&re->mi, t->value, sizeof(re->mi));
 		parsed++;
 		break;
 	    case STORE_META_OBJSIZE:
-		debug(47, 5) ("  STORE_META_OBJSIZE\n");
+		debugs(47, 5, "  STORE_META_OBJSIZE");
 		/* XXX is this typecast'ed to the right "size" on all platforms ? */
 		break;
 	    default:
@@ -142,7 +142,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	int len;
 	struct stat sb;
 
-	debug(47, 3) ("read_file: %s\n", path);
+	debugs(47, 3, "read_file: %s", path);
 	fd = open(path, O_RDONLY);
  	if (fd < 0) {
 		perror("open");
@@ -156,7 +156,7 @@ read_file(const char *path, rebuild_entry_t *re)
 	}
 
 	len = read(fd, buf, BUFSIZE);
-	debug(47, 3) ("read_file: FILE: %s\n", path);
+	debugs(47, 3, "read_file: FILE: %s", path);
 
 	if (! parse_header(buf, len, re)) {
 		close(fd);
@@ -205,7 +205,7 @@ read_dir(store_ufs_dir_t *sd)
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
 			getCurrentTime();
-			debug(47, 1) ("read_dir: opening dir %s\n", dir);
+			debugs(47, 1, "read_dir: opening dir %s", dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");
@@ -219,16 +219,16 @@ read_dir(store_ufs_dir_t *sd)
 
 				/* Verify that the given filename belongs in the given directory */
 				if (sscanf(de->d_name, "%x", &fn) != 1) {
-					debug(47, 1) ("read_dir: invalid %s\n", de->d_name);
+					debugs(47, 1, "read_dir: invalid %s", de->d_name);
 						continue;
 				}
 				if (! store_ufs_filenum_correct_dir(sd, fn, i, j)) {
-					debug(47, 1) ("read_dir: %s does not belong in %d/%d\n", de->d_name, i, j);
+					debugs(47, 1, "read_dir: %s does not belong in %d/%d", de->d_name, i, j);
 						continue;
 				}
 
 				snprintf(path, sizeof(path) - 1, "%s/%s", dir, de->d_name);
-				debug(47, 3) ("read_dir: opening %s\n", path);
+				debugs(47, 3, "read_dir: opening %s", path);
 
 				rebuild_entry_init(&re);
 				(void) read_file(path, &re);
@@ -241,6 +241,8 @@ read_dir(store_ufs_dir_t *sd)
 		}
 	}
 }
+
+int KidIdentifier = 0;
 
 int
 main(int argc, char *argv[])

@@ -81,7 +81,7 @@ httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
     String s = StringNull;
     HttpHeaderEntry *e;
     HttpHeaderPos pos = HttpHeaderInitPos;
-    debug(55, 6) ("%p: joining for id %d\n", hdr, id);
+    debugs(55, 6, "%p: joining for id %d", hdr, id);
     /* only fields from ListHeaders array can be "listed" */
     assert(CBIT_TEST(ListHeadersMask, id));
     if (!CBIT_TEST(hdr->mask, id))
@@ -97,8 +97,8 @@ httpHeaderGetList(const HttpHeader * hdr, http_hdr_type id)
     assert(strBuf(s));
     /* temporary warning: remove it! @?@ @?@ @?@ */
     if (!strLen(s))
-        debug(55, 3) ("empty list header: %.*s (%d)\n", strLen2(Headers[id].name), strBuf2(Headers[id].name), id);
-    debug(55, 6) ("%p: joined for id %d: %.*s\n", hdr, id, strLen2(s), strBuf2(s));
+        debugs(55, 3, "empty list header: %.*s (%d)", strLen2(Headers[id].name), strBuf2(Headers[id].name), id);
+    debugs(55, 6, "%p: joined for id %d: %.*s", hdr, id, strLen2(s), strBuf2(s));
     return s;
 }
 

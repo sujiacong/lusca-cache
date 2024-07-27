@@ -72,7 +72,7 @@ read_dir(store_ufs_dir_t *sd)
 		for (j = 0; j < store_ufs_l2(sd); j++) {
 			(void) store_ufs_createDir(sd, i, j, dir);
 			getCurrentTime();
-			debug(47, 1) ("read_dir: opening dir %s\n", dir);
+			debugs(47, 1, "read_dir: opening dir %s", dir);
 			d = opendir(dir);
 			if (! d) {
 				perror("opendir");
@@ -86,11 +86,11 @@ read_dir(store_ufs_dir_t *sd)
 
 				/* Verify that the given filename belongs in the given directory */
 				if (sscanf(de->d_name, "%x", &fn) != 1) {
-					debug(47, 1) ("read_dir: invalid %s\n", de->d_name);
+					debugs(47, 1, "read_dir: invalid %s", de->d_name);
 						continue;
 				}
 				if (! store_ufs_filenum_correct_dir(sd, fn, i, j)) {
-					debug(47, 1) ("read_dir: %s does not belong in %d/%d\n", de->d_name, i, j);
+					debugs(47, 1, "read_dir: %s does not belong in %d/%d", de->d_name, i, j);
 						continue;
 				}
 

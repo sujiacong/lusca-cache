@@ -75,8 +75,8 @@ file_map_create(void)
     fileMap *fm = xcalloc(1, sizeof(fileMap));
     fm->max_n_files = FM_INITIAL_NUMBER;
     fm->nwords = fm->max_n_files >> LONG_BIT_SHIFT;
-    debug(8, 3) ("file_map_create: creating space for %d files\n", fm->max_n_files);
-    debug(8, 5) ("--> %d words of %d bytes each\n",
+    debugs(8, 3, "file_map_create: creating space for %d files", fm->max_n_files);
+    debugs(8, 5, "--> %d words of %d bytes each",
 	fm->nwords, (int) sizeof(*fm->file_map));
     fm->file_map = xcalloc(fm->nwords, sizeof(*fm->file_map));
     /* XXX account fm->file_map */
@@ -91,9 +91,9 @@ file_map_grow(fileMap * fm)
     fm->max_n_files <<= 1;
     assert(fm->max_n_files <= FILEMAP_MAX_SIZE);	/* swap_filen is 25 bits, signed */
     fm->nwords = fm->max_n_files >> LONG_BIT_SHIFT;
-    debug(8, 3) ("file_map_grow: creating space for %d files\n", fm->max_n_files);
+    debugs(8, 3, "file_map_grow: creating space for %d files", fm->max_n_files);
     fm->file_map = xcalloc(fm->nwords, sizeof(*fm->file_map));
-    debug(8, 3) ("copying %d old bytes\n", old_sz);
+    debugs(8, 3, "copying %d old bytes", old_sz);
     xmemcpy(fm->file_map, old_map, old_sz);
     xfree(old_map);
     /* XXX account fm->file_map */
@@ -156,7 +156,7 @@ file_map_allocate(fileMap * fm, int suggestion)
 	    return suggestion;
 	}
     }
-    debug(8, 3) ("growing from file_map_allocate\n");
+    debugs(8, 3, "growing from file_map_allocate");
     file_map_grow(fm);
     return file_map_allocate(fm, fm->max_n_files >> 1);
 }

@@ -112,7 +112,7 @@ do_select_init()
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using kqueue for the IO loop\n");
+    debugs(5, 1, "Using kqueue for the IO loop");
 }
 
 static void
@@ -150,7 +150,7 @@ commSetEvents(int fd, int need_read, int need_write)
     int st_change;
 
     assert(fd >= 0);
-    debug(5, 8) ("commSetEvents(fd=%d, read=%d, write=%d)\n", fd, need_read, need_write);
+    debugs(5, 8, "commSetEvents(fd=%d, read=%d, write=%d)", fd, need_read, need_write);
 
     st_change = kqueue_state[fd] ^ st_new;
     if (!st_change)
@@ -193,13 +193,13 @@ do_comm_select(int msec)
     num = kevent(kq, kqlst, kqoff, ke, kqmax, &timeout);
     saved_errno = errno;
     getCurrentTime();
-    debug(5, 5) ("do_comm_select: %d fds ready\n", num);
+    debugs(5, 5, "do_comm_select: %d fds ready", num);
     kqoff = 0;
     if (num < 0) {
 	if (ignoreErrno(saved_errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: kevent failure: %s\n", xstrerror());
+	debugs(5, 1, "comm_select: kevent failure: %s", xstrerror());
 	return COMM_ERROR;
     }
     statHistCount(&select_fds_hist, num);
@@ -210,7 +210,7 @@ do_comm_select(int msec)
 	int fd = (int) ke[i].ident;
 	if (ke[i].flags & EV_ERROR) {
 	    errno = ke[i].data;
-	    debug(5, 3) ("do_comm_select: kqueue event error: %s\n",
+	    debugs(5, 3, "do_comm_select: kqueue event error: %s",
 		xstrerror());
 	    continue;		/* XXX! */
 	}
@@ -222,7 +222,7 @@ do_comm_select(int msec)
 	    comm_call_handlers(fd, 0, 1);
 	    break;
 	default:
-	    debug(5, 1) ("comm_select: unexpected event: %d\n",
+	    debugs(5, 1, "comm_select: unexpected event: %d",
 		ke[i].filter);
 	    break;
 	}

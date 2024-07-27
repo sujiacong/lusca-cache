@@ -55,7 +55,7 @@ rebuild_log_progress(store_ufs_dir_t *ufs, FILE *fp, size_t s, int num_objects)
 	if (0 == fstat(fileno(fp), &sb)) {
 		if (! storeSwapLogPrintProgress(stdout, num_objects, (int) sb.st_size / s))
 			return 0;
-		debug(47, 1) ("ufs_rebuild: %s: %d of %d objects read\n", ufs->path, (int) num_objects, (int) sb.st_size / (int) s);
+		debugs(47, 1, "ufs_rebuild: %s: %d of %d objects read", ufs->path, (int) num_objects, (int) sb.st_size / (int) s);
 	}
 	return 1;
 }
@@ -80,7 +80,7 @@ read_entry(store_ufs_dir_t *ufs, FILE *fp, int version)
 	if (r != 1) {
 		if (feof(fp))
 			return 0;
-		debug(86, 2) ("fread: returned %d (ferror %d)\n", r, ferror(fp));
+		debugs(86, 2, "fread: returned %d (ferror %d)", r, ferror(fp));
 		return 0;
 	}
 	num_objects++;
@@ -101,11 +101,11 @@ read_entry(store_ufs_dir_t *ufs, FILE *fp, int version)
 	if (sd.op == SWAP_LOG_ADD || sd.op == SWAP_LOG_DEL) {
 		num_valid_objects++;
 		if (fwrite(&sd, sizeof(sd), 1, stdout) != 1) {
-			debug(86, 1) ("write failed: (%d) %s\n", errno, xstrerror());
+			debugs(86, 1, "write failed: (%d) %s", errno, xstrerror());
 			return 0;
 		}
 	} else {
-		debug(86, 5) ("error! Got swaplog entry op %d?!\n", sd.op);
+		debugs(86, 5, "error! Got swaplog entry op %d?!", sd.op);
 		num_invalid_objects++;
 	}
 
@@ -124,7 +124,7 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 	int version = -1;		/* -1 = not set, 0 = old, 1 = new */
 	char *rbuf;
 
-	debug(47, 1) ("ufs_rebuild: %s: rebuild from swaplog\n", ufs->path);
+	debugs(47, 1, "ufs_rebuild: %s: rebuild from swaplog", ufs->path);
 	fp = fopen(ufs->swaplog_path, "rb");
 	if (! fp) {
 		perror("fopen");
@@ -159,7 +159,7 @@ rebuild_from_log(store_ufs_dir_t *ufs)
 		} else if (hdr.version == 1 && hdr.record_size == sizeof(storeSwapLogDataOld)) {
 			version = 0;
 		} else {
-			debug(86, 1) ("Unsupported swap.state version %d size %d\n", hdr.version, hdr.record_size);
+			debugs(86, 1, "Unsupported swap.state version %d size %d", hdr.version, hdr.record_size);
 			fclose(fp);
 			return;
 		}
@@ -205,7 +205,7 @@ main(int argc, char *argv[])
 
     read_log_file(argv[2]);
 
-    debug(86, 1) ("%s: Read %d objects\n", argv[2], num_objects);
+    debugs(86, 1, "%s: Read %d objects", argv[2], num_objects);
 
     return 0;
 }

@@ -83,7 +83,7 @@ eventAdd(const char *name, EVH * func, void *arg, double when, int weight)
     event->id = run_id;
     if (NULL != arg)
 	cbdataLock(arg);
-    debug(41, 7) ("eventAdd: Adding '%s', in %f seconds\n", name, when);
+    debugs(41, 7, "eventAdd: Adding '%s', in %f seconds", name, when);
     /* Insert after the last event with the same or earlier time */
     for (E = &tasks; *E; E = &(*E)->next) {
 	if ((*E)->when > event->when)
@@ -109,6 +109,24 @@ eventAddIsh(const char *name, EVH * func, void *arg, double delta_ish, int weigh
 }
 
 void
+eventDeleteNoAssert(EVH * func, void *arg)
+{
+    struct ev_entry **E;
+    struct ev_entry *event;
+    for (E = &tasks; (event = *E) != NULL; E = &(*E)->next) {
+	if (event->func != func)
+	    continue;
+	if (arg && event->arg != arg)
+	    continue;
+	*E = event->next;
+	if (NULL != event->arg)
+	    cbdataUnlock(event->arg);
+	memPoolFree(pool_event, event);
+	return;
+    }
+}
+
+void
 eventDelete(EVH * func, void *arg)
 {
     struct ev_entry **E;
@@ -129,6 +147,59 @@ eventDelete(EVH * func, void *arg)
 }
 
 void
+eventConditionDelete(int fd, EVH * func, EVCDT* condition)
+{
+    struct ev_entry **E;
+    struct ev_entry *event;
+	int count = 0;
+    for (E = &tasks; (event = *E) != NULL; ++count) 
+	{
+		if (event->func != func)
+			{
+			E = &(*E)->next;
+		    continue;
+			}
+		
+		if (!condition(fd,event->arg))
+		{
+		   E = &(*E)->next;
+		    continue;
+		}
+
+		debugs(41, 5, "FD:%d,delete event %p:%p", fd, event->func,event->arg);
+		
+		*E = event->next;
+		
+		if (NULL != event->arg)
+		    cbdataUnlock(event->arg);
+		memPoolFree(pool_event, event);
+    }
+
+	debugs(41, 5, "FD:%d,delete end,count:%d", fd, count);
+}
+
+
+void
+eventTravel(int fd, EVH * func, EVCDT* travel)
+{
+    struct ev_entry **E;
+    struct ev_entry *event;
+	int count = 0;
+    for (E = &tasks; (event = *E) != NULL; ++count) 
+	{
+		if (event->func != func)
+		{
+			E = &(*E)->next;
+		    continue;
+		}
+		travel(fd,event->arg);	
+		E = &(*E)->next;
+    }
+
+	debugs(41, 5, "FD:%d,travel end,count:%d", fd, count);
+}
+
+void
 eventRun(void)
 {
     struct ev_entry *event = NULL;
@@ -140,7 +211,7 @@ eventRun(void)
     if (tasks->when > current_dtime)
 	return;
     run_id++;
-    debug(41, 5) ("eventRun: RUN ID %d\n", run_id);
+    debugs(41, 5, "eventRun: RUN ID %d", run_id);
     while ((event = tasks)) {
 	int valid = 1;
 	if (event->when > current_dtime)
@@ -162,7 +233,7 @@ eventRun(void)
 	    weight += event->weight;
 	    /* XXX assumes ->name is static memory! */
 	    last_event_ran = event->name;
-	    debug(41, 5) ("eventRun: Running '%s', id %d\n",
+	    debugs(41, 5, "eventRun: Running '%s', id %d",
 		event->name, event->id);
 	    func(arg);
 	}
@@ -175,12 +246,12 @@ eventCleanup(void)
 {
     struct ev_entry **p = &tasks;
 
-    debug(41, 2) ("eventCleanup\n");
+    debugs(41, 2, "eventCleanup");
 
     while (*p) {
 	struct ev_entry *event = *p;
 	if (!cbdataValid(event->arg)) {
-	    debug(41, 2) ("eventCleanup: cleaning '%s'\n", event->name);
+	    debugs(41, 2, "eventCleanup: cleaning '%s'", event->name);
 	    *p = event->next;
 	    cbdataUnlock(event->arg);
 	    memPoolFree(pool_event, event);

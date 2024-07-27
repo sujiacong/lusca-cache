@@ -140,6 +140,17 @@ typedef struct _RemovalPolicyNode RemovalPolicyNode;
 typedef struct _RemovalPolicySettings RemovalPolicySettings;
 typedef struct _errormap errormap;
 typedef struct _PeerMonitor PeerMonitor;
+typedef struct _action_table action_table;
+
+typedef struct _QueryParam QueryParam;
+typedef struct _QueryParams QueryParams;
+typedef struct _ActionParams ActionParams;
+typedef struct _InfoActionData InfoActionData;
+typedef struct _IntervalActionData IntervalActionData;
+typedef struct _IoActionData IoActionData;
+typedef struct _StoreIoActionData StoreIoActionData;
+typedef struct _CountersActionData CountersActionData;
+
 
 #if SQUID_SNMP
 typedef variable_list *(oid_ParseFn) (variable_list *, snint *);
@@ -171,7 +182,9 @@ typedef void STNCB(void *, struct _mem_node_ref r, ssize_t);	/* new store callba
 typedef void STHCB(void *, HttpReply *);	/* store callback */
 typedef void STABH(void *);
 typedef void ERCB(int fd, void *, size_t);
-typedef void OBJH(StoreEntry *);
+typedef void OBJH(StoreEntry *,void* data);
+typedef void* COL(void);
+typedef int ADD(void *, void *);
 typedef void STVLDCB(void *, int, int);
 typedef void HLPCMDOPTS(int *argc, char **argv);
 
@@ -239,7 +252,7 @@ typedef void AUTHSREQFREE(auth_user_request_t *);
 typedef void AUTHSSETUP(authscheme_entry_t *);
 typedef void AUTHSSHUTDOWN(void);
 typedef void AUTHSSTART(auth_user_request_t *, RH *, void *);
-typedef void AUTHSSTATS(StoreEntry *);
+typedef void AUTHSSTATS(StoreEntry *, void* data);
 typedef const char *AUTHSCONNLASTHEADER(auth_user_request_t *);
 
 /* append/vprintf's for Packer */

@@ -169,7 +169,7 @@ void
 urlMethodAssign(method_t **dst, method_t *src)
 {   
         if (*dst && (*dst)->code == METHOD_OTHER) {
-		debug(23, 1) ("urlMethodAssign: overwriting an existing method: '%s'\n",
+		debugs(23, 1, "urlMethodAssign: overwriting an existing method: '%s'",
 		    urlMethodGetConstStr((*dst)));
 	}
 	if (*dst)

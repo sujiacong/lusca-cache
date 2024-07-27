@@ -26,6 +26,7 @@
 #if HAVE_NETDB_H
 #include <netdb.h>
 #endif
+#include <sys/un.h>
 
 #include "../include/util.h"		/* for memrcmp(); perhaps that should be broken out? */
 #include "../include/hash.h"		/* for hash4() */
@@ -173,6 +174,55 @@ sqinet_copy_v4_inaddr(const sqaddr_t *src, struct in_addr *dst, sqaddr_flags fla
 
 /*!
  * @function
+ *	sqinet_get_unix_addr
+ * @abstract
+ *	Return the unix domain address of the given sqaddr_t.
+ * @discussion
+ *	This routine will assert() if the passed-in sqaddr_t is not initialised.
+ *
+ * @param	s	pointer to sqaddr_t to return the domain path for.
+ * @return		the unix domain string.
+ */
+const char*
+sqinet_get_unix_addr(const sqaddr_t *s)
+{
+	struct sockaddr_un *unixaddr = (struct sockaddr_un *) &s->st;
+	assert(s->init);
+	switch (s->st.ss_family) {
+		case PF_UNIX:
+			 return unixaddr->sun_path;
+		default:
+			assert(0);
+	}
+	return 0;
+}
+
+/*!
+ * @function
+ *	sqinet_set_unix_addr
+ * @abstract
+ *	Set the given sqaddr_t to the given unix domain address.
+ * @discussion
+ *	The sqaddr_t should be init'ed but not assigned any particular address.
+ *	The code does not currently check that the sqaddr_t is init'ed or previously assigned
+ *	and will silently overwrite the existing address.
+ *
+ * @param	s	pointer to the sqaddr_t to set the unix domain address of.
+ * @param	addr	pointer to the sockaddr_un domain address.
+ * @return		1 is succesful, 0 if failure (eg not initialised, address not set.)
+ */
+int sqinet_set_unix_addr(sqaddr_t *s, struct sockaddr_un* addr)
+{
+	struct sockaddr_un *unixaddr; 
+	assert(s->init);
+	unixaddr = (struct sockaddr_un *) &s->st;
+	unixaddr->sun_family = PF_UNIX;
+	memcpy(unixaddr->sun_path,addr->sun_path,sizeof(addr->sun_path));
+	return 1;
+}
+
+/*!
+ * @function
  *	sqinet_set_v4_inaddr
  * @abstract
  *	Set the given sqaddr_t to the given IPv4 address. The IPv4 port is set to 0.
@@ -188,7 +238,7 @@ sqinet_copy_v4_inaddr(const sqaddr_t *src, struct in_addr *dst, sqaddr_flags fla
 int
 sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr)
 {
-	struct sockaddr_in *v4;
+	struct sockaddr_in *v4; 
 
 	assert(s->init);
 	s->st.ss_family = AF_INET;
@@ -510,6 +560,9 @@ sqinet_get_port(const sqaddr_t *s)
 		case AF_INET6:
 			return ntohs(((struct sockaddr_in6 *) &s->st)->sin6_port);
 			break;
+		case PF_UNIX:
+			break;
+			
 		default:
 			assert(0);
 	}
@@ -588,6 +641,17 @@ sqinet_ntoa(const sqaddr_t *s, char *hoststr, int hostlen, sqaddr_flags flags)
 		*hoststr = '[';
 		hoststr++;
 		hostlen -= 2;
+	}
+
+	if(sqinet_get_family(s) == AF_UNIX)
+	{
+		const char* path = sqinet_get_unix_addr(s);
+		if(!path)
+		{
+			return 0;
+		}
+		strncpy(hoststr, path, MAX_IPSTRLEN);
+		return 1;
 	}
 
 	retval = getnameinfo((struct sockaddr *) (&s->st), sqinet_get_length(s), hoststr, hostlen, NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV);

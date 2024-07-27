@@ -79,20 +79,20 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	for (t = tlv_list; t; t = t->next) {
 	    switch (t->type) {
 	    case STORE_META_URL:
-		debug(47, 5) ("  STORE_META_URL\n");
+		debugs(47, 5, "  STORE_META_URL");
 		/* XXX Is this OK? Is the URL guaranteed to be \0 terminated? */
 		re->url = xstrdup( (char *) t->value );
 		parsed++;
 		break;
 	    case STORE_META_KEY_MD5:
-		debug(47, 5) ("  STORE_META_KEY_MD5\n");
+		debugs(47, 5, "  STORE_META_KEY_MD5");
 		/* XXX should double-check key length? */
 		re->md5_key = xmalloc(SQUID_MD5_DIGEST_LENGTH);
 		memcpy(re->md5_key, t->value, SQUID_MD5_DIGEST_LENGTH);
 		parsed++;
 		break;
 	    case STORE_META_STD_LFS:
-		debug(47, 5) ("  STORE_META_STD_LFS\n");
+		debugs(47, 5, "  STORE_META_STD_LFS");
 		/* XXX should double-check lengths match? */
 		memcpy(&re->mi, t->value, sizeof(re->mi));
 		parsed++;
@@ -102,7 +102,7 @@ parse_header(char *buf, int len, rebuild_entry_t *re)
 	    /* STORE_META_OBJSIZE is the objectLen(). It includes the reply headers but not the swap metadata */
 	    /* swap_file_sz in the rebuild entry data is the objectLen() + swap_hdr_size */
 	    case STORE_META_OBJSIZE:
-		debug(47, 5) ("  STORE_META_OBJSIZE\n");
+		debugs(47, 5, "  STORE_META_OBJSIZE");
 		/* XXX is this typecast'ed to the right "size" on all platforms ? */
 		re->file_size = *((squid_off_t *) t->value);
 		parsed++;

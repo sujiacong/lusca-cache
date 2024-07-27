@@ -137,11 +137,11 @@ file_open(const char *path, int mode)
     fd = open(path, mode, 0644);
     CommStats.syscalls.disk.opens++;
     if (fd < 0) {
-	debug(50, 3) ("file_open: error opening file %s: %s\n", path,
+	debugs(50, 3, "file_open: error opening file %s: %s", path,
 	    xstrerror());
 	fd = DISK_ERROR;
     } else {
-	debug(6, 5) ("file_open: FD %d\n", fd);
+	debugs(6, 5, "file_open: FD %d", fd);
 	commSetCloseOnExec(fd);
 	fd_open(fd, FD_FILE, path);
     }
@@ -188,7 +188,7 @@ file_close(int fd)
 	    diskHandleWrite(fd, NULL);
 #else
 	F->flags.close_request = 1;
-	debug(6, 2) ("file_close: FD %d, delaying close\n", fd);
+	debugs(6, 2, "file_close: FD %d, delaying close", fd);
 	return;
 #endif
     }
@@ -201,8 +201,7 @@ file_close(int fd)
 #if CALL_FSYNC_BEFORE_CLOSE
     fsync(fd);
 #endif
-    debug(6, F->flags.close_request ? 2 : 5)
-	("file_close: FD %d, really closing\n", fd);
+    debugs(6, F->flags.close_request ? 2 : 5, "file_close: FD %d, really closing", fd);
     fd_close(fd);
     close(fd);
     CommStats.syscalls.disk.closes++;
@@ -270,11 +269,11 @@ diskHandleWrite(int fd, void *notused)
     int do_close;
     if (NULL == q)
 	return;
-    debug(6, 3) ("diskHandleWrite: FD %d\n", fd);
+    debugs(6, 3, "diskHandleWrite: FD %d", fd);
     fdd->flags.write_daemon = 0;
     assert(fdd->write_q != NULL);
     assert(fdd->write_q->len > fdd->write_q->buf_offset);
-    debug(6, 3) ("diskHandleWrite: FD %d writing %d bytes\n",
+    debugs(6, 3, "diskHandleWrite: FD %d writing %d bytes",
 	fd, (int) (fdd->write_q->len - fdd->write_q->buf_offset));
     errno = 0;
     if (fdd->write_q->file_offset != -1)
@@ -282,13 +281,13 @@ diskHandleWrite(int fd, void *notused)
     len = FD_WRITE_METHOD(fd,
 	fdd->write_q->buf + fdd->write_q->buf_offset,
 	fdd->write_q->len - fdd->write_q->buf_offset);
-    debug(6, 3) ("diskHandleWrite: FD %d len = %d\n", fd, len);
+    debugs(6, 3, "diskHandleWrite: FD %d len = %d", fd, len);
     CommStats.syscalls.disk.writes++;
     fd_bytes(fd, len, FD_WRITE);
     if (len < 0) {
 	if (!ignoreErrno(errno)) {
 	    status = errno == ENOSPC ? DISK_NO_SPACE_LEFT : DISK_ERROR;
-	    debug(50, 1) ("diskHandleWrite: FD %d: disk write error: %s\n",
+	    debugs(50, 1, "diskHandleWrite: FD %d: disk write error: %s",
 		fd, xstrerror());
 	    /*
 	     * If there is no write callback, then this file is
@@ -301,7 +300,7 @@ diskHandleWrite(int fd, void *notused)
 	     */
 	    /* XXX move fatal() outside of src/! -adrian */
 	    if (fdd->wrt_handle == NULL) {
-		debug(1, 1) ("write failure!\n");
+		debugs(1, 1, "write failure!");
 		assert(1 == 0);
 	    }
 #if 0
@@ -332,7 +331,7 @@ diskHandleWrite(int fd, void *notused)
 	/* q might become NULL from write failure above */
 	q->buf_offset += len;
 	if (q->buf_offset > q->len)
-	    debug(50, 1) ("diskHandleWrite: q->buf_offset > q->len (%p,%d, %d, %d FD %d)\n",
+	    debugs(50, 1, "diskHandleWrite: q->buf_offset > q->len (%p,%d, %d, %d FD %d)",
 		q, (int) q->buf_offset, (int) q->len, len, fd);
 	assert(q->buf_offset <= q->len);
 	if (q->buf_offset == q->len) {
@@ -494,7 +493,7 @@ diskHandleRead(int fd, void *data)
 	return;
     }
     if (fdd->offset != ctrl_dat->file_offset) {
-	debug(6, 3) ("diskHandleRead: FD %d seeking to offset %d\n",
+	debugs(6, 3, "diskHandleRead: FD %d seeking to offset %d",
 	    fd, (int) ctrl_dat->file_offset);
 	lseek(fd, ctrl_dat->file_offset, SEEK_SET);	/* XXX ignore return? */
 	CommStats.syscalls.disk.seeks++;
@@ -511,7 +510,7 @@ diskHandleRead(int fd, void *data)
 	    commSetSelect(fd, COMM_SELECT_READ, diskHandleRead, ctrl_dat, 0);
 	    return;
 	}
-	debug(50, 1) ("diskHandleRead: FD %d: %s\n", fd, xstrerror());
+	debugs(50, 1, "diskHandleRead: FD %d: %s", fd, xstrerror());
 	len = 0;
 	rc = DISK_ERROR;
     } else if (len == 0) {

@@ -48,14 +48,14 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 		rebuild_entry_init(&re);
 		if (! parse_header(&buf[j], len - j, &re)) {
 			rebuild_entry_done(&re);
-			debug(85, 5) ("parse_stripe: id %d: no more data or invalid header\n", stripeid);
+			debugs(85, 5, "parse_stripe: id %d: no more data or invalid header", stripeid);
 			return 0;
 		}
 
-		debug(85, 5) ("  Object: (filen %ld)\n", (long int) (j / blocksize + (stripeid * stripesize / blocksize)));
-		debug(85, 5) ("  URL: %s\n", re.url);
-		debug(85, 5) ("  hdr_size: %d\n", (int) re.hdr_size);
-		debug(85, 5) ("  file_size: %d\n", (int) re.file_size);
+		debugs(85, 5, "  Object: (filen %ld)", (long int) (j / blocksize + (stripeid * stripesize / blocksize)));
+		debugs(85, 5, "  URL: %s", re.url);
+		debugs(85, 5, "  hdr_size: %d", (int) re.hdr_size);
+		debugs(85, 5, "  file_size: %d", (int) re.file_size);
 
 		/*
 		 * We require at least the size to continue. If we don't get a valid size to read the next
@@ -64,7 +64,7 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize, size_t stripesize)
 		 */
 		if (re.hdr_size == -1 || re.file_size == -1) {
 			rebuild_entry_done(&re);
-			debug(85, 5) ("parse_stripe: id %d: not enough information in this object; end of stripe?\n", stripeid);
+			debugs(85, 5, "parse_stripe: id %d: not enough information in this object; end of stripe?", stripeid);
 			return 0;
 		}
 
@@ -102,7 +102,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 
 	buf = malloc(stripesize);
 	if (! buf) {
-		debug(85, 1) ("%s: couldn't allocated %ld bytes for rebuild buffer: (%d) %s\n", file, (long int) stripesize, errno, xstrerror());
+		debugs(85, 1, "%s: couldn't allocated %ld bytes for rebuild buffer: (%d) %s", file, (long int) stripesize, errno, xstrerror());
 		return 0;
 	}
 
@@ -117,7 +117,7 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 	for(blksize_bits = 0;((blocksize >> blksize_bits) > 0);blksize_bits++) {
 		if( ((blocksize >> blksize_bits) > 0) &&
 		  (((blocksize >> blksize_bits) << blksize_bits) != blocksize)) {
-			debug(85, 1) ("COSS[%d]: %s: Blocksize bits (%d) must be a power of 2\n", pid, file, blksize_bits);
+			debugs(85, 1, "COSS[%d]: %s: Blocksize bits (%d) must be a power of 2", pid, file, blksize_bits);
 			safe_free(buf);
 			return(0);
 		}
@@ -125,10 +125,10 @@ coss_rebuild_dir(const char *file, size_t stripesize, int blocksize, int numstri
 
 	for (cur_stripe = 0; cur_stripe < numstripes; cur_stripe++) {
 		getCurrentTime();
-		debug(85, 5) ("COSS: %s: STRIPE: %d\n", file, cur_stripe);
+		debugs(85, 5, "COSS: %s: STRIPE: %d", file, cur_stripe);
 		storeSwapLogPrintProgress(stdout, cur_stripe, numstripes);
 		if (cur_stripe % report_interval == 0) {
-			debug(85, 1) ("COSS[%d]: %s: Rebuilding %.2f%% complete (%d out of %d stripes)\n",
+			debugs(85, 1, "COSS[%d]: %s: Rebuilding %.2f%% complete (%d out of %d stripes)",
 			    pid, file, (float) cur_stripe / (float) numstripes * 100.0, cur_stripe, numstripes);
 		}
 

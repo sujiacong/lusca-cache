@@ -125,7 +125,7 @@ fqdncacheRelease(fqdncache_entry * f)
     hash_remove_link(fqdn_table, (hash_link *) f);
     for (k = 0; k < (int) f->name_count; k++)
 	safe_free(f->names[k]);
-    debug(35, 5) ("fqdncacheRelease: Released FQDN record for '%s'.\n",
+    debugs(35, 5, "fqdncacheRelease: Released FQDN record for '%s'.",
 	hashKeyStr(&f->hash));
     dlinkDelete(&f->lru, &fqdncache_lru_list);
     safe_free(f->hash.key);
@@ -176,7 +176,7 @@ fqdncache_purgelru(void *notused)
 	fqdncacheRelease(f);
 	removed++;
     }
-    debug(35, 9) ("fqdncache_purgelru: removed %d entries\n", removed);
+    debugs(35, 9, "fqdncache_purgelru: removed %d entries", removed);
 }
 
 static void
@@ -252,27 +252,27 @@ fqdncacheParse(fqdncache_entry * f, rfc1035_rr * answers, int nr, const char *er
     f->expires = squid_curtime + namecache_dns_negative_ttl;
     f->flags.negcached = 1;
     if (nr < 0) {
-	debug(35, 3) ("fqdncacheParse: Lookup of '%s' failed (%s)\n", name, error_message);
+	debugs(35, 3, "fqdncacheParse: Lookup of '%s' failed (%s)", name, error_message);
 	f->error_message = xstrdup(error_message);
 	return f;
     }
     if (nr == 0) {
-	debug(35, 3) ("fqdncacheParse: No DNS records for '%s'\n", name);
+	debugs(35, 3, "fqdncacheParse: No DNS records for '%s'", name);
 	f->error_message = xstrdup("No DNS records");
 	return f;
     }
-    debug(35, 3) ("fqdncacheParse: %d answers for '%s'\n", nr, name);
+    debugs(35, 3, "fqdncacheParse: %d answers for '%s'", nr, name);
     assert(answers);
     for (k = 0; k < nr; k++) {
 	if (answers[k].class != RFC1035_CLASS_IN)
 	    continue;
 	if (answers[k].type == RFC1035_TYPE_PTR) {
 	    if (!answers[k].rdata[0]) {
-		debug(35, 2) ("fqdncacheParse: blank PTR record for '%s'\n", name);
+		debugs(35, 2, "fqdncacheParse: blank PTR record for '%s'", name);
 		continue;
 	    }
 	    if (strchr(answers[k].rdata, ' ')) {
-		debug(35, 2) ("fqdncacheParse: invalid PTR record '%s' for '%s'\n", answers[k].rdata, name);
+		debugs(35, 2, "fqdncacheParse: invalid PTR record '%s' for '%s'", answers[k].rdata, name);
 		continue;
 	    }
 	    f->names[f->name_count++] = xstrdup(answers[k].rdata);
@@ -284,7 +284,7 @@ fqdncacheParse(fqdncache_entry * f, rfc1035_rr * answers, int nr, const char *er
 	    break;
     }
     if (f->name_count == 0) {
-	debug(35, 1) ("fqdncacheParse: No PTR record for '%s'\n", name);
+	debugs(35, 1, "fqdncacheParse: No PTR record for '%s'", name);
 	f->error_message = xstrdup("No PTR record");
 	return f;
     }
@@ -322,10 +322,10 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
     char *name = inet_ntoa(addr);
     generic_cbdata *c;
     assert(handler);
-    debug(35, 4) ("fqdncache_nbgethostbyaddr: Name '%s'.\n", name);
+    debugs(35, 4, "fqdncache_nbgethostbyaddr: Name '%s'.", name);
     FqdncacheStats.requests++;
     if (name == NULL || name[0] == '\0') {
-	debug(35, 4) ("fqdncache_nbgethostbyaddr: Invalid name!\n");
+	debugs(35, 4, "fqdncache_nbgethostbyaddr: Invalid name!");
 	dns_error_message = "Invalid hostname";
 	handler(NULL, handlerData);
 	return;
@@ -340,7 +340,7 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
 	f = NULL;
     } else {
 	/* hit */
-	debug(35, 4) ("fqdncache_nbgethostbyaddr: HIT for '%s'\n", name);
+	debugs(35, 4, "fqdncache_nbgethostbyaddr: HIT for '%s'", name);
 	if (f->flags.negcached)
 	    FqdncacheStats.negative_hits++;
 	else
@@ -352,7 +352,7 @@ fqdncache_nbgethostbyaddr(struct in_addr addr, FQDNH * handler, void *handlerDat
 	return;
     }
 
-    debug(35, 5) ("fqdncache_nbgethostbyaddr: MISS for '%s'\n", name);
+    debugs(35, 5, "fqdncache_nbgethostbyaddr: MISS for '%s'", name);
     FqdncacheStats.misses++;
     f = fqdncacheCreateEntry(name);
     f->handler = handler;
@@ -372,7 +372,7 @@ fqdncache_init(void)
     int n;
     if (fqdn_table)
 	return;
-    debug(35, 3) ("Initializing FQDN Cache...\n");
+    debugs(35, 3, "Initializing FQDN Cache...");
     memset(&FqdncacheStats, '\0', sizeof(FqdncacheStats));
     memset(&fqdncache_lru_list, '\0', sizeof(fqdncache_lru_list));
     fqdncache_high = (long) (((float) namecache_fqdncache_size *
@@ -498,7 +498,7 @@ fqdncacheAddEntryFromHosts(char *addr, wordlist * hostnames)
 	if (1 == fce->flags.fromhosts) {
 	    fqdncacheUnlockEntry(fce);
 	} else if (fce->locks > 0) {
-	    debug(35, 1) ("fqdncacheAddEntryFromHosts: can't add static entry for locked address '%s'\n", addr);
+	    debugs(35, 1, "fqdncacheAddEntryFromHosts: can't add static entry for locked address '%s'", addr);
 	    return;
 	} else {
 	    fqdncacheRelease(fce);

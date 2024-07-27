@@ -417,10 +417,10 @@ WIN32_IpAddrChangeMonitor(LPVOID lpParam)
     while (1) {
 	Result = NotifyAddrChange(NULL, NULL);
 	if (Result != NO_ERROR) {
-	    debug(1, 1) ("NotifyAddrChange error %ld\n", Result);
+	    debugs(1, 1, "NotifyAddrChange error %ld", Result);
 	    return 1;
 	}
-	debug(1, 1) ("Notification of IP address change received, requesting Squid reconfiguration ...\n");
+	debugs(1, 1, "Notification of IP address change received, requesting Squid reconfiguration ...");
 	reconfigure(SIGHUP);
     }
     return 0;
@@ -438,9 +438,9 @@ WIN32_IpAddrChangeMonitorInit()
 	if (NotifyAddrChange_thread == NULL) {
 	    status = GetLastError();
 	    NotifyAddrChange_thread = INVALID_HANDLE_VALUE;
-	    debug(1, 1) ("Failed to start IP monitor thread.\n");
+	    debugs(1, 1, "Failed to start IP monitor thread.");
 	} else
-	    debug(1, 2) ("Starting IP monitor thread [%li] ...\n", threadID);
+	    debugs(1, 2, "Starting IP monitor thread [%li] ...", threadID);
     }
     return status;
 }
@@ -554,15 +554,15 @@ WIN32_svcHandler(DWORD Opcode)
 	shut_down(SIGTERM);
 	if (!SetServiceStatus(svcHandle, &svcStatus)) {
 	    status = GetLastError();
-	    debug(1, 1) ("SetServiceStatus error %ld\n", status);
+	    debugs(1, 1, "SetServiceStatus error %ld", status);
 	}
-	debug(1, 1) ("Leaving Squid service\n");
+	debugs(1, 1, "Leaving Squid service");
 	return;
     case _WIN_SQUID_SERVICE_CONTROL_INTERROGATE:
 /* Fall through to send current status. */
 	if (!SetServiceStatus(svcHandle, &svcStatus)) {
 	    status = GetLastError();
-	    debug(1, 1) ("SetServiceStatus error %ld\n", status);
+	    debugs(1, 1, "SetServiceStatus error %ld", status);
 	}
 	break;
     case _WIN_SQUID_SERVICE_CONTROL_ROTATE:
@@ -583,12 +583,12 @@ WIN32_svcHandler(DWORD Opcode)
 	shut_down(SIGINT);
 	if (!SetServiceStatus(svcHandle, &svcStatus)) {
 	    status = GetLastError();
-	    debug(1, 1) ("SetServiceStatus error %ld\n", status);
+	    debugs(1, 1, "SetServiceStatus error %ld", status);
 	}
-	debug(1, 1) ("Leaving Squid service\n");
+	debugs(1, 1, "Leaving Squid service");
 	break;
     default:
-	debug(1, 1) ("Unrecognized opcode %ld\n", Opcode);
+	debugs(1, 1, "Unrecognized opcode %ld", Opcode);
     }
     return;
 }

@@ -134,7 +134,7 @@ httpTimeout(int fd, void *data)
 {
     HttpStateData *httpState = data;
     StoreEntry *entry = httpState->entry;
-    debug(11, 4) ("httpTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
+    debugs(11, 4, "httpTimeout: FD %d: '%s'", fd, storeUrl(entry));
     if (entry->store_status == STORE_PENDING) {
 	fwdFail(httpState->fwd,
 	    errorCon(ERR_READ_TIMEOUT, HTTP_GATEWAY_TIMEOUT, httpState->fwd->request));
@@ -273,7 +273,7 @@ httpMaybeRemovePublic(StoreEntry * e, HttpReply * reply)
     if (e->mem_obj->method->flags.purges_all && status < 400) {
 	req = e->mem_obj->request;
 	reqUrl = urlCanonical(req);
-	debug(88, 5) ("httpMaybeRemovePublic: purging due to %s %s\n",
+	debugs(88, 5, "httpMaybeRemovePublic: purging due to %s %s",
 	  urlMethodGetConstStr(req->method), reqUrl);
 	storePurgeEntriesByUrl(req, reqUrl);
 	httpRemovePublicByHeader(req, reply, HDR_LOCATION);
@@ -467,7 +467,7 @@ httpMakeVaryMark(request_t * request, HttpReply * reply)
 	request->vary_hdr = stringDupToC(&vary);
 	request->vary_headers = stringDupToC(&vstr);
     }
-    debug(11, 3) ("httpMakeVaryMark: %.*s\n", strLen2(vstr), strBuf2(vstr));
+    debugs(11, 3, "httpMakeVaryMark: %.*s", strLen2(vstr), strBuf2(vstr));
     stringClean(&vary);
     stringClean(&vstr);
     return request->vary_headers;
@@ -478,7 +478,7 @@ httpSetHttp09Header(HttpStateData *httpState, HttpReply *reply)
 {
 	char *t, *t2;
 
-	debug(11, 3) ("httpSetHttp09Header: Non-HTTP-compliant header: '%.*s'\n", buf_len(httpState->read_buf), buf_buf(httpState->read_buf));
+	debugs(11, 3, "httpSetHttp09Header: Non-HTTP-compliant header: '%.*s'", buf_len(httpState->read_buf), buf_buf(httpState->read_buf));
 	t = buf_dup_cbuf(httpState->read_buf);
 	t2 = strchr(t, '\n');
 	if (t2)
@@ -516,7 +516,7 @@ httpReplySetupStuff(HttpStateData *httpState)
 	httpState->orig_request->flags.no_connection_auth = 1;
     storeTimestampsSet(entry);
     /* Check if object is cacheable or not based on reply code */
-    debug(11, 3) ("httpProcessReplyHeader: HTTP CODE: %d\n", reply->sline.status);
+    debugs(11, 3, "httpProcessReplyHeader: HTTP CODE: %d", reply->sline.status);
     if (httpHeaderHas(&reply->header, HDR_TRANSFER_ENCODING)) {
 	String tr = httpHeaderGetList(&reply->header, HDR_TRANSFER_ENCODING);
 	const char *pos = NULL;
@@ -531,7 +531,7 @@ httpReplySetupStuff(HttpStateData *httpState)
 	    if (item) {
 		/* Can't handle other transfer-encodings */
 		if (Config.onoff.log_http_violations)
-		    debug(11, 1) ("Unexpected transfer encoding '%.*s'\n", strLen2(tr), strBuf2(tr));
+		    debugs(11, 1, "Unexpected transfer encoding '%.*s'", strLen2(tr), strBuf2(tr));
 		reply->sline.status = HTTP_INVALID_HEADER;
 		return -1;
 	    }
@@ -551,7 +551,7 @@ httpReplySetupStuff(HttpStateData *httpState)
 #if HTTP_GZIP
     if (Config.http_gzip.enable && httpState->context == NULL) {
 	httpGzipStart(httpState);
-	debug(11, 2) ("httpGzipStart: http_gzip: %d, types: %s, min_length: %d, "
+	debugs(11, 2, "httpGzipStart: http_gzip: %d, types: %s, min_length: %d, "
 		"level: %d, window: %d, hash: %d, context: %p, type: %d\n",
 		Config.http_gzip.enable, Config.http_gzip.types, Config.http_gzip.min_length,
 		Config.http_gzip.level, Config.http_gzip.wbits, Config.http_gzip.memlevel,
@@ -607,8 +607,8 @@ httpReplySetupStuff(HttpStateData *httpState)
 	if (httpState->peer)
 	    httpState->peer->stats.n_keepalives_recv++;
 	if (Config.onoff.detect_broken_server_pconns && httpReplyBodySize(httpState->request->method, reply) == -1) {
-	    debug(11, 2) ("httpProcessReplyHeader: Impossible keep-alive header from '%s'\n", storeUrl(entry));
-	    debug(11, 2) ("GOT HTTP REPLY HDR:\n---------\n%.*s\n----------\n",
+	    debugs(11, 2, "httpProcessReplyHeader: Impossible keep-alive header from '%s'", storeUrl(entry));
+	    debugs(11, 2, "GOT HTTP REPLY HDR:\n---------\n%.*s\n----------",
 		buf_len(httpState->read_buf), buf_buf(httpState->read_buf));
 	    httpState->flags.keepalive_broken = 1;
 	}
@@ -616,7 +616,7 @@ httpReplySetupStuff(HttpStateData *httpState)
     if (reply->date > -1 && !httpState->peer) {
 	int skew = abs(reply->date - squid_curtime);
 	if (skew > 86400)
-	    debug(11, 3) ("%s's clock is skewed by %d seconds!\n",
+	    debugs(11, 3, "%s's clock is skewed by %d seconds!",
 		httpState->request->host, skew);
     }
     return 0;
@@ -650,7 +650,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
     size_t hdr_size;						/* actual size of reply status + headers in hdr_buf */
 
     Ctx ctx = ctx_enter(entry->mem_obj->url);
-    debug(11, 3) ("httpProcessReplyHeader: key '%s'\n",
+    debugs(11, 3, "httpProcessReplyHeader: key '%s'",
 	storeKeyText(entry->hash.key));
     assert(httpState->reply_hdr_state == 0);
 
@@ -678,7 +678,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
 
     /* Is the reply buffer size (whether a full reply is contained or not) > max? */
     if (hdr_len > Config.maxReplyHeaderSize) {
-	debug(11, 1) ("httpProcessReplyHeader: Too large reply header\n");
+	debugs(11, 1, "httpProcessReplyHeader: Too large reply header");
 	storeAppend(entry, hdr_buf, hdr_len);
         httpState->read_buf = buf_deref(httpState->read_buf); /* XXX hdr_buf / hdr_len are invalid now */
 	reply->sline.status = HTTP_HEADER_TOO_LARGE;
@@ -707,7 +707,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
     httpState->reply_hdr_state++;
     assert(httpState->reply_hdr_state == 1);
     httpState->reply_hdr_state++;
-    debug(11, 9) ("GOT HTTP REPLY HDR:\n---------\n%.*s\n----------\n", (int) hdr_size, hdr_buf);
+    debugs(11, 9, "GOT HTTP REPLY HDR:\n---------\n%.*s\n----------", (int) hdr_size, hdr_buf);
 
     /* Parse headers into reply structure */
     /* what happens if we fail to parse here? */
@@ -729,7 +729,7 @@ httpProcessReplyHeader(HttpStateData * httpState, int s)
      * (But we don't currently support pipelining!)
      */
     if (reply->sline.status >= HTTP_INVALID_HEADER) {
-	debug(11, 3) ("httpProcessReplyHeader: Non-HTTP-compliant header: '%.*s'\n", (int) hdr_size, hdr_buf);
+	debugs(11, 3, "httpProcessReplyHeader: Non-HTTP-compliant header: '%.*s'", (int) hdr_size, hdr_buf);
         httpState->read_buf = buf_deref(httpState->read_buf);
 	ctx_exit(ctx);
         /* XXX why return hdr_len here when the memBuf used has been cleaned? */
@@ -834,7 +834,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	    if (ctx) {
 		rc = httpGzipCompress(httpState, buf, size);
 		if ( rc < 0) {
-		    debug(11, 1) ("httpGzipCompress error.\n");
+		    debugs(11, 1, "httpGzipCompress error.");
 		    fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP,
 				HTTP_INTERNAL_SERVER_ERROR, httpState->fwd->request));
 		    comm_close(fd);
@@ -842,7 +842,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		}
 		else if (rc == GZIP_SYNC) {
 		    sync = 1;
-		    debug(11, 2) ("httpGzipCompress sync: %lu \n", ctx->zstream.total_out);
+		    debugs(11, 2, "httpGzipCompress sync: %lu ", ctx->zstream.total_out);
 		    storeAppend(httpState->entry, (char *) ctx->gzipBuffer,
 			    ctx->zstream.total_out);
 		    httpGzipStreamOutReset(ctx);
@@ -863,7 +863,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	    if (ctx) {
 		rc = httpGzipCompress(httpState, buf, len);
 		if ( rc < 0) {
-		    debug(11, 1) ("httpGzipCompress error.\n");
+		    debugs(11, 1, "httpGzipCompress error.");
 		    fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, 
 				HTTP_INTERNAL_SERVER_ERROR, httpState->fwd->request));
 		    comm_close(fd);
@@ -871,7 +871,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		}
 		else if (rc == GZIP_SYNC) {
 		    sync = 1;
-		    debug(11, 1) ("httpGzipCompress sync: %lu \n", ctx->zstream.total_out);
+		    debugs(11, 1, "httpGzipCompress sync: %lu ", ctx->zstream.total_out);
 		    storeAppend(httpState->entry, (char *) ctx->gzipBuffer,
 			    ctx->zstream.total_out);
 		    httpGzipStreamOutReset(ctx);
@@ -893,7 +893,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 	    buf += size;
 	    len -= size;
 	    if (strLen(httpState->chunkhdr) > 256) {
-		debug(11, 1) ("Oversized chunk header on port %d, url %s\n", comm_local_port(fd), entry->mem_obj->url);
+		debugs(11, 1, "Oversized chunk header on port %d, url %s", comm_local_port(fd), entry->mem_obj->url);
 		fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 		comm_close(fd);
 		return;
@@ -904,7 +904,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    char *end = NULL;
 		    int badchunk = 0;
 		    int emptychunk = 0;
-		    debug(11, 3) ("Chunk header '%.*s'\n", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
+		    debugs(11, 3, "Chunk header '%.*s'", strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 		    errno = 0;
 		    httpState->chunk_size = strto_off_t(strBuf(httpState->chunkhdr), &end, 16);
 		    if (end == strBuf(httpState->chunkhdr))
@@ -914,16 +914,16 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 		    while (end && (*end == '\r' || *end == ' ' || *end == '\t'))
 			end++;
 		    if (httpState->chunk_size < 0 || badchunk || !end || (*end != '\n' && *end != ';')) {
-			debug(11, 1) ("Invalid chunk header: URL %s: header '%.*s'\n", storeUrl(entry), strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
+			debugs(11, 1, "Invalid chunk header: URL %s: header '%.*s'", storeUrl(entry), strLen2(httpState->chunkhdr), strBuf2(httpState->chunkhdr));
 			fwdFail(httpState->fwd, errorCon(ERR_INVALID_RESP, HTTP_BAD_GATEWAY, httpState->fwd->request));
 			comm_close(fd);
 			return;
 		    }
 		    if (emptychunk)
 			continue;	/* Skip blank lines */
-		    debug(11, 2) ("Chunk size %" PRINTF_OFF_T "\n", httpState->chunk_size);
+		    debugs(11, 2, "Chunk size %" PRINTF_OFF_T "", httpState->chunk_size);
 		    if (httpState->chunk_size == 0) {
-			debug(11, 3) ("Processing trailer\n");
+			debugs(11, 3, "Processing trailer");
 			httpState->flags.trailer = 1;
 		    }
 		} else {
@@ -933,7 +933,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
 			p++;
 		    if (*p == '\n') {
 			complete = 1;
-			debug(11, 2) ("Chunked response complete\n");
+			debugs(11, 2, "Chunked response complete");
 		    }
 		}
 		stringReset(&httpState->chunkhdr, NULL);
@@ -980,7 +980,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     }
     /* Is it a incomplete reply? */
     if (httpState->chunk_size > 0) {
-	debug(11, 2) ("Short response from '%s' on port %d. Expecting %" PRINTF_OFF_T " octets more\n", storeUrl(entry), comm_local_port(fd), httpState->chunk_size);
+	debugs(11, 2, "Short response from '%s' on port %d. Expecting %" PRINTF_OFF_T " octets more", storeUrl(entry), comm_local_port(fd), httpState->chunk_size);
 	comm_close(fd);
 	return;
     }
@@ -1007,14 +1007,14 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      */
     if (len > 0 && httpState->chunk_size == 0) {
 	if (Config.onoff.log_http_violations)
-	    debug(11, 1) ("httpReadReply: Unexpected reply body data from \"%s %s\"\n",
+	    debugs(11, 1, "httpReadReply: Unexpected reply body data from \"%s %s\"",
 	        urlMethodGetConstStr(orig_request->method), storeUrl(entry));
 	comm_close(fd);
 	return;
     }
     if (len > 0) {
         if (Config.onoff.log_http_violations)
-	    debug(11, 1) ("httpReadReply: Excess data from \"%s %s\"\n",
+	    debugs(11, 1, "httpReadReply: Excess data from \"%s %s\"",
 	      urlMethodGetConstStr(orig_request->method), storeUrl(entry));
 	comm_close(fd);
 	return;
@@ -1023,21 +1023,21 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
     /* Flush the gzip buffer to cache */
 #if HTTP_GZIP
     if (httpState->context) {
-	debug(11, 2) ("Flush the gzip buffer to cache.\n");
+	debugs(11, 2, "Flush the gzip buffer to cache.");
 
 	HttpGzipContext *ctx = httpState->context;
 
-	debug(11, 2) ("httpGzipDone:" 
+	debugs(11, 2, "httpGzipDone:" 
 		"gzip context's checksum:%x, original:%x, compressed:%d\n", 
 		ctx->checksum, ctx->originalSize, ctx->compressedSize);
 
 	rc = httpGzipDone(httpState);
 	if (rc < 0) {
-	    debug(11, 1) ("httpGzipDone error. rc: %d\n", rc);
+	    debugs(11, 1, "httpGzipDone error. rc: %d", rc);
 	    comm_close(fd);
 	}
 
-	debug(11, 2) ("httpGzipDone: gzip context's checksum:%x, original:%x, compressed:%u,"
+	debugs(11, 2, "httpGzipDone: gzip context's checksum:%x, original:%x, compressed:%u,"
 		" total_out: %lu, avail_out: %u\n", 
 		ctx->checksum, ctx->originalSize, ctx->compressedSize, 
 		ctx->zstream.total_out, ctx->zstream.avail_out);
@@ -1067,7 +1067,7 @@ httpAppendBody(HttpStateData * httpState, const char *buf, ssize_t len, int buff
      * connection.
      */
     if (!httpState->flags.request_sent) {
-	debug(11, 1) ("httpAppendBody: Request not yet fully sent \"%s %s\"\n",
+	debugs(11, 1, "httpAppendBody: Request not yet fully sent \"%s %s\"",
 	    urlMethodGetConstStr(orig_request->method),
 	    storeUrl(entry));
 	keep_alive = 0;
@@ -1164,7 +1164,7 @@ httpReadReply(int fd, void *data)
     /* XXX buffer_filled is all busted right now, unfortunately! */
     len = buf_read(httpState->read_buf, fd, read_sz);
     buffer_filled = (len == read_sz);
-    debug(11, 5) ("httpReadReply: FD %d: len %d.\n", fd, (int) len);
+    debugs(11, 5, "httpReadReply: FD %d: len %d.", fd, (int) len);
 
     /* Len > 0? Account for data; here's where data would be appended to the reply buffer */
     if (len > 0) {
@@ -1205,7 +1205,7 @@ httpReadReply(int fd, void *data)
 
     /* Len < 0? Error */
     if (len < 0) {
-	debug(11, 2) ("httpReadReply: FD %d: read failure: %s.\n",
+	debugs(11, 2, "httpReadReply: FD %d: read failure: %s.",
 	    fd, xstrerror());
 	if (ignoreErrno(errno)) {
 	    commSetSelect(fd, COMM_SELECT_READ, httpReadReply, httpState, 0);
@@ -1260,7 +1260,7 @@ httpReadReply(int fd, void *data)
 
 	/* Did we get a successful parse but 1xx? Try again */
         if (reply->sline.status >= 100 && reply->sline.status < 200) {
-		debug(1, 1) ("httpReadReply: FD %d: skipping 1xx response!\n", fd);
+		debugs(1, 1, "httpReadReply: FD %d: skipping 1xx response!", fd);
 		httpReplyReset(reply);
 		storeEntryReset(entry);
 		httpState->reply_hdr_state = 0;
@@ -1389,7 +1389,7 @@ httpSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     HttpStateData *httpState = data;
     StoreEntry *entry = httpState->entry;
-    debug(11, 5) ("httpSendComplete: FD %d: size %d: errflag %d.\n",
+    debugs(11, 5, "httpSendComplete: FD %d: size %d: errflag %d.",
 	fd, (int) size, errflag);
 #if URL_CHECKSUM_DEBUG
     assert(entry->mem_obj->chksum == url_checksum(entry->mem_obj->url));
@@ -1484,15 +1484,15 @@ httpBuildRequestHeader(request_t * request,
 	we_do_ranges = 0;
     else
 	we_do_ranges = 1;
-    debug(11, 8) ("httpBuildRequestHeader: range specs: %p, cachable: %d; we_do_ranges: %d\n",
+    debugs(11, 8, "httpBuildRequestHeader: range specs: %p, cachable: %d; we_do_ranges: %d",
 	orig_request->range, orig_request->flags.cachable, we_do_ranges);
 
     strConnection = httpHeaderGetList(hdr_in, HDR_CONNECTION);
     while ((e = httpHeaderGetEntry(hdr_in, &pos))) {
-	debug(11, 5) ("httpBuildRequestHeader: %.*s: %.*s\n",
+	debugs(11, 5, "httpBuildRequestHeader: %.*s: %.*s",
 	    strLen2(e->name), strBuf2(e->name), strLen2(e->value), strBuf2(e->value));
 	if (!httpRequestHdrAllowed(e, &strConnection)) {
-	    debug(11, 2) ("'%.*s' header is a hop-by-hop connections header\n",
+	    debugs(11, 2, "'%.*s' header is a hop-by-hop connections header",
 		strLen2(e->name), strBuf2(e->name));
 	    continue;
 	}
@@ -1813,7 +1813,7 @@ httpSendRequest(HttpStateData * httpState)
     CWCB *sendHeaderDone;
     int fd = httpState->fd;
 
-    debug(11, 5) ("httpSendRequest: FD %d: httpState %p.\n", fd, httpState);
+    debugs(11, 5, "httpSendRequest: FD %d: httpState %p.", fd, httpState);
 
     /* Schedule read reply. (but no timeout set until request fully sent) */
     commSetTimeout(fd, Config.Timeout.lifetime, httpTimeout, httpState);
@@ -1862,7 +1862,7 @@ httpSendRequest(HttpStateData * httpState)
 	httpState->flags);
     if (req->flags.pinned)
 	httpState->flags.keepalive = 1;
-    debug(11, 6) ("httpSendRequest: FD %d:\n%s\n", fd, mb.buf);
+    debugs(11, 6, "httpSendRequest: FD %d:\n%s", fd, mb.buf);
     comm_write_mbuf(fd, mb, sendHeaderDone, httpState);
 }
 
@@ -1875,7 +1875,7 @@ httpStart(FwdState * fwd)
     HttpStateData *httpState;
     request_t *proxy_req;
     request_t *orig_req = fwd->request;
-    debug(11, 3) ("httpStart: \"%s %s\"\n", urlMethodGetConstStr(orig_req->method),
+    debugs(11, 3, "httpStart: \"%s %s\"", urlMethodGetConstStr(orig_req->method),
 	storeUrl(fwd->entry));
     CBDATA_INIT_TYPE(HttpStateData);
     httpState = cbdataAlloc(HttpStateData);
@@ -1938,16 +1938,16 @@ static void
 httpSendRequestEntryDone(int fd, void *data)
 {
     HttpStateData *httpState = data;
-    debug(11, 5) ("httpSendRequestEntryDone: FD %d\n",
+    debugs(11, 5, "httpSendRequestEntryDone: FD %d",
 	fd);
     if (!Config.accessList.brokenPosts) {
-	debug(11, 5) ("httpSendRequestEntryDone: No brokenPosts list\n");
+	debugs(11, 5, "httpSendRequestEntryDone: No brokenPosts list");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else if (!aclCheckFastRequest(Config.accessList.brokenPosts, httpState->request)) {
-	debug(11, 5) ("httpSendRequestEntryDone: didn't match brokenPosts\n");
+	debugs(11, 5, "httpSendRequestEntryDone: didn't match brokenPosts");
 	httpSendComplete(fd, NULL, 0, 0, data);
     } else {
-	debug(11, 2) ("httpSendRequestEntryDone: matched brokenPosts\n");
+	debugs(11, 2, "httpSendRequestEntryDone: matched brokenPosts");
 	comm_write(fd, "\r\n", 2, httpSendComplete, data, NULL);
     }
 }
@@ -1969,7 +1969,7 @@ httpRequestBodyHandler(char *buf, ssize_t size, void *data)
     if (size > 0) {
 	if (httpState->reply_hdr_state >= 2 && !httpState->flags.abuse_detected) {
 	    httpState->flags.abuse_detected = 1;
-	    debug(11, 1) ("httpRequestBodyHandler: Likely proxy abuse detected '%s' -> '%s'\n",
+	    debugs(11, 1, "httpRequestBodyHandler: Likely proxy abuse detected '%s' -> '%s'",
 		inet_ntoa(httpState->orig_request->client_addr),
 		storeUrl(httpState->entry));
 	    if (httpState->entry->mem_obj->reply->sline.status == HTTP_INVALID_HEADER) {
@@ -2001,7 +2001,7 @@ httpSendRequestEntry(int fd, char *bufnotused, size_t size, int errflag, void *d
 {
     HttpStateData *httpState = data;
     StoreEntry *entry = httpState->entry;
-    debug(11, 5) ("httpSendRequestEntry: FD %d: size %d: errflag %d.\n",
+    debugs(11, 5, "httpSendRequestEntry: FD %d: size %d: errflag %d.",
 	fd, (int) size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);

@@ -67,9 +67,9 @@ clientSetKeepaliveFlag(clientHttpRequest * http)
     request_t *request = http->request;
     const HttpHeader *req_hdr = &request->header;
 
-    debug(33, 3) ("clientSetKeepaliveFlag: http_ver = %d.%d\n",
+    debugs(33, 3, "clientSetKeepaliveFlag: http_ver = %d.%d",
         request->http_ver.major, request->http_ver.minor);
-    debug(33, 3) ("clientSetKeepaliveFlag: method = %s\n",
+    debugs(33, 3, "clientSetKeepaliveFlag: method = %s",
         urlMethodGetConstStr(request->method));
     {
         http_version_t http_ver;
@@ -118,7 +118,7 @@ clientMaxRequestBodySize(request_t * request, clientHttpRequest * http)
             /* Allow - use this entry */
             http->maxRequestBodySize = bs->maxsize;
             bs = NULL;
-            debug(58, 3) ("clientMaxRequestBodySize: Setting maxRequestBodySize to %ld\n", (long int) http->maxRequestBodySize);
+            debugs(58, 3, "clientMaxRequestBodySize: Setting maxRequestBodySize to %ld", (long int) http->maxRequestBodySize);
         }
         aclChecklistFree(checklist);
     }
@@ -169,11 +169,11 @@ static int
 parseHttpConnectRequest(ConnStateData *conn, clientHttpRequest *http)
 {
 	if (http->http_ver.major < 1) {
-	    debug(33, 1) ("parseHttpRequest: Invalid HTTP version\n");
+	    debugs(33, 1, "parseHttpRequest: Invalid HTTP version");
 	    return 0;
 	}
 	if (conn->port->accel) {
-	    debug(33, 1) ("parseHttpRequest: CONNECT not valid in accelerator mode\n");
+	    debugs(33, 1, "parseHttpRequest: CONNECT not valid in accelerator mode");
 	    return 0;
 	}
 	return 1;
@@ -185,7 +185,7 @@ parseHttpInternalRequest(ConnStateData *conn, clientHttpRequest *http, const cha
 	http->uri = xstrdup(internalStoreUri("", url));
 	http->flags.internal = 1;
 	http->flags.accel = 1;
-	debug(33, 5) ("INTERNAL REWRITE: '%s'\n", http->uri);
+	debugs(33, 5, "INTERNAL REWRITE: '%s'", http->uri);
 	return 1;
 }
 static int
@@ -271,7 +271,7 @@ parseHttpAccelRequest(ConnStateData *conn, clientHttpRequest *http, const char *
 	    else
 		snprintf(http->uri, url_sz, "%s://%s:%d%s",
 		    conn->port->protocol, host, port, url);
-	    debug(33, 5) ("VHOST REWRITE: '%s'\n", http->uri);
+	    debugs(33, 5, "VHOST REWRITE: '%s'", http->uri);
 	} else if (internalCheck(url)) {
 	    parseHttpInternalRequest(conn, http, url);
 	} else {
@@ -315,7 +315,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     if (ret == -1)
 	return parseHttpRequestAbort(conn, method_p, "error:invalid-request");
     if (ret == 0) {
-	debug(33, 5) ("Incomplete request, waiting for end of request line\n");
+	debugs(33, 5, "Incomplete request, waiting for end of request line");
 	*status = 0;
 	return NULL;
     }
@@ -325,7 +325,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     } else {
 	req_sz = httpMsgFindHeadersEnd(hmsg);
 	if (req_sz == 0) {
-	    debug(33, 5) ("Incomplete request, waiting for end of headers\n");
+	    debugs(33, 5, "Incomplete request, waiting for end of headers");
 	    *status = 0;
 	    return NULL;
 	}
@@ -335,27 +335,27 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
 
     /* Enforce max_request_size */
     if (req_sz >= Config.maxRequestHeaderSize) {
-	debug(33, 5) ("parseHttpRequest: Too large request\n");
+	debugs(33, 5, "parseHttpRequest: Too large request");
 	return parseHttpRequestAbort(conn, method_p, "error:request-too-large");
     }
     /* Wrap the request method */
     method = urlMethodGet(hmsg->buf + hmsg->m_start, hmsg->m_len);
 
-    debug(33, 5) ("parseHttpRequest: Method is '%s'\n", urlMethodGetConstStr(method));
+    debugs(33, 5, "parseHttpRequest: Method is '%s'", urlMethodGetConstStr(method));
     if (method->code == METHOD_OTHER) {
-	debug(33, 5) ("parseHttpRequest: Unknown method, continuing regardless");
+	debugs(33, 5, "parseHttpRequest: Unknown method, continuing regardless");
     }
     *method_p = method;
 
     /* Make sure URL fits inside MAX_URL */
     if (hmsg->u_len >= MAX_URL) {
-	debug(33, 1) ("parseHttpRequest: URL too big (%d) chars: %s\n", hmsg->u_len, hmsg->buf + hmsg->u_start);
+	debugs(33, 1, "parseHttpRequest: URL too big (%d) chars: %s", hmsg->u_len, hmsg->buf + hmsg->u_start);
 	return parseHttpRequestAbort(conn, method_p, "error:request-too-large");
     }
     xmemcpy(urlbuf, hmsg->buf + hmsg->u_start, hmsg->u_len);
     /* XXX off-by-one termination error? */
     urlbuf[hmsg->u_len] = '\0';
-    debug(33, 5) ("parseHttpRequest: URI is '%s'\n", urlbuf);
+    debugs(33, 5, "parseHttpRequest: URI is '%s'", urlbuf);
 
     /*
      * Process headers after request line
@@ -365,10 +365,10 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     /* XXX re-evaluate all of these values and use whats in hmsg instead! */
     req_hdr = hmsg->buf + hmsg->r_len;
     header_sz = hmsg->h_len;
-    debug(33, 3) ("parseHttpRequest: req_hdr = {%s}\n", req_hdr);
+    debugs(33, 3, "parseHttpRequest: req_hdr = {%s}", req_hdr);
 
     prefix_sz = req_sz;
-    debug(33, 3) ("parseHttpRequest: prefix_sz = %d, req_line_sz = %d\n",
+    debugs(33, 3, "parseHttpRequest: prefix_sz = %d, req_line_sz = %d",
 	(int) prefix_sz, (int) hmsg->r_len);
     assert(prefix_sz <= conn->in.offset);
 
@@ -383,7 +383,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
     http->maxRequestBodySize = -1;
     dlinkAdd(http, &http->active, &ClientActiveRequests);
 
-    debug(33, 5) ("parseHttpRequest: Request Header is\n%s\n", hmsg->buf + hmsg->req_end);
+    debugs(33, 5, "parseHttpRequest: Request Header is\n%s", hmsg->buf + hmsg->req_end);
 
 #if THIS_VIOLATES_HTTP_SPECS_ON_URL_TRANSFORMATION
     if ((t = strchr(url, '#')))	/* remove HTML anchors */
@@ -410,7 +410,7 @@ parseHttpRequest(ConnStateData * conn, HttpMsgBuf * hmsg, method_t ** method_p, 
 	http->uri = xcalloc(url_sz, 1);
 	strcpy(http->uri, url);
     }
-    debug(33, 5) ("parseHttpRequest: Complete request received\n");
+    debugs(33, 5, "parseHttpRequest: Complete request received");
     *status = 1;
     return http;
 
@@ -459,8 +459,8 @@ clientTryParseRequest(ConnStateData * conn)
     /* Limit the number of concurrent requests to 2 */
     for (n = conn->reqs.head, nrequests = 0; n; n = n->next, nrequests++);
     if (nrequests >= (Config.onoff.pipeline_prefetch ? 2 : 1)) {
-	debug(33, 3) ("clientTryParseRequest: FD %d max concurrent requests reached\n", fd);
-	debug(33, 5) ("clientTryParseRequest: FD %d defering new request until one is done\n", fd);
+	debugs(33, 3, "clientTryParseRequest: FD %d max concurrent requests reached", fd);
+	debugs(33, 5, "clientTryParseRequest: FD %d defering new request until one is done", fd);
 	conn->defer.until = squid_curtime + 100;	/* Reset when a request is complete */
 	ret = 0;
 	goto finish;
@@ -480,7 +480,7 @@ clientTryParseRequest(ConnStateData * conn)
 	conn->nrequests++;
 	commSetTimeout(fd, Config.Timeout.lifetime, clientLifetimeTimeout, http);
 	if (parser_return_code < 0) {
-	    debug(33, 1) ("clientTryParseRequest: FD %d (%s:%d) Invalid Request\n", fd, fd_table[fd].ipaddrstr, fd_table[fd].remote_port);
+	    debugs(33, 1, "clientTryParseRequest: FD %d (%s:%d) Invalid Request", fd, fd_table[fd].ipaddrstr, fd_table[fd].remote_port);
 	    err = errorCon(ERR_INVALID_REQ, HTTP_BAD_REQUEST, NULL);
 	    err->src_addr = conn->peer.sin_addr;
 	    err->request_hdrs = xstrdup(conn->in.buf);
@@ -491,7 +491,7 @@ clientTryParseRequest(ConnStateData * conn)
 	    goto finish;
 	}
 	if ((request = urlParse(method, http->uri)) == NULL) {
-	    debug(33, 5) ("Invalid URL: %s\n", http->uri);
+	    debugs(33, 5, "Invalid URL: %s", http->uri);
 	    err = errorCon(ERR_INVALID_URL, HTTP_BAD_REQUEST, NULL);
 	    err->src_addr = conn->peer.sin_addr;
 	    err->url = xstrdup(http->uri);
@@ -505,7 +505,7 @@ clientTryParseRequest(ConnStateData * conn)
 	/* compile headers */
 	/* we should skip request line! */
 	if ((http->http_ver.major >= 1) && !httpMsgParseRequestHeader(request, &msg)) {
-	    debug(33, 1) ("Failed to parse request headers: %s\n%s\n",
+	    debugs(33, 1, "Failed to parse request headers: %s\n%s",
 		http->uri, msg.buf + msg.req_end);
 	    err = errorCon(ERR_INVALID_URL, HTTP_BAD_REQUEST, request);
 	    err->url = xstrdup(http->uri);
@@ -522,7 +522,7 @@ clientTryParseRequest(ConnStateData * conn)
 	 */
 	assert(conn->in.offset >= http->req_sz);
 	conn->in.offset -= http->req_sz;
-	debug(33, 5) ("removing %d bytes; conn->in.offset = %d\n", (int) http->req_sz, (int) conn->in.offset);
+	debugs(33, 5, "removing %d bytes; conn->in.offset = %d", (int) http->req_sz, (int) conn->in.offset);
 	if (conn->in.offset > 0)
 	    xmemmove(conn->in.buf, conn->in.buf + http->req_sz, conn->in.offset);
 
@@ -583,7 +583,7 @@ clientTryParseRequest(ConnStateData * conn)
 	/* Do we expect a request-body? */
 	if (request->content_length > 0) {
 	    conn->body.size_left = request->content_length;
-	    debug(33, 2) ("clientTryParseRequest: %p: FD %d: request body is %d bytes in size\n", request, conn->fd, (int) conn->body.size_left);
+	    debugs(33, 2, "clientTryParseRequest: %p: FD %d: request body is %d bytes in size", request, conn->fd, (int) conn->body.size_left);
 	    request->body_reader = clientReadBody;
 	    request->body_reader_data = conn;
 	    cbdataLock(conn);
@@ -603,7 +603,7 @@ clientTryParseRequest(ConnStateData * conn)
 	    if (!DLINK_ISEMPTY(conn->reqs) && DLINK_HEAD(conn->reqs) == http)
 		clientCheckFollowXForwardedFor(http);
 	    else {
-		debug(33, 1) ("WARNING: pipelined CONNECT request seen from %s\n", inet_ntoa(http->conn->peer.sin_addr));
+		debugs(33, 1, "WARNING: pipelined CONNECT request seen from %s", inet_ntoa(http->conn->peer.sin_addr));
 		debugObj(33, 1, "Previous request:\n", ((clientHttpRequest *) DLINK_HEAD(conn->reqs))->request,
 		    (ObjPackMethod) & httpRequestPackDebug);
 		debugObj(33, 1, "This request:\n", request, (ObjPackMethod) & httpRequestPackDebug);
@@ -620,9 +620,9 @@ clientTryParseRequest(ConnStateData * conn)
 	 */
 	if (conn->in.offset >= Config.maxRequestHeaderSize) {
 	    /* The request is too large to handle */
-	    debug(33, 1) ("Request header is too large (%d bytes)\n",
+	    debugs(33, 1, "Request header is too large (%d bytes)",
 		(int) conn->in.offset);
-	    debug(33, 1) ("Config 'request_header_max_size'= %ld bytes.\n",
+	    debugs(33, 1, "Config 'request_header_max_size'= %ld bytes.",
 		(long int) Config.maxRequestHeaderSize);
 	    err = errorCon(ERR_TOO_BIG, HTTP_REQUEST_URI_TOO_LONG, NULL);
 	    err->src_addr = conn->peer.sin_addr;

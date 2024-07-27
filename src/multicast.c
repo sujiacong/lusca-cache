@@ -41,7 +41,7 @@ mcastSetTtl(int fd, int mcast_ttl)
 #ifdef IP_MULTICAST_TTL
     char ttl = (char) mcast_ttl;
     if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, 1) < 0)
-	debug(50, 1) ("mcastSetTtl: FD %d, TTL: %d: %s\n",
+	debugs(50, 1, "mcastSetTtl: FD %d, TTL: %d: %s",
 	    fd, mcast_ttl, xstrerror());
 #endif
     return 0;
@@ -57,22 +57,22 @@ mcastJoinGroups(const ipcache_addrs * ia, void *datanotused)
     int x;
     char c = 0;
     if (ia == NULL) {
-	debug(7, 0) ("mcastJoinGroups: Unknown host\n");
+	debugs(7, 0, "mcastJoinGroups: Unknown host");
 	return;
     }
     for (i = 0; i < (int) ia->count; i++) {
-	debug(7, 10) ("Listening for ICP requests on %s\n",
+	debugs(7, 10, "Listening for ICP requests on %s",
 	    inet_ntoa(*(ia->in_addrs + i)));
 	mr.imr_multiaddr.s_addr = (ia->in_addrs + i)->s_addr;
 	mr.imr_interface.s_addr = INADDR_ANY;
 	x = setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
 	    (char *) &mr, sizeof(struct ip_mreq));
 	if (x < 0)
-	    debug(7, 1) ("mcastJoinGroups: FD %d, [%s]\n",
+	    debugs(7, 1, "mcastJoinGroups: FD %d, [%s]",
 		fd, inet_ntoa(*(ia->in_addrs + i)));
 	x = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &c, 1);
 	if (x < 0)
-	    debug(7, 1) ("Can't disable multicast loopback: %s\n", xstrerror());
+	    debugs(7, 1, "Can't disable multicast loopback: %s", xstrerror());
     }
 #endif
 }

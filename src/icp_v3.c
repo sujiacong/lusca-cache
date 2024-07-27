@@ -63,7 +63,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
      * Length field should match the number of bytes read
      */
     if (len != header.length) {
-	debug(12, 3) ("icpHandleIcpV3: ICP message is too small\n");
+	debugs(12, 3, "icpHandleIcpV3: ICP message is too small");
 	return;
     }
     switch (header.opcode) {
@@ -87,7 +87,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {
-	    debug(12, 2) ("icpHandleIcpV3: Access Denied for %s by %s.\n",
+	    debugs(12, 2, "icpHandleIcpV3: Access Denied for %s by %s.",
 		inet_ntoa(from.sin_addr), AclMatchedName);
 	    if (clientdbCutoffDenied(from.sin_addr)) {
 		/*
@@ -103,7 +103,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	}
 	/* The peer is allowed to use this cache */
 	entry = storeGetPublic(url, method_get);
-	debug(12, 5) ("icpHandleIcpV3: OPCODE %s\n",
+	debugs(12, 5, "icpHandleIcpV3: OPCODE %s",
 	    icp_opcode_str[header.opcode]);
 	if (icpCheckUdpHit(entry, icp_request)) {
 	    reply = icpCreateMessage(ICP_HIT, 0, url, header.reqnum, 0);
@@ -132,13 +132,13 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
     case ICP_DENIED:
     case ICP_MISS_NOFETCH:
 	if (neighbors_do_private_keys && header.reqnum == 0) {
-	    debug(12, 0) ("icpHandleIcpV3: Neighbor %s returned reqnum = 0\n",
+	    debugs(12, 0, "icpHandleIcpV3: Neighbor %s returned reqnum = 0",
 		inet_ntoa(from.sin_addr));
-	    debug(12, 0) ("icpHandleIcpV3: Disabling use of private keys\n");
+	    debugs(12, 0, "icpHandleIcpV3: Disabling use of private keys");
 	    neighbors_do_private_keys = 0;
 	}
 	url = buf + sizeof(icp_common_t);
-	debug(12, 3) ("icpHandleIcpV3: %s from %s for '%s'\n",
+	debugs(12, 3, "icpHandleIcpV3: %s from %s for '%s'",
 	    icp_opcode_str[header.opcode],
 	    inet_ntoa(from.sin_addr),
 	    url);
@@ -152,7 +152,7 @@ icpHandleIcpV3(int fd, struct sockaddr_in from, char *buf, int len)
 	break;
 
     default:
-	debug(12, 0) ("icpHandleIcpV3: UNKNOWN OPCODE: %d from %s\n",
+	debugs(12, 0, "icpHandleIcpV3: UNKNOWN OPCODE: %d from %s",
 	    header.opcode, inet_ntoa(from.sin_addr));
 	break;
     }

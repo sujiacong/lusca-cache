@@ -36,7 +36,7 @@ clientPurgeRequest(clientHttpRequest * http)
     HttpReply *r;
     http_status status = HTTP_NOT_FOUND;
     method_t *method_get = NULL, *method_head = NULL;
-    debug(33, 3) ("Config2.onoff.enable_purge = %d\n", Config2.onoff.enable_purge);
+    debugs(33, 3, "Config2.onoff.enable_purge = %d", Config2.onoff.enable_purge);
     if (!Config2.onoff.enable_purge) {
 	http->log_type = LOG_TCP_DENIED;
 	err = errorCon(ERR_ACCESS_DENIED, HTTP_FORBIDDEN, http->orig_request);
@@ -82,7 +82,7 @@ clientPurgeRequest(clientHttpRequest * http)
     /* Release the cached URI */
     entry = storeGetPublicByRequestMethod(http->request, method_get);
     if (entry) {
-	debug(33, 4) ("clientPurgeRequest: GET '%s'\n",
+	debugs(33, 4, "clientPurgeRequest: GET '%s'",
 	    storeUrl(entry));
 #if USE_HTCP
 	neighborsHtcpClear(entry, NULL, http->request, method_get, HTCP_CLR_PURGE);
@@ -92,7 +92,7 @@ clientPurgeRequest(clientHttpRequest * http)
     }
     entry = storeGetPublicByRequestMethod(http->request, method_head);
     if (entry) {
-	debug(33, 4) ("clientPurgeRequest: HEAD '%s'\n",
+	debugs(33, 4, "clientPurgeRequest: HEAD '%s'",
 	    storeUrl(entry));
 #if USE_HTCP
 	neighborsHtcpClear(entry, NULL, http->request, method_head, HTCP_CLR_PURGE);
@@ -104,7 +104,7 @@ clientPurgeRequest(clientHttpRequest * http)
     if (http->request->vary_headers && !strstr(http->request->vary_headers, "=")) {
 	entry = storeGetPublic(urlCanonical(http->request), method_get);
 	if (entry) {
-	    debug(33, 4) ("clientPurgeRequest: Vary GET '%s'\n",
+	    debugs(33, 4, "clientPurgeRequest: Vary GET '%s'",
 		storeUrl(entry));
 #if USE_HTCP
 	    neighborsHtcpClear(entry, NULL, http->request, method_get, HTCP_CLR_PURGE);
@@ -114,7 +114,7 @@ clientPurgeRequest(clientHttpRequest * http)
 	}
 	entry = storeGetPublic(urlCanonical(http->request), method_head);
 	if (entry) {
-	    debug(33, 4) ("clientPurgeRequest: Vary HEAD '%s'\n",
+	    debugs(33, 4, "clientPurgeRequest: Vary HEAD '%s'",
 		storeUrl(entry));
 #if USE_HTCP
 	    neighborsHtcpClear(entry, NULL, http->request, method_head, HTCP_CLR_PURGE);

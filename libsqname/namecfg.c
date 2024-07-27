@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-int namecache_dns_skiptests = 0;
+int namecache_dns_skiptests = 1;
 int namecache_dns_positive_ttl = 0;
 int namecache_dns_negative_ttl = 0;
 int namecache_ipcache_size = 0;

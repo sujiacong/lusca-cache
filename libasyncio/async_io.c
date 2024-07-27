@@ -245,7 +245,7 @@ aioCancel(int fd)
 	    their_data = ctrlp->done_handler_data;
 	    ctrlp->done_handler = NULL;
 	    ctrlp->done_handler_data = NULL;
-	    debug(32, 0) ("this be aioCancel. Danger ahead!\n");
+	    debugs(32, 0, "this be aioCancel. Danger ahead!");
 	    if (cbdataValid(their_data))
 		done_handler(fd, their_data, NULL, -2, -2);
 	    cbdataUnlock(their_data);
@@ -491,11 +491,11 @@ aioSync(void)
     if (!initialised)
 	return;			/* nothing to do then */
     /* Flush all pending operations */
-    debug(32, 1) ("aioSync: flushing pending I/O operations\n");
+    debugs(32, 1, "aioSync: flushing pending I/O operations");
     do {
 	aioCheckCallbacks();
     } while (squidaio_sync());
-    debug(32, 1) ("aioSync: done\n");
+    debugs(32, 1, "aioSync: done");
 }
 
 int

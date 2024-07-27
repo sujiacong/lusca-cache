@@ -53,7 +53,7 @@ storeSwapOutStart(StoreEntry * e)
     /* Build the swap metadata, so the filesystem will know how much
      * metadata there is to store
      */
-    debug(20, 5) ("storeSwapOutStart: Begin SwapOut '%s' to dirno %d, fileno %08X\n",
+    debugs(20, 5, "storeSwapOutStart: Begin SwapOut '%s' to dirno %d, fileno %08X",
 	storeUrl(e), e->swap_dirn, e->swap_filen);
     e->swap_status = SWAPOUT_WRITING;
     tlv_list = storeSwapMetaBuild(e);
@@ -129,7 +129,7 @@ storeSwapOutMaintainMemObject(StoreEntry * e)
      * still writing to disk or not
      */
     lowest_offset = storeLowestMemReaderOffset(e);
-    debug(20, 7) ("storeSwapOutMaintainMemObject: lowest_offset = %" PRINTF_OFF_T "\n",
+    debugs(20, 7, "storeSwapOutMaintainMemObject: lowest_offset = %" PRINTF_OFF_T "",
 	lowest_offset);
     if (!swapout_able)
 	new_mem_lo = lowest_offset;
@@ -173,8 +173,8 @@ storeSwapOut(StoreEntry * e)
     if (mem == NULL)
 	return;
     /* should we swap something out to disk? */
-    debug(20, 7) ("storeSwapOut: %s\n", storeUrl(e));
-    debug(20, 7) ("storeSwapOut: store_status = %s\n",
+    debugs(20, 7, "storeSwapOut: %s", storeUrl(e));
+    debugs(20, 7, "storeSwapOut: store_status = %s",
 	storeStatusStr[e->store_status]);
     if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
 	assert(EBIT_TEST(e->flags, RELEASE_REQUEST));
@@ -182,17 +182,17 @@ storeSwapOut(StoreEntry * e)
 	return;
     }
     if (EBIT_TEST(e->flags, ENTRY_SPECIAL)) {
-	debug(20, 3) ("storeSwapOut: %s SPECIAL\n", storeUrl(e));
+	debugs(20, 3, "storeSwapOut: %s SPECIAL", storeUrl(e));
 	return;
     }
-    debug(20, 7) ("storeSwapOut: mem->inmem_lo = %" PRINTF_OFF_T "\n",
+    debugs(20, 7, "storeSwapOut: mem->inmem_lo = %" PRINTF_OFF_T "",
 	mem->inmem_lo);
-    debug(20, 7) ("storeSwapOut: mem->inmem_hi = %" PRINTF_OFF_T "\n",
+    debugs(20, 7, "storeSwapOut: mem->inmem_hi = %" PRINTF_OFF_T "",
 	mem->inmem_hi);
-    debug(20, 7) ("storeSwapOut: swapout.queue_offset = %" PRINTF_OFF_T "\n",
+    debugs(20, 7, "storeSwapOut: swapout.queue_offset = %" PRINTF_OFF_T "",
 	mem->swapout.queue_offset);
     if (mem->swapout.sio)
-	debug(20, 7) ("storeSwapOut: storeOffset() = %" PRINTF_OFF_T "\n",
+	debugs(20, 7, "storeSwapOut: storeOffset() = %" PRINTF_OFF_T "",
 	    storeOffset(mem->swapout.sio));
     assert(mem->inmem_hi >= mem->swapout.queue_offset);
     /*
@@ -211,20 +211,20 @@ storeSwapOut(StoreEntry * e)
 	 * content-length, rather than wait to accumulate huge
 	 * amounts of object data in memory.
 	 */
-	debug(20, 5) ("storeSwapOut: Deferring starting swapping out\n");
+	debugs(20, 5, "storeSwapOut: Deferring starting swapping out");
 	return;
     }
     swapout_able = storeSwapOutMaintainMemObject(e);
 #if SIZEOF_SQUID_OFF_T <= 4
     if (mem->inmem_hi > 0x7FFF0000) {
-	debug(20, 0) ("WARNING: preventing squid_off_t overflow for %s\n", storeUrl(e));
+	debugs(20, 0, "WARNING: preventing squid_off_t overflow for %s", storeUrl(e));
 	storeAbort(e);
 	return;
     }
 #endif
     if (!swapout_able)
 	return;
-    debug(20, 7) ("storeSwapOut: swapout_size = %" PRINTF_OFF_T "\n",
+    debugs(20, 7, "storeSwapOut: swapout_size = %" PRINTF_OFF_T "",
 	swapout_size);
     if (swapout_size == 0) {
 	if (e->store_status == STORE_OK)
@@ -284,9 +284,9 @@ storeSwapOut(StoreEntry * e)
 	 */
 	swap_buf_len = mem->swapout.memnode->len;
 
-	debug(20, 3) ("storeSwapOut: swap_buf_len = %d\n", (int) swap_buf_len);
+	debugs(20, 3, "storeSwapOut: swap_buf_len = %d", (int) swap_buf_len);
 	assert(swap_buf_len > 0);
-	debug(20, 3) ("storeSwapOut: swapping out %d bytes from %" PRINTF_OFF_T "\n",
+	debugs(20, 3, "storeSwapOut: swapping out %d bytes from %" PRINTF_OFF_T "",
 	    (int) swap_buf_len, mem->swapout.queue_offset);
 	mem->swapout.queue_offset += swap_buf_len;
 	storeWrite(mem->swapout.sio, stmemNodeGet(mem->swapout.memnode), swap_buf_len, stmemNodeFree);
@@ -318,8 +318,8 @@ storeSwapOutFileClose(StoreEntry * e)
     MemObject *mem = e->mem_obj;
     storeIOState *sio = mem->swapout.sio;
     assert(mem != NULL);
-    debug(20, 3) ("storeSwapOutFileClose: %s\n", storeKeyText(e->hash.key));
-    debug(20, 3) ("storeSwapOutFileClose: sio = %p\n", mem->swapout.sio);
+    debugs(20, 3, "storeSwapOutFileClose: %s", storeKeyText(e->hash.key));
+    debugs(20, 3, "storeSwapOutFileClose: sio = %p", mem->swapout.sio);
     if (sio == NULL)
 	return;
     mem->swapout.sio = NULL;
@@ -335,7 +335,7 @@ storeSwapOutFileClosed(void *data, int errflag, storeIOState * sio)
     assert(e->swap_status == SWAPOUT_WRITING);
     cbdataFree(c);
     if (errflag) {
-	debug(20, 1) ("storeSwapOutFileClosed: dirno %d, swapfile %08X, errflag=%d\n\t%s\n",
+	debugs(20, 1, "storeSwapOutFileClosed: dirno %d, swapfile %08X, errflag=%d\n\t%s",
 	    e->swap_dirn, e->swap_filen, errflag, xstrerror());
 	if (errflag == DISK_NO_SPACE_LEFT) {
 	    storeDirDiskFull(e->swap_dirn);
@@ -350,7 +350,7 @@ storeSwapOutFileClosed(void *data, int errflag, storeIOState * sio)
 	storeReleaseRequest(e);
     } else {
 	/* swapping complete */
-	debug(20, 3) ("storeSwapOutFileClosed: SwapOut complete: '%s' to %d, %08X\n",
+	debugs(20, 3, "storeSwapOutFileClosed: SwapOut complete: '%s' to %d, %08X",
 	    storeUrl(e), e->swap_dirn, e->swap_filen);
 	e->swap_file_sz = objectLen(e) + mem->swap_hdr_sz;
 	e->swap_status = SWAPOUT_DONE;
@@ -361,7 +361,7 @@ storeSwapOutFileClosed(void *data, int errflag, storeIOState * sio)
 	}
 	statCounter.swap.outs++;
     }
-    debug(20, 3) ("storeSwapOutFileClosed: %s:%d\n", __FILE__, __LINE__);
+    debugs(20, 3, "storeSwapOutFileClosed: %s:%d", __FILE__, __LINE__);
     mem->swapout.sio = NULL;
     cbdataUnlock(sio);
     storeSwapOutMaintainMemObject(e);

@@ -44,7 +44,7 @@ internalStart(request_t * request, StoreEntry * entry)
 {
     ErrorState *err;
 
-    debug(76, 3) ("internalStart: %s requesting '%.*s'\n",
+    debugs(76, 3, "internalStart: %s requesting '%.*s'",
 	inet_ntoa(request->client_addr), strLen2(request->urlpath), strBuf2(request->urlpath));
     if (strCmp(request->urlpath, "/squid-internal-dynamic/netdb") == 0) {
 	netdbBinaryExchange(entry);

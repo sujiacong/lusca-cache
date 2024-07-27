@@ -93,17 +93,17 @@ storeUpdateCopy(void *data, mem_node_ref nr, ssize_t size)
     StoreUpdateState *state = data;
 
     if (EBIT_TEST(state->newentry->flags, ENTRY_ABORTED)) {
-	debug(20, 1) ("storeUpdateCopy: Aborted at %d (%d)\n", (int) state->offset, (int) size);
+	debugs(20, 1, "storeUpdateCopy: Aborted at %d (%d)", (int) state->offset, (int) size);
 	/* the abort callback deals with the needed cleanup */
 	goto finish;
     }
     if (EBIT_TEST(state->newentry->flags, KEY_PRIVATE) && state->newentry->mem_obj->nclients == 0) {
-	debug(20, 2) ("storeUpdateCopy: Gone stale with no clients, skip copying of the rest\n");
+	debugs(20, 2, "storeUpdateCopy: Gone stale with no clients, skip copying of the rest");
 	storeUpdateDone(state);
 	goto finish;
     }
     if (size < 0) {
-	debug(20, 1) ("storeUpdateCopy: Error at %d (%d)\n", (int) state->offset, (int) size);
+	debugs(20, 1, "storeUpdateCopy: Error at %d (%d)", (int) state->offset, (int) size);
 	storeUpdateDone(state);
 	goto finish;
     }
@@ -112,7 +112,7 @@ storeUpdateCopy(void *data, mem_node_ref nr, ssize_t size)
 	assert(size <= nr.node->len - nr.offset);
 	storeAppend(state->newentry, buf, size);
 	if (EBIT_TEST(state->newentry->flags, ENTRY_ABORTED)) {
-	    debug(20, 1) ("storeUpdateCopy: Aborted on write at %d (%d)\n", (int) state->offset, (int) size);
+	    debugs(20, 1, "storeUpdateCopy: Aborted on write at %d (%d)", (int) state->offset, (int) size);
 	    goto finish;
 	}
 	state->offset += size;
@@ -186,7 +186,7 @@ storeUpdate(StoreEntry * entry, request_t * request)
 	 * the above storeBufferFlush() call could ABORT this entry,
 	 * in that case, there's nothing for us to do.
 	 */
-	debug(20, 1) ("storeUpdate: Aborted on write\n");
+	debugs(20, 1, "storeUpdate: Aborted on write");
 	return;
     }
     storeClientRef(state->sc, state->oldentry, state->offset, state->offset, SM_PAGE_SIZE, storeUpdateCopy, state);

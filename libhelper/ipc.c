@@ -183,31 +183,31 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	    name);
     } else if (type == IPC_FIFO) {
         if (! comm_create_fifopair(&prfd, &pwfd, &crfd, &cwfd)) {
-	    debug(54, 0) ("ipcCreate: pipe: %s\n", xstrerror());
+	    debugs(54, 0, "ipcCreate: pipe: %s", xstrerror());
         }
     } else if (type == IPC_UNIX_STREAM) {
         if (! comm_create_unix_stream_pair(&prfd, &pwfd, &crfd, &cwfd, 32768)) {
-	    debug(54, 0) ("ipcCreate: pipe: %s\n", xstrerror());
+	    debugs(54, 0, "ipcCreate: pipe: %s", xstrerror());
         }
     } else if (type == IPC_UNIX_DGRAM) {
         if (! comm_create_unix_dgram_pair(&prfd, &pwfd, &crfd, &cwfd)) {
-            debug(54, 0) ("ipcCreate: dgrampair: %s\n", xstrerror());
+            debugs(54, 0, "ipcCreate: dgrampair: %s", xstrerror());
             return -1;
         }
     } else {
 	assert(IPC_NONE);
     }
-    debug(54, 3) ("ipcCreate: prfd FD %d\n", prfd);
-    debug(54, 3) ("ipcCreate: pwfd FD %d\n", pwfd);
-    debug(54, 3) ("ipcCreate: crfd FD %d\n", crfd);
-    debug(54, 3) ("ipcCreate: cwfd FD %d\n", cwfd);
+    debugs(54, 3, "ipcCreate: prfd FD %d", prfd);
+    debugs(54, 3, "ipcCreate: pwfd FD %d", pwfd);
+    debugs(54, 3, "ipcCreate: crfd FD %d", crfd);
+    debugs(54, 3, "ipcCreate: cwfd FD %d", cwfd);
 
     if (crfd < 0) {
-	debug(54, 0) ("ipcCreate: Failed to create child FD.\n");
+	debugs(54, 0, "ipcCreate: Failed to create child FD.");
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
     if (pwfd < 0) {
-	debug(54, 0) ("ipcCreate: Failed to create server FD.\n");
+	debugs(54, 0, "ipcCreate: Failed to create server FD.");
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
     sqinet_init(&PS);
@@ -216,38 +216,38 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     if (type == IPC_TCP_SOCKET || type == IPC_UDP_SOCKET) {
 	len = sqinet_get_maxlength(&PS);
 	if (getsockname(pwfd, sqinet_get_entry(&PS), &len) < 0) {
-	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
+	    debugs(54, 0, "ipcCreate: getsockname: %s", xstrerror());
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
         sqinet_ntoa(&PS, tmp, MAX_IPSTRLEN, 0);
-	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
+	debugs(54, 3, "ipcCreate: FD %d sockaddr %s:%d",
 	    pwfd, tmp, sqinet_get_port(&PS));
 	len = sqinet_get_maxlength(&CS);
 	if (getsockname(crfd, sqinet_get_entry(&CS), &len) < 0) {
-	    debug(54, 0) ("ipcCreate: getsockname: %s\n", xstrerror());
+	    debugs(54, 0, "ipcCreate: getsockname: %s", xstrerror());
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
         sqinet_ntoa(&CS, tmp, MAX_IPSTRLEN, 0);
-	debug(54, 3) ("ipcCreate: FD %d sockaddr %s:%d\n",
+	debugs(54, 3, "ipcCreate: FD %d sockaddr %s:%d",
 	    crfd, tmp, sqinet_get_port(&CS));
     }
     if (type == IPC_TCP_SOCKET) {
 	if (listen(crfd, 1) < 0) {
-	    debug(54, 1) ("ipcCreate: listen FD %d: %s\n", crfd, xstrerror());
+	    debugs(54, 1, "ipcCreate: listen FD %d: %s", crfd, xstrerror());
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
-	debug(54, 3) ("ipcCreate: FD %d listening...\n", crfd);
+	debugs(54, 3, "ipcCreate: FD %d listening...", crfd);
     }
     /* flush or else we get dup data if unbuffered_logs is set */
     logsFlush();
     if ((pid = fork()) < 0) {
-	debug(54, 1) ("ipcCreate: fork: %s\n", xstrerror());
+	debugs(54, 1, "ipcCreate: fork: %s", xstrerror());
 	return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
     }
     if (pid > 0) {		/* parent */
@@ -269,20 +269,20 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
 	else
 	    x = read(prfd, hello_buf, HELLO_BUF_SZ - 1);
 	if (x < 0) {
-	    debug(54, 0) ("ipcCreate: PARENT: hello read test failed\n");
-	    debug(54, 0) ("--> read: %s\n", xstrerror());
+	    debugs(54, 0, "ipcCreate: PARENT: hello read test failed");
+	    debugs(54, 0, "--> read: %s", xstrerror());
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	} else if (strcmp(hello_buf, hello_string)) {
-	    debug(54, 0) ("ipcCreate: PARENT: hello read test failed\n");
-	    debug(54, 0) ("--> read returned %d\n", x);
-	    debug(54, 0) ("--> got '%s'\n", rfc1738_escape(hello_buf));
+	    debugs(54, 0, "ipcCreate: PARENT: hello read test failed");
+	    debugs(54, 0, "--> read returned %d", x);
+	    debugs(54, 0, "--> got '%s'", rfc1738_escape(hello_buf));
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    return ipcCloseAllFD(prfd, pwfd, crfd, cwfd);
 	}
-	debug(54, 2) ("ipcCreate: hello read: %d bytes\n", x);
+	debugs(54, 2, "ipcCreate: hello read: %d bytes", x);
 	commSetTimeout(prfd, -1, NULL, NULL);
 	commSetNonBlocking(prfd);
 	commSetNonBlocking(pwfd);
@@ -309,14 +309,14 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     pwfd = prfd = -1;
 
     if (type == IPC_TCP_SOCKET) {
-	debug(54, 3) ("ipcCreate: calling accept on FD %d\n", crfd);
+	debugs(54, 3, "ipcCreate: calling accept on FD %d", crfd);
 	if ((fd = accept(crfd, NULL, NULL)) < 0) {
-	    debug(54, 0) ("ipcCreate: FD %d accept: %s\n", crfd, xstrerror());
+	    debugs(54, 0, "ipcCreate: FD %d accept: %s", crfd, xstrerror());
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    _exit(1);
 	}
-	debug(54, 3) ("ipcCreate: CHILD accepted new FD %d\n", fd);
+	debugs(54, 3, "ipcCreate: CHILD accepted new FD %d", fd);
 	close(crfd);
 	cwfd = crfd = fd;
     } else if (type == IPC_UDP_SOCKET) {
@@ -329,16 +329,16 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     if (type == IPC_UDP_SOCKET) {
 	x = send(cwfd, hello_string, strlen(hello_string) + 1, 0);
 	if (x < 0) {
-	    debug(54, 0) ("sendto FD %d: %s\n", cwfd, xstrerror());
-	    debug(54, 0) ("ipcCreate: CHILD: hello write test failed\n");
+	    debugs(54, 0, "sendto FD %d: %s", cwfd, xstrerror());
+	    debugs(54, 0, "ipcCreate: CHILD: hello write test failed");
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    _exit(1);
 	}
     } else {
 	if (write(cwfd, hello_string, strlen(hello_string) + 1) < 0) {
-	    debug(54, 0) ("write FD %d: %s\n", cwfd, xstrerror());
-	    debug(54, 0) ("ipcCreate: CHILD: hello write test failed\n");
+	    debugs(54, 0, "write FD %d: %s", cwfd, xstrerror());
+	    debugs(54, 0, "ipcCreate: CHILD: hello write test failed");
 	    sqinet_done(&PS);
 	    sqinet_done(&CS);
 	    _exit(1);
@@ -387,7 +387,7 @@ ipcCreate(int type, const char *prog, const char *const args[], const char *name
     execvp(prog, (char *const *) args);
     debug_log = fdopen(2, "a+");
 
-    debug(54, 0) ("ipcCreate: %s: %s\n", prog, xstrerror());
+    debugs(54, 0, "ipcCreate: %s: %s", prog, xstrerror());
     _exit(1);
     return 0;
 }

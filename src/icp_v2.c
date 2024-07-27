@@ -37,6 +37,8 @@
 
 #include "client_db.h"
 
+#include "../libmutiprocess/ipcsupport.h"
+
 static void icpLogIcp(struct in_addr, log_type, int, const char *, int);
 static void icpHandleIcpV2(int, struct sockaddr_in, char *, int);
 static void icpCount(void *, int, size_t, int);
@@ -127,7 +129,7 @@ icpUdpSend(int fd,
     int x;
     int len;
     len = (int) ntohs(msg->length);
-    debug(12, 5) ("icpUdpSend: FD %d sending %s, %d bytes to %s:%d\n",
+    debugs(12, 5, "icpUdpSend: FD %d sending %s, %d bytes to %s:%d",
 	fd,
 	icp_opcode_str[msg->opcode],
 	len,
@@ -209,7 +211,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
      * Length field should match the number of bytes read
      */
     if (len != header.length) {
-	debug(12, 3) ("icpHandleIcpV2: ICP message is too small\n");
+	debugs(12, 3, "icpHandleIcpV2: ICP message is too small");
 	return;
     }
     switch (header.opcode) {
@@ -233,7 +235,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	checklist.request = icp_request;
 	allow = aclCheckFast(Config.accessList.icp, &checklist);
 	if (!allow) {
-	    debug(12, 2) ("icpHandleIcpV2: Access Denied for %s by %s.\n",
+	    debugs(12, 2, "icpHandleIcpV2: Access Denied for %s by %s.",
 		inet_ntoa(from.sin_addr), AclMatchedName);
 	    if (clientdbCutoffDenied(from.sin_addr)) {
 		/*
@@ -256,7 +258,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	}
 	/* The peer is allowed to use this cache */
 	entry = storeGetPublic(url, method_get);
-	debug(12, 5) ("icpHandleIcpV2: OPCODE %s\n", icp_opcode_str[header.opcode]);
+	debugs(12, 5, "icpHandleIcpV2: OPCODE %s", icp_opcode_str[header.opcode]);
 	if (icpCheckUdpHit(entry, icp_request)) {
 	    reply = icpCreateMessage(ICP_HIT, flags, url, header.reqnum, src_rtt);
 	    icpUdpSend(fd, &from, reply, LOG_UDP_HIT, 0);
@@ -291,13 +293,13 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
     case ICP_DENIED:
     case ICP_MISS_NOFETCH:
 	if (neighbors_do_private_keys && header.reqnum == 0) {
-	    debug(12, 0) ("icpHandleIcpV2: Neighbor %s returned reqnum = 0\n",
+	    debugs(12, 0, "icpHandleIcpV2: Neighbor %s returned reqnum = 0",
 		inet_ntoa(from.sin_addr));
-	    debug(12, 0) ("icpHandleIcpV2: Disabling use of private keys\n");
+	    debugs(12, 0, "icpHandleIcpV2: Disabling use of private keys");
 	    neighbors_do_private_keys = 0;
 	}
 	url = buf + sizeof(icp_common_t);
-	debug(12, 3) ("icpHandleIcpV2: %s from %s for '%s'\n",
+	debugs(12, 3, "icpHandleIcpV2: %s from %s for '%s'",
 	    icp_opcode_str[header.opcode],
 	    inet_ntoa(from.sin_addr),
 	    url);
@@ -311,7 +313,7 @@ icpHandleIcpV2(int fd, struct sockaddr_in from, char *buf, int len)
 	break;
 
     default:
-	debug(12, 0) ("icpHandleIcpV2: UNKNOWN OPCODE: %d from %s\n",
+	debugs(12, 0, "icpHandleIcpV2: UNKNOWN OPCODE: %d from %s",
 	    header.opcode, inet_ntoa(from.sin_addr));
 	break;
     }
@@ -325,16 +327,16 @@ icpPktDump(icp_common_t * pkt)
 {
     struct in_addr a;
 
-    debug(12, 9) ("opcode:     %3d %s\n",
+    debugs(12, 9, "opcode:     %3d %s",
 	(int) pkt->opcode,
 	icp_opcode_str[pkt->opcode]);
-    debug(12, 9) ("version: %-8d\n", (int) pkt->version);
-    debug(12, 9) ("length:  %-8d\n", (int) ntohs(pkt->length));
-    debug(12, 9) ("reqnum:  %-8d\n", ntohl(pkt->reqnum));
-    debug(12, 9) ("flags:   %-8x\n", ntohl(pkt->flags));
+    debugs(12, 9, "version: %-8d", (int) pkt->version);
+    debugs(12, 9, "length:  %-8d", (int) ntohs(pkt->length));
+    debugs(12, 9, "reqnum:  %-8d", ntohl(pkt->reqnum));
+    debugs(12, 9, "flags:   %-8x", ntohl(pkt->flags));
     a.s_addr = pkt->shostid;
-    debug(12, 9) ("shostid: %s\n", inet_ntoa(a));
-    debug(12, 9) ("payload: %s\n", (char *) pkt + sizeof(icp_common_t));
+    debugs(12, 9, "shostid: %s", inet_ntoa(a));
+    debugs(12, 9, "payload: %s", (char *) pkt + sizeof(icp_common_t));
 }
 #endif
 
@@ -371,14 +373,14 @@ icpHandleUdp(int sock, void *data)
 	    /* or maybe an EHOSTUNREACH "No route to host" message */
 	    if (errno != ECONNREFUSED && errno != EHOSTUNREACH)
 #endif
-		debug(12, 1) ("icpHandleUdp: FD %d recvfrom: %s\n",
+		debugs(12, 1, "icpHandleUdp: FD %d recvfrom: %s",
 		    sock, xstrerror());
 	    break;
 	}
 	(*N)++;
 	icpCount(buf, RECV, (size_t) len, 0);
 	buf[len] = '\0';
-	debug(12, 4) ("icpHandleUdp: FD %d: received %d bytes from %s.\n",
+	debugs(12, 4, "icpHandleUdp: FD %d: received %d bytes from %s.",
 	    sock,
 	    len,
 	    inet_ntoa(from.sin_addr));
@@ -386,7 +388,7 @@ icpHandleUdp(int sock, void *data)
 	icpPktDump(buf);
 #endif
 	if (len < sizeof(icp_common_t)) {
-	    debug(12, 4) ("icpHandleUdp: Ignoring too-small UDP packet\n");
+	    debugs(12, 4, "icpHandleUdp: Ignoring too-small UDP packet");
 	    break;
 	}
 	icp_version = (int) buf[1];	/* cheat! */
@@ -395,47 +397,76 @@ icpHandleUdp(int sock, void *data)
 	else if (icp_version == ICP_VERSION_3)
 	    icpHandleIcpV3(sock, from, buf, len);
 	else
-	    debug(12, 1) ("WARNING: Unused ICP version %d received from %s:%d\n",
+	    debugs(12, 1, "WARNING: Unused ICP version %d received from %s:%d",
 		icp_version,
 		inet_ntoa(from.sin_addr),
 		ntohs(from.sin_port));
     }
 }
 
+
+static void
+icpIncomingConnectionOpened(int fd, void* data)
+{
+    if (fd < 0)
+        fatal("Cannot open ICP Port");
+
+    commSetSelect(fd, COMM_SELECT_READ, icpHandleUdp, NULL, 0);
+
+    wordlist *s = NULL;
+
+    for (s = Config.mcast_group_list; s; s = s->next)
+        ipcache_nbgethostbyname(s->key, mcastJoinGroups, NULL); // XXX: pass the conn for mcastJoinGroups usage.
+
+	theInIcpConnection = fd;
+
+    debugs(12, 1, "Accepting ICP messages at %s, port %d, FD %d.\n",
+	inet_ntoa(Config.Addrs.udp_incoming),
+	(int)Config.Port.icp, theInIcpConnection);
+
+    fd_note(fd, "Incoming ICP port");
+
+    if (IsNoAddr(&Config.Addrs.udp_outgoing)) {
+		int x;
+		unsigned int len;	
+		struct sockaddr_in xaddr;
+		
+        theOutIcpConnection = theInIcpConnection;
+		
+        //debugs(12, DBG_IMPORTANT, "Sending ICP messages from " << icpOutgoingConn->local);
+        
+	    memset(&theOutICPAddr, '\0', sizeof(struct in_addr));
+	    len = sizeof(struct sockaddr_in);
+	    memset(&xaddr, '\0', len);
+	    x = getsockname(theOutIcpConnection,
+		(struct sockaddr *) &xaddr, &len);
+	    if (x < 0)
+		debugs(12, 1, "theOutIcpConnection FD %d: getsockname: %s",
+		    theOutIcpConnection, xstrerror());
+	    else
+		theOutICPAddr = xaddr.sin_addr;        
+    }
+}
+
+
 void
-icpConnectionsOpen(void)
+icpConnectionsSMPOpen(void)
 {
     u_short port;
     struct in_addr addr;
     struct sockaddr_in xaddr;
     int x;
     socklen_t len;
-    wordlist *s;
+
     if ((port = Config.Port.icp) <= 0)
 	return;
-    enter_suid();
-    theInIcpConnection = comm_open(SOCK_DGRAM,
-	IPPROTO_UDP,
-	Config.Addrs.udp_incoming,
-	port,
-	COMM_NONBLOCKING,
-	COMM_TOS_DEFAULT,
-	"ICP Socket");
-    leave_suid();
-    if (theInIcpConnection < 0)
-	fatal("Cannot open ICP Port");
-    commSetSelect(theInIcpConnection,
-	COMM_SELECT_READ,
-	icpHandleUdp,
-	NULL,
-	0);
-    for (s = Config.mcast_group_list; s; s = s->next)
-	ipcache_nbgethostbyname(s->key, mcastJoinGroups, NULL);
-    debug(12, 1) ("Accepting ICP messages at %s, port %d, FD %d.\n",
-	inet_ntoa(Config.Addrs.udp_incoming),
-	(int) port, theInIcpConnection);
+	
+	debugs(1, 1, "StrandStartListen icp in port %d", port);
+	
+	StrandStartListenRequest(SOCK_DGRAM, IPPROTO_UDP, fdnInIcpSocket, COMM_NONBLOCKING, &Config.Addrs.udp_incoming, Config.Port.icp, NULL, icpIncomingConnectionOpened);
+	
     addr = Config.Addrs.udp_outgoing;
-    if (! IsNoAddr(&addr)) {
+    if (!IsNoAddr(&addr)) {
 	enter_suid();
 	theOutIcpConnection = comm_open(SOCK_DGRAM,
 	    IPPROTO_UDP,
@@ -452,24 +483,99 @@ icpConnectionsOpen(void)
 	    icpHandleUdp,
 	    NULL,
 	    0);
-	debug(12, 1) ("Outgoing ICP messages on port %d, FD %d.\n",
+	debugs(12, 1, "Outgoing ICP messages on port %d, FD %d.",
 	    (int) port, theOutIcpConnection);
 	fd_note(theOutIcpConnection, "Outgoing ICP socket");
-	fd_note(theInIcpConnection, "Incoming ICP socket");
-    } else {
-	theOutIcpConnection = theInIcpConnection;
-    }
+	
     memset(&theOutICPAddr, '\0', sizeof(struct in_addr));
     len = sizeof(struct sockaddr_in);
     memset(&xaddr, '\0', len);
     x = getsockname(theOutIcpConnection,
 	(struct sockaddr *) &xaddr, &len);
     if (x < 0)
-	debug(12, 1) ("theOutIcpConnection FD %d: getsockname: %s\n",
+	debugs(12, 1, "theOutIcpConnection FD %d: getsockname: %s",
 	    theOutIcpConnection, xstrerror());
     else
-	theOutICPAddr = xaddr.sin_addr;
+		theOutICPAddr = xaddr.sin_addr;	
+    } 
 }
+
+void
+icpConnectionsOpen(void)
+{
+	if(UsingSmp())
+	{
+		icpConnectionsSMPOpen();
+	}
+	else
+	{
+	    u_short port;
+	    struct in_addr addr;
+	    struct sockaddr_in xaddr;
+	    int x;
+	    socklen_t len;
+	    wordlist *s;
+	    if ((port = Config.Port.icp) <= 0)
+		return;
+	    enter_suid();
+	    theInIcpConnection = comm_open(SOCK_DGRAM,
+		IPPROTO_UDP,
+		Config.Addrs.udp_incoming,
+		port,
+		COMM_NONBLOCKING,
+		COMM_TOS_DEFAULT,
+		"ICP Socket");
+	    leave_suid();
+	    if (theInIcpConnection < 0)
+		fatal("Cannot open ICP Port");
+	    commSetSelect(theInIcpConnection,
+		COMM_SELECT_READ,
+		icpHandleUdp,
+		NULL,
+		0);
+	    for (s = Config.mcast_group_list; s; s = s->next)
+		ipcache_nbgethostbyname(s->key, mcastJoinGroups, NULL);
+	    debugs(12, 1, "Accepting ICP messages at %s, port %d, FD %d.\n",
+		inet_ntoa(Config.Addrs.udp_incoming),
+		(int) port, theInIcpConnection);
+	    addr = Config.Addrs.udp_outgoing;
+	    if (! IsNoAddr(&addr)) {
+		enter_suid();
+		theOutIcpConnection = comm_open(SOCK_DGRAM,
+		    IPPROTO_UDP,
+		    addr,
+		    port,
+		    COMM_NONBLOCKING,
+		    COMM_TOS_DEFAULT,
+		    "ICP Port");
+		leave_suid();
+		if (theOutIcpConnection < 0)
+		    fatal("Cannot open Outgoing ICP Port");
+		commSetSelect(theOutIcpConnection,
+		    COMM_SELECT_READ,
+		    icpHandleUdp,
+		    NULL,
+		    0);
+		debugs(12, 1, "Outgoing ICP messages on port %d, FD %d.\n",
+		    (int) port, theOutIcpConnection);
+		fd_note(theOutIcpConnection, "Outgoing ICP socket");
+		fd_note(theInIcpConnection, "Incoming ICP socket");
+	    } else {
+		theOutIcpConnection = theInIcpConnection;
+	    }
+	    memset(&theOutICPAddr, '\0', sizeof(struct in_addr));
+	    len = sizeof(struct sockaddr_in);
+	    memset(&xaddr, '\0', len);
+	    x = getsockname(theOutIcpConnection,
+		(struct sockaddr *) &xaddr, &len);
+	    if (x < 0)
+		debugs(12, 1, "theOutIcpConnection FD %d: getsockname: %s\n",
+		    theOutIcpConnection, xstrerror());
+	    else
+		theOutICPAddr = xaddr.sin_addr;
+	}
+}
+
 
 /*
  * icpConnectionShutdown only closes the 'in' socket if it is 
@@ -481,7 +587,7 @@ icpConnectionShutdown(void)
     if (theInIcpConnection < 0)
 	return;
     if (theInIcpConnection != theOutIcpConnection) {
-	debug(12, 1) ("FD %d Closing ICP connection\n", theInIcpConnection);
+	debugs(12, 1, "FD %d Closing ICP connection", theInIcpConnection);
 	comm_close(theInIcpConnection);
     }
     /*
@@ -506,7 +612,7 @@ icpConnectionClose(void)
 {
     icpConnectionShutdown();
     if (theOutIcpConnection > -1) {
-	debug(12, 1) ("FD %d Closing ICP connection\n", theOutIcpConnection);
+	debugs(12, 1, "FD %d Closing ICP connection", theOutIcpConnection);
 	comm_close(theOutIcpConnection);
 	theOutIcpConnection = -1;
     }

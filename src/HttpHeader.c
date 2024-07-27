@@ -87,7 +87,7 @@ httpHeaderInitModule(void)
     httpHdrCcInitModule();
     /* register with cache manager */
     cachemgrRegister("http_headers",
-	"HTTP Header Statistics", httpHeaderStoreReport, 0, 1);
+	"HTTP Header Statistics", httpHeaderStoreReport, NULL, NULL,0, 1, 0);
 }
 
 void
@@ -109,7 +109,7 @@ httpHeaderPackInto(const HttpHeader * hdr, Packer * p)
     HttpHeaderPos pos = HttpHeaderInitPos;
     const HttpHeaderEntry *e;
     assert(hdr && p);
-    debug(55, 7) ("packing hdr: (%p)\n", hdr);
+    debugs(55, 7, "packing hdr: (%p)", hdr);
     /* pack all entries one by one */
     while ((e = httpHeaderGetEntry(hdr, &pos)))
 	httpHeaderEntryPackInto(e, p);
@@ -243,7 +243,7 @@ httpHeaderStatDump(const HttpHeaderStat * hs, StoreEntry * e)
 }
 
 void
-httpHeaderStoreReport(StoreEntry * e)
+httpHeaderStoreReport(StoreEntry * e, void* data)
 {
     int i;
     http_hdr_type ht;

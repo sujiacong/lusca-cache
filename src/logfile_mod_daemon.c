@@ -75,7 +75,7 @@ logfileNewBuffer(Logfile * lf)
     l_daemon_t *ll = (l_daemon_t *) lf->data;
     logfile_buffer_t *b;
 
-    debug(50, 5) ("logfileNewBuffer: %s: new buffer\n", lf->path);
+    debugs(50, 5, "logfileNewBuffer: %s: new buffer", lf->path);
 
     b = xcalloc(1, sizeof(logfile_buffer_t));
     assert(b != NULL);
@@ -117,19 +117,19 @@ logfileHandleWrite(int fd, void *data)
     ll->flush_pending = 0;
 
     ret = FD_WRITE_METHOD(ll->wfd, b->buf + b->written_len, b->len - b->written_len);
-    debug(50, 3) ("logfileHandleWrite: %s: write returned %d\n", lf->path, ret);
+    debugs(50, 3, "logfileHandleWrite: %s: write returned %d", lf->path, ret);
     if (ret < 0) {
 	if (ignoreErrno(errno)) {
 	    /* something temporary */
 	    goto reschedule;
 	}
-	debug(50, 1) ("logfileHandleWrite: %s: error writing (%s)\n", lf->path, xstrerror());
+	debugs(50, 1, "logfileHandleWrite: %s: error writing (%s)", lf->path, xstrerror());
 	/* XXX should handle this better */
 	fatal("I don't handle this error well!");
     }
     if (ret == 0) {
 	/* error? */
-	debug(50, 1) ("logfileHandleWrite: %s: wrote 0 bytes?\n", lf->path);
+	debugs(50, 1, "logfileHandleWrite: %s: wrote 0 bytes?", lf->path);
 	/* XXX should handle this better */
 	fatal("I don't handle this error well!");
     }
@@ -182,11 +182,11 @@ logfile_mod_daemon_append(Logfile * lf, const char *buf, int len)
     if (ll->bufs.head == NULL) {
 	logfileNewBuffer(lf);
     }
-    debug(50, 3) ("logfile_mod_daemon_append: %s: appending %d bytes\n", lf->path, len);
+    debugs(50, 3, "logfile_mod_daemon_append: %s: appending %d bytes", lf->path, len);
     /* Copy what can be copied */
     while (len > 0) {
 	b = ll->bufs.tail->data;
-	debug(50, 3) ("logfile_mod_daemon_append: current buffer has %d of %d bytes before append\n", b->len, b->size);
+	debugs(50, 3, "logfile_mod_daemon_append: current buffer has %d of %d bytes before append", b->len, b->size);
 	s = XMIN(len, (b->size - b->len));
 	xmemcpy(b->buf + b->len, buf, s);
 	len = len - s;
@@ -234,7 +234,7 @@ logfile_mod_daemon_open(Logfile * lf, const char *path, size_t bufsz, int fatal_
     lf->f_rotate = logfile_mod_daemon_rotate;
 
     cbdataLock(lf);
-    debug(50, 1) ("Logfile Daemon: opening log %s\n", path);
+    debugs(50, 1, "Logfile Daemon: opening log %s", path);
     ll = xcalloc(1, sizeof(*ll));
     lf->data = ll;
     ll->eol = 1;
@@ -264,7 +264,7 @@ static void
 logfile_mod_daemon_close(Logfile * lf)
 {
     l_daemon_t *ll = (l_daemon_t *) lf->data;
-    debug(50, 1) ("Logfile Daemon: closing log %s\n", lf->path);
+    debugs(50, 1, "Logfile Daemon: closing log %s", lf->path);
     logfileFlush(lf);
     if (ll->rfd == ll->wfd)
 	comm_close(ll->rfd);
@@ -283,7 +283,7 @@ static void
 logfile_mod_daemon_rotate(Logfile * lf)
 {
     char tb[3];
-    debug(50, 1) ("logfile_mod_daemon_rotate: %s\n", lf->path);
+    debugs(50, 1, "logfile_mod_daemon_rotate: %s", lf->path);
     tb[0] = 'R';
     tb[1] = '\n';
     tb[2] = '\0';
@@ -304,7 +304,7 @@ logfile_mod_daemon_writeline(Logfile * lf, const char *buf, size_t len)
     if (ll->nbufs > LOGFILE_MAXBUFS) {
 	if (ll->last_warned < squid_curtime - LOGFILE_WARN_TIME) {
 	    ll->last_warned = squid_curtime;
-	    debug(50, 1) ("logfile_mod_daemon_writeline: %s: queue is too large; some log messages have been lost.\n", lf->path);
+	    debugs(50, 1, "logfile_mod_daemon_writeline: %s: queue is too large; some log messages have been lost.", lf->path);
 	}
 	return;
     }
@@ -345,7 +345,7 @@ logfile_mod_daemon_flush(Logfile * lf)
 {
     l_daemon_t *ll = (l_daemon_t *) lf->data;
     if (commUnsetNonBlocking(ll->wfd)) {
-	debug(50, 1) ("Logfile Daemon: Couldn't set the pipe blocking for flush! You're now missing some log entries.\n");
+	debugs(50, 1, "Logfile Daemon: Couldn't set the pipe blocking for flush! You're now missing some log entries.");
 	return;
     }
     while (ll->bufs.head != NULL) {

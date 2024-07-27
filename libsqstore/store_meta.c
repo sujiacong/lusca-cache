@@ -73,18 +73,18 @@ storeSwapMetaUnpack(const char *buf, int *hdr_len)
         type = buf[j++];
         /* VOID is reserved, but allow some slack for new types.. */
         if (type <= STORE_META_VOID || type > STORE_META_END + 10) {
-            debug(20, 0) ("storeSwapMetaUnpack: bad type (%d)!\n", type);
+            debugs(20, 0, "storeSwapMetaUnpack: bad type (%d)!", type);
             break;
         }
         xmemcpy(&length, &buf[j], sizeof(int));
         if (length < 0 || length > (1 << 16)) {
-            debug(20, 0) ("storeSwapMetaUnpack: insane length (%d)!\n", length);
+            debugs(20, 0, "storeSwapMetaUnpack: insane length (%d)!", length);
             break;
         }
         j += sizeof(int);
         if (j + length > buflen) {
-            debug(20, 0) ("storeSwapMetaUnpack: overflow!\n");
-            debug(20, 0) ("\ttype=%d, length=%d, buflen=%d, offset=%d\n",
+            debugs(20, 0, "storeSwapMetaUnpack: overflow!");
+            debugs(20, 0, "\ttype=%d, length=%d, buflen=%d, offset=%d",
                 type, length, buflen, (int) j);
             break;
         }

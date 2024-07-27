@@ -118,7 +118,7 @@ void
 storeLogOpen(void)
 {
     if (strcmp(Config.Log.store, "none") == 0) {
-	debug(20, 1) ("Store logging disabled\n");
+	debugs(20, 1, "Store logging disabled");
 	return;
     }
     storelog = logfileOpen(Config.Log.store, 0, 1);

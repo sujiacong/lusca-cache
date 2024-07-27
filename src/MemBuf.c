@@ -28,7 +28,7 @@ buf_read(buf_t *b, int fd, int read_size)
 	int ret;
 
 	/* extend buffer to have enough space */
-	debug(1, 3) ("buf_read: len %d, capacity %d, read size %d\n",
+	debugs(1, 3, "buf_read: len %d, capacity %d, read size %d",
 	    buf_len(b), buf_capacity(b), read_size);
 	buf_grow_to_min_free(b, read_size);
 

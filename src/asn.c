@@ -86,7 +86,7 @@ asnMatchIp(void *data, sqaddr_t *v6addr)
 {
 	struct in_addr a;
 
-#warning ASN code needs to be made ipv6 aware
+//#warning ASN code needs to be made ipv6 aware
 
     if (sqinet_get_family(v6addr) != AF_INET)
         return 0;
@@ -104,7 +104,7 @@ asnMatchIp4(void *data, struct in_addr addr)
     prefix_t *p;
     radix_node_t *n;
 
-    debug(53, 3) ("asnMatchIp: Called for %s.\n", inet_ntoa(addr));
+    debugs(53, 3, "asnMatchIp: Called for %s.", inet_ntoa(addr));
 
     if (AS_tree == NULL)
 	return 0;
@@ -117,20 +117,20 @@ asnMatchIp4(void *data, struct in_addr addr)
     n = radix_search_best(AS_tree, p);
     Deref_Prefix(p);
     if (n == NULL) {
-	debug(53, 3) ("asnMatchIp: Address not in as db.\n");
+	debugs(53, 3, "asnMatchIp: Address not in as db.");
 	return 0;
     }
 
-    debug(53, 3) ("asnMatchIp: Found in db!\n");
+    debugs(53, 3, "asnMatchIp: Found in db!");
     e = ((rtentry *) (n->data))->e_info;
     assert(e);
     for (a = (intlist *) data; a; a = a->next)
 	for (b = e->as_number; b; b = b->next)
 	    if (a->i == b->i) {
-		debug(53, 5) ("asnMatchIp: Found a match!\n");
+		debugs(53, 5, "asnMatchIp: Found a match!");
 		return 1;
 	    }
-    debug(53, 5) ("asnMatchIp: AS not in as db.\n");
+    debugs(53, 5, "asnMatchIp: AS not in as db.");
     return 0;
 }
 
@@ -139,7 +139,7 @@ asnAclInitialize(acl * acls)
 {
     acl *a;
     intlist *i;
-    debug(53, 3) ("asnAclInitialize\n");
+    debugs(53, 3, "asnAclInitialize");
     for (a = acls; a; a = a->next) {
 	if (a->type != ACL_DST_ASN && a->type != ACL_SRC_ASN)
 	    continue;
@@ -155,7 +155,7 @@ asnInit(void)
     CBDATA_INIT_TYPE(ASState);
     AS_tree = New_Radix();
     asnAclInitialize(Config.aclList);
-    cachemgrRegister("asndb", "AS Number Database", asnStats, 0, 1);
+    cachemgrRegister("asndb", "AS Number Database", asnStats, NULL, NULL, 0, 1, 0);
 }
 
 static void
@@ -179,7 +179,7 @@ asnFreeMemory(void)
 }
 
 static void
-asnStats(StoreEntry * sentry)
+asnStats(StoreEntry * sentry, void* data)
 {
     radix_node_t *n;
 
@@ -203,7 +203,7 @@ asnCacheStart(int as)
     method_t *method_get;
     method_get = urlMethodGetKnownByCode(METHOD_GET);
     asState = cbdataAlloc(ASState);
-    debug(53, 3) ("asnCacheStart: AS %d\n", as);
+    debugs(53, 3, "asnCacheStart: AS %d", as);
     snprintf(asres, 4096, "whois://%s/!gAS%d", Config.as_whois_server, as);
     asState->as_number = as;
     req = urlParse(method_get, asres);
@@ -238,7 +238,7 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
     char *t;
     LOCAL_ARRAY(char, buf, SM_PAGE_SIZE);
 
-    debug(53, 3) ("asHandleReply: Called with size=%ld\n", (long int) size);
+    debugs(53, 3, "asHandleReply: Called with size=%ld", (long int) size);
     if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
 	stmemNodeUnref(&nr);
 	asStateFree(asState);
@@ -249,12 +249,12 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	stmemNodeUnref(&nr);
 	return;
     } else if (size < 0) {
-	debug(53, 1) ("asHandleReply: Called with size=%ld\n", (long int) size);
+	debugs(53, 1, "asHandleReply: Called with size=%ld", (long int) size);
 	asStateFree(asState);
 	stmemNodeUnref(&nr);
 	return;
     } else if (HTTP_OK != e->mem_obj->reply->sline.status) {
-	debug(53, 1) ("WARNING: AS %d whois request failed\n",
+	debugs(53, 1, "WARNING: AS %d whois request failed",
 	    asState->as_number);
 	stmemNodeUnref(&nr);
 	asStateFree(asState);
@@ -277,16 +277,16 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	    break;
 	}
 	*t = '\0';
-	debug(53, 3) ("asHandleReply: AS# %s (%d)\n", s, asState->as_number);
+	debugs(53, 3, "asHandleReply: AS# %s (%d)", s, asState->as_number);
 	asnAddNet(s, asState->as_number);
 	s = t + 1;
     }
     asState->seen = asState->offset + size;
     asState->offset += (s - buf);
-    debug(53, 3) ("asState->seen = %ld, asState->offset = %ld\n",
+    debugs(53, 3, "asState->seen = %ld, asState->offset = %ld",
 	(long int) asState->seen, (long int) asState->offset);
     if (e->store_status == STORE_PENDING) {
-	debug(53, 3) ("asHandleReply: store_status == STORE_PENDING: %s\n", storeUrl(e));
+	debugs(53, 3, "asHandleReply: store_status == STORE_PENDING: %s", storeUrl(e));
 	storeClientRef(asState->sc,
 	    e,
 	    asState->seen,
@@ -295,7 +295,7 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	    asHandleReply,
 	    asState);
     } else if (asState->seen < e->mem_obj->inmem_hi) {
-	debug(53, 3) ("asHandleReply: asState->seen < e->mem_obj->inmem_hi %s\n", storeUrl(e));
+	debugs(53, 3, "asHandleReply: asState->seen < e->mem_obj->inmem_hi %s", storeUrl(e));
 	storeClientRef(asState->sc,
 	    e,
 	    asState->seen,
@@ -304,7 +304,7 @@ asHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	    asHandleReply,
 	    asState);
     } else {
-	debug(53, 3) ("asHandleReply: Done: %s\n", storeUrl(e));
+	debugs(53, 3, "asHandleReply: Done: %s", storeUrl(e));
 	asStateFree(asState);
     }
 }
@@ -313,7 +313,7 @@ static void
 asStateFree(void *data)
 {
     ASState *asState = data;
-    debug(53, 3) ("asStateFree: %s\n", storeUrl(asState->entry));
+    debugs(53, 3, "asStateFree: %s", storeUrl(asState->entry));
     storeClientUnregister(asState->sc, asState->entry, asState);
     storeUnlockObject(asState->entry);
     requestUnlink(asState->request);
@@ -341,7 +341,7 @@ asnAddNet(char *as_string, int as_number)
 
     t = strchr(as_string, '/');
     if (t == NULL) {
-	debug(53, 3) ("asnAddNet: failed, invalid response from whois server.\n");
+	debugs(53, 3, "asnAddNet: failed, invalid response from whois server.");
 	return 0;
     }
     *t = '\0';
@@ -356,7 +356,7 @@ asnAddNet(char *as_string, int as_number)
     in_m.s_addr = mask;
     xstrncpy(dbg1, inet_ntoa(in_a), 32);
     xstrncpy(dbg2, inet_ntoa(in_m), 32);
-    debug(53, 3) ("asnAddNet: called for %s/%s\n", dbg1, dbg2);
+    debugs(53, 3, "asnAddNet: called for %s/%s", dbg1, dbg2);
 
     e = xcalloc(1, sizeof(rtentry));
 
@@ -367,10 +367,10 @@ asnAddNet(char *as_string, int as_number)
     if (n != NULL) {
 	asinfo = ((rtentry *) (n->data))->e_info;
 	if (intlistFind(asinfo->as_number, as_number)) {
-	    debug(53, 3) ("asnAddNet: Ignoring repeated network '%s/%d' for AS %d\n",
+	    debugs(53, 3, "asnAddNet: Ignoring repeated network '%s/%d' for AS %d",
 		dbg1, bitl, as_number);
 	} else {
-	    debug(53, 3) ("asnAddNet: Warning: Found a network with multiple AS numbers!\n");
+	    debugs(53, 3, "asnAddNet: Warning: Found a network with multiple AS numbers!");
 	    for (Tail = &asinfo->as_number; *Tail; Tail = &(*Tail)->next);
 	    q = xcalloc(1, sizeof(intlist));
 	    q->i = as_number;

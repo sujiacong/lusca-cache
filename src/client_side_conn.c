@@ -14,7 +14,7 @@ connStateFree(int fd, void *data)
     ConnStateData *connState = data;
     dlink_node *n;
     clientHttpRequest *http;
-    debug(33, 3) ("connStateFree: FD %d\n", fd);
+    debugs(33, 3, "connStateFree: FD %d", fd);
     assert(connState != NULL);
     clientdbEstablished(connState->peer.sin_addr, -1);	/* decrement */
     n = connState->reqs.head;

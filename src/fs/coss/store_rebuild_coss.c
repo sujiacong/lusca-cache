@@ -50,16 +50,16 @@ storeCossRebuildComplete(void *data)
     CossInfo *cs = SD->fsdata;
     store_dirs_rebuilding--;
     storeRebuildComplete(&rb->counts);
-    debug(47, 1) ("COSS: %s: Rebuild Completed\n", stripePath(SD));
+    debugs(47, 1, "COSS: %s: Rebuild Completed", stripePath(SD));
     cs->rebuild.rebuilding = 0;
     if (rb->helper.pid != -1)
         ipcClose(rb->helper.pid, rb->helper.r_fd, rb->helper.w_fd);
     safe_free(rb->rbuf.buf);
-    debug(47, 1) ("  %d objects scanned, %d objects relocated, %d objects fresher, %d objects ignored\n",
+    debugs(47, 1, "  %d objects scanned, %d objects relocated, %d objects fresher, %d objects ignored",
         rb->counts.scancount, rb->cosscounts.reloc, rb->cosscounts.fresher, rb->cosscounts.unknown);
     if (rb->recent.timestamp > -1 && rb->recent.swap_filen > -1) {
 	cs->curstripe = storeCossFilenoToStripe(cs, rb->recent.swap_filen);
-        debug(47, 1) ("  Current stripe set to %d\n", cs->curstripe);
+        debugs(47, 1, "  Current stripe set to %d", cs->curstripe);
     }
     storeCossStartMembuf(SD);
     cbdataFree(rb);
@@ -135,7 +135,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
 
     /* Is it Private? Don't bother */
     if (EBIT_TEST(d->flags, KEY_PRIVATE)) {
-        debug(47, 3) ("COSS: %s: filen %x private key flag set, ignoring.\n", stripePath(sd), d->swap_filen);
+        debugs(47, 3, "COSS: %s: filen %x private key flag set, ignoring.", stripePath(sd), d->swap_filen);
         rb->counts.badflags++;
         return;
     }
@@ -144,7 +144,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
     oe = storeGet(key);
     if (oe == NULL) {
 	rb->cosscounts.new++;
-	debug(47, 3) ("COSS: Adding filen %d\n", d->swap_filen);
+	debugs(47, 3, "COSS: Adding filen %d", d->swap_filen);
 	/* no clash! woo, can add and forget */
 	storeCoss_updateRecent(rb, d);
 	storeCoss_AddStoreEntry(rb, key, d);
@@ -158,7 +158,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
 
     /* Fresher? Its a new object: deallocate the old one, reallocate the new one */
     if (d->lastref > oe->lastref) {
-	debug(47, 3) ("COSS: fresher object for filen %d found (%ld -> %ld)\n", oe->swap_filen, (long int) oe->timestamp, (long int) d->timestamp);
+	debugs(47, 3, "COSS: fresher object for filen %d found (%ld -> %ld)", oe->swap_filen, (long int) oe->timestamp, (long int) d->timestamp);
 	rb->cosscounts.fresher++;
 	storeCoss_DeleteStoreEntry(rb, key, oe);
 	oe = NULL;
@@ -171,7 +171,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
      * not sure what should be done here.
      */
     if (oe->timestamp == d->timestamp && oe->expires == d->expires) {
-	debug(47, 3) ("COSS: filen %d -> %d (since they're the same!)\n", oe->swap_filen, d->swap_filen);
+	debugs(47, 3, "COSS: filen %d -> %d (since they're the same!)", oe->swap_filen, d->swap_filen);
 	rb->cosscounts.reloc++;
 	storeCoss_DeleteStoreEntry(rb, key, oe);
 	oe = NULL;
@@ -179,7 +179,7 @@ storeCoss_ConsiderStoreEntry(RebuildState * rb, const cache_key * key, storeSwap
 	storeCoss_AddStoreEntry(rb, key, d);
 	return;
     }
-    debug(47, 3) ("COSS: filen %d: ignoring this one for some reason\n", d->swap_filen);
+    debugs(47, 3, "COSS: filen %d: ignoring this one for some reason", d->swap_filen);
     rb->cosscounts.unknown++;
 }
 
@@ -198,15 +198,15 @@ storeCossRebuildHelperRead(int fd, void *data)
 	int t, p;
 
         assert(fd == rb->helper.r_fd);
-        debug(47, 5) ("storeCossRebuildHelperRead: %s: ready for helper read\n", sd->path);
+        debugs(47, 5, "storeCossRebuildHelperRead: %s: ready for helper read", sd->path);
 
         assert(rb->rbuf.size - rb->rbuf.used > 0);
-        debug(47, 8) ("storeCossRebuildHelperRead: %s: trying to read %d bytes\n", sd->path, rb->rbuf.size - rb->rbuf.used);
+        debugs(47, 8, "storeCossRebuildHelperRead: %s: trying to read %d bytes", sd->path, rb->rbuf.size - rb->rbuf.used);
         r = FD_READ_METHOD(fd, rb->rbuf.buf + rb->rbuf.used, rb->rbuf.size - rb->rbuf.used);
-        debug(47, 8) ("storeCossRebuildHelperRead: %s: read %d bytes\n", sd->path, r);
+        debugs(47, 8, "storeCossRebuildHelperRead: %s: read %d bytes", sd->path, r);
         if (r <= 0) {
                 /* Error or EOF */
-                debug(47, 1) ("storeCossRebuildHelperRead: %s: read returned %d; error/eof?\n", sd->path, r);
+                debugs(47, 1, "storeCossRebuildHelperRead: %s: read returned %d; error/eof?", sd->path, r);
                 storeCossRebuildComplete(rb);
                 return;
         }
@@ -222,11 +222,11 @@ storeCossRebuildHelperRead(int fd, void *data)
                         case SWAP_LOG_PROGRESS:
                                 t = ((storeSwapLogProgress *)(&s))->total;
 				p = ((storeSwapLogProgress *)(&s))->progress;
-				debug(47, 3) ("storeCOSSRebuildHelperRead: %s: SWAP_LOG_PROGRESS: total %d objects, progress %d objects\n", sd->path, t, p);
+				debugs(47, 3, "storeCOSSRebuildHelperRead: %s: SWAP_LOG_PROGRESS: total %d objects, progress %d objects", sd->path, t, p);
                                 storeRebuildProgress(rb->sd->index, t, p);
                                 break;
                         case SWAP_LOG_COMPLETED:
-                                debug(47, 1) ("  %s: completed rebuild\n", sd->path);
+                                debugs(47, 1, "  %s: completed rebuild", sd->path);
                                 storeCossRebuildComplete(rb);
                                 return;
                         default:
@@ -237,7 +237,7 @@ storeCossRebuildHelperRead(int fd, void *data)
                 }
                 i += sizeof(storeSwapLogData);
         }
-        debug(47, 5) ("storeCossRebuildHelperRead: %s: read %d entries\n", sd->path, (int) i / (int) sizeof(storeSwapLogData));
+        debugs(47, 5, "storeCossRebuildHelperRead: %s: read %d entries", sd->path, (int) i / (int) sizeof(storeSwapLogData));
 
         /* Shuffle what is left to the beginning of the buffer */
         if (i < rb->rbuf.used) {
@@ -270,7 +270,7 @@ storeDirCoss_StartDiskRebuild(RebuildState * rb)
     args[5] = num_stripes;
     args[6] = NULL;
 
-    debug(47, 2) ("COSS: %s: Beginning disk rebuild.\n", stripePath(SD));
+    debugs(47, 2, "COSS: %s: Beginning disk rebuild.", stripePath(SD));
 
     rb->helper.pid = ipcCreate(IPC_STREAM, Config.Program.coss_log_build, args, "coss_rebuild helper",
       0, &rb->helper.r_fd, &rb->helper.w_fd, NULL);
@@ -305,7 +305,7 @@ storeCossDirRebuild(SwapDir * sd)
     rb->flags.clean = (unsigned int) clean;
     rb->recent.swap_filen = -1;
     rb->recent.timestamp = -1;
-    debug(20, 1) ("Rebuilding COSS storage in %s (DIRTY)\n", stripePath(sd));
+    debugs(20, 1, "Rebuilding COSS storage in %s (DIRTY)", stripePath(sd));
     store_dirs_rebuilding++;
     storeDirCoss_StartDiskRebuild(rb);
 }

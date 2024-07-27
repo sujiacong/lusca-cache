@@ -83,8 +83,10 @@ debug_log_flush(void)
 }
 
 void
-_db_print_file(const char *format, va_list args)
+_db_print_file(const char *format, ...)
 {
+	va_list args;
+	va_start (args, format);
     if (debug_log == NULL)
 	return;
     /* give a chance to context-based debugging to print current context */

@@ -47,7 +47,7 @@ variable_list *
 snmp_sysFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_sysFn: Processing request:\n");
+    debugs(49, 5, "snmp_sysFn: Processing request:");
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_SYS]) {
@@ -70,6 +70,9 @@ snmp_sysFn(variable_list * Var, snint * ErrP)
 	*ErrP = SNMP_ERR_NOSUCHNAME;
 	break;
     }
+
+	snmpDebugAnswer(Answer);
+	
     return Answer;
 }
 
@@ -78,7 +81,7 @@ snmp_confFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
     const char *cp = NULL;
-    debug(49, 5) ("snmp_confFn: Processing request with magic %d!\n", Var->name[8]);
+    debugs(49, 5, "snmp_confFn: Processing request with magic %d!", Var->name[8]);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_CONF]) {
     case CONF_ADMIN:
@@ -145,6 +148,9 @@ snmp_confFn(variable_list * Var, snint * ErrP)
 	*ErrP = SNMP_ERR_NOSUCHNAME;
 	break;
     }
+
+	snmpDebugAnswer(Answer);
+	
     return Answer;
 }
 
@@ -157,7 +163,7 @@ snmp_meshPtblFn(variable_list * Var, snint * ErrP)
     char *cp = NULL;
     peer *p = NULL;
     int cnt = 0;
-    debug(49, 5) ("snmp_meshPtblFn: peer %d requested!\n", Var->name[LEN_SQ_MESH + 3]);
+    debugs(49, 5, "snmp_meshPtblFn: peer %d requested!", Var->name[LEN_SQ_MESH + 3]);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_MESH + 1]) {
     case 1:
@@ -276,7 +282,7 @@ snmp_prfSysFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
     static struct rusage rusage;
-    debug(49, 5) ("snmp_prfSysFn: Processing request with magic %d!\n", Var->name[LEN_SQ_PRF + 1]);
+    debugs(49, 5, "snmp_prfSysFn: Processing request with magic %d!", Var->name[LEN_SQ_PRF + 1]);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_PRF + 1]) {
     case PERF_SYS_PF:
@@ -364,7 +370,7 @@ snmp_prfProtoFn(variable_list * Var, snint * ErrP)
     static StatCounters *l = NULL;
     double x;
     int minutes;
-    debug(49, 5) ("snmp_prfProtoFn: Processing request with magic %d!\n", Var->name[LEN_SQ_PRF]);
+    debugs(49, 5, "snmp_prfProtoFn: Processing request with magic %d!", Var->name[LEN_SQ_PRF]);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_PRF + 1]) {
     case PERF_PROTOSTAT_AGGR:	/* cacheProtoAggregateStats */
@@ -458,9 +464,9 @@ snmp_prfProtoFn(variable_list * Var, snint * ErrP)
 	    break;
 	f = snmpStatGet(0);
 	l = snmpStatGet(minutes);
-	debug(49, 8) ("median: min= %d, %d l= %p , f = %p\n", minutes,
+	debugs(49, 8, "median: min= %d, %d l= %p , f = %p", minutes,
 	    Var->name[LEN_SQ_PRF + 3], l, f);
-	debug(49, 8) ("median: l= %p , f = %p\n", l, f);
+	debugs(49, 8, "median: l= %p , f = %p", l, f);
 	switch (Var->name[LEN_SQ_PRF + 3]) {
 	case PERF_MEDIAN_TIME:
 	    x = minutes;

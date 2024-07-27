@@ -33,6 +33,7 @@ extern void stringAppend(String * s, const char *buf, int len);
 extern char * stringDupToC(const String *s);
 extern char * stringDupToCOffset(const String *s, int offset);
 extern char * stringDupSubstrToC(const String *s, int len);
+extern char * stringDupToCRange(const String *s, int start, int end);
 extern int strChr(String *s, char c);
 extern int strRChr(String *s, char c);
 

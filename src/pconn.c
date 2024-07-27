@@ -82,7 +82,7 @@ pconnNew(const char *key)
     p->hash.key = xstrdup(key);
     p->nfds_alloc = PCONN_FDS_SZ;
     p->fds = memPoolAlloc(pconn_fds_pool);
-    debug(48, 3) ("pconnNew: adding %s\n", hashKeyStr(&p->hash));
+    debugs(48, 3, "pconnNew: adding %s", hashKeyStr(&p->hash));
     hash_join(table, &p->hash);
     return p;
 }
@@ -90,7 +90,7 @@ pconnNew(const char *key)
 static void
 pconnDelete(struct _pconn *p)
 {
-    debug(48, 3) ("pconnDelete: deleting %s\n", hashKeyStr(&p->hash));
+    debugs(48, 3, "pconnDelete: deleting %s", hashKeyStr(&p->hash));
     hash_remove_link(table, (hash_link *) p);
     if (p->nfds_alloc == PCONN_FDS_SZ)
 	memPoolFree(pconn_fds_pool, p->fds);
@@ -109,7 +109,7 @@ pconnRemoveFD(struct _pconn *p, int fd)
 	    break;
     }
     assert(i >= 0);
-    debug(48, 3) ("pconnRemoveFD: found FD %d at index %d\n", fd, i);
+    debugs(48, 3, "pconnRemoveFD: found FD %d at index %d", fd, i);
     for (; i < p->nfds - 1; i++)
 	p->fds[i] = p->fds[i + 1];
     if (--p->nfds == 0)
@@ -121,7 +121,7 @@ pconnTimeout(int fd, void *data)
 {
     struct _pconn *p = data;
     assert(table != NULL);
-    debug(48, 3) ("pconnTimeout: FD %d %s\n", fd, hashKeyStr(&p->hash));
+    debugs(48, 3, "pconnTimeout: FD %d %s", fd, hashKeyStr(&p->hash));
     pconnRemoveFD(p, fd);
     comm_close(fd);
 }
@@ -135,14 +135,14 @@ pconnRead(int fd, void *data)
     assert(table != NULL);
     CommStats.syscalls.sock.reads++;
     n = FD_READ_METHOD(fd, buf, 256);
-    debug(48, 3) ("pconnRead: %d bytes from FD %d, %s\n", n, fd,
+    debugs(48, 3, "pconnRead: %d bytes from FD %d, %s", n, fd,
 	hashKeyStr(&p->hash));
     pconnRemoveFD(p, fd);
     comm_close(fd);
 }
 
 static void
-pconnHistDump(StoreEntry * e)
+pconnHistDump(StoreEntry * e, void* data)
 {
     int i;
     storeAppendPrintf(e,
@@ -188,8 +188,8 @@ pconnInit(void)
 
     cachemgrRegister("pconn",
 	"Persistent Connection Utilization Histograms",
-	pconnHistDump, 0, 1);
-    debug(48, 3) ("persistent connection module initialized\n");
+	pconnHistDump, NULL, NULL, 0, 1, 0);
+    debugs(48, 3, "persistent connection module initialized");
 }
 
 void
@@ -200,7 +200,7 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
     LOCAL_ARRAY(char, desc, FD_DESC_SZ);
     LOCAL_ARRAY(char, key, PCONN_KEYLEN);
     if (fdUsageHigh()) {
-	debug(48, 3) ("pconnPush: Not many unused FDs\n");
+	debugs(48, 3, "pconnPush: Not many unused FDs");
 	comm_close(fd);
 	return;
     } else if (shutting_down) {
@@ -213,7 +213,7 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
     if (p == NULL)
 	p = pconnNew(key);
     if (p->nfds == p->nfds_alloc) {
-	debug(48, 3) ("pconnPush: growing FD array\n");
+	debugs(48, 3, "pconnPush: growing FD array");
 	p->nfds_alloc <<= 1;
 	old = p->fds;
 	p->fds = xmalloc(p->nfds_alloc * sizeof(int));
@@ -228,7 +228,7 @@ pconnPush(int fd, const char *host, u_short port, const char *domain, struct in_
     commSetTimeout(fd, Config.Timeout.pconn, pconnTimeout, p);
     snprintf(desc, FD_DESC_SZ, "%s idle connection", host);
     fd_note(fd, desc);
-    debug(48, 3) ("pconnPush: pushed FD %d for %s\n", fd, key);
+    debugs(48, 3, "pconnPush: pushed FD %d for %s", fd, key);
 }
 
 int

@@ -145,7 +145,7 @@ extern void eventLocalInit(void);
 
 extern void fqdncache_local_params(void);
 extern void fqdncache_init_local(void);
-extern void fqdnStats(StoreEntry *);
+extern void fqdnStats(StoreEntry *,void*);
 
 extern void ftpStart(FwdState *);
 extern char *ftpUrlWith2f(const request_t *);
@@ -207,7 +207,7 @@ extern void httpHeaderPutRange(HttpHeader * hdr, const HttpHdrRange * range);
 /* avoid using these low level routines */
 extern void httpHeaderEntryPackInto(const HttpHeaderEntry * e, Packer * p);
 /* store report about current header usage and other stats */
-extern void httpHeaderStoreReport(StoreEntry * e);
+extern void httpHeaderStoreReport(StoreEntry * e,void* data);
 extern void httpHdrMangleList(HttpHeader *, request_t *);
 
 /* Http Reply */
@@ -270,12 +270,16 @@ extern PF icpUdpSendQueue;
 extern PF httpAccept;
 
 #ifdef SQUID_SNMP
+typedef enum {atNone = 0, atSum, atAverage, atMax, atMin} AggrType;
 extern PF snmpHandleUdp;
 extern void snmpInit(void);
 extern void snmpConnectionOpen(void);
 extern void snmpConnectionShutdown(void);
 extern void snmpConnectionClose(void);
+extern void snmpDebugAnswer(variable_list* Answer);
 extern void snmpDebugOid(int lvl, oid * Name, snint Len);
+extern AggrType snmpAggrType(oid* Current, snint CurrentLen);
+extern struct snmp_pdu * snmpAgentResponse(struct snmp_pdu *PDU);
 extern void addr2oid(struct in_addr addr, oid * Dest);
 extern struct in_addr *oid2addr(oid * id);
 extern struct in_addr *client_entry(struct in_addr *current);
@@ -314,7 +318,7 @@ extern const cache_key *icpGetCacheKey(const char *url, int reqnum);
 
 extern void ipcache_local_params(void);
 extern void ipcache_init_local(void);
-extern void stat_ipcache_get(StoreEntry *);
+extern void stat_ipcache_get(StoreEntry *,void* data);
 
 extern char *mime_get_header(const char *mime, const char *header);
 extern char *mime_get_header_field(const char *mime, const char *name, const char *prefix);
@@ -398,7 +402,8 @@ extern peer *netdbClosestParent(request_t *);
 extern void netdbHostData(const char *host, int *samp, int *rtt, int *hops);
 
 extern void cachemgrStart(int fd, request_t * request, StoreEntry * entry);
-extern void cachemgrRegister(const char *, const char *, OBJH *, int, int);
+extern void cachemgrRegister(const char *, const char *, OBJH *, ADD*, COL*, int, int, int);
+
 extern void cachemgrInit(void);
 
 extern void peerSelect(request_t *, StoreEntry *, PSC *, void *data);
@@ -666,7 +671,7 @@ extern void storeDigestInit(void);
 extern void storeDigestNoteStoreReady(void);
 extern void storeDigestScheduleRebuild(void);
 extern void storeDigestDel(const StoreEntry * entry);
-extern void storeDigestReport(StoreEntry *);
+extern void storeDigestReport(StoreEntry *, void *);
 
 /*
  * store_dir.c
@@ -1044,7 +1049,7 @@ extern void clientRedirectStart(clientHttpRequest * http);
 extern void clientStoreURLRewriteStart(clientHttpRequest * http);
 
 /* statIapp.c */
-extern void statIappStats(StoreEntry *sentry);
+extern void statIappStats(StoreEntry *sentry, void* data);
 
 /* comm.c */
 extern void commConnectStart(int fd, const char *, u_short, CNCB *, void *, struct in_addr *addr);

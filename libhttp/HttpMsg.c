@@ -367,7 +367,7 @@ httpMsgParseRequestLine(HttpMsgBuf * hmsg)
   finish:
     hmsg->v_maj = maj;
     hmsg->v_min = min;
-    debug(1, 2) ("Parser: retval %d: from %d->%d: method %d->%d; url %d->%d; version %d->%d (%d/%d)\n",
+    debugs(1, 2, "Parser: retval %d: from %d->%d: method %d->%d; url %d->%d; version %d->%d (%d/%d)",
 	retcode, hmsg->req_start, hmsg->req_end,
 	hmsg->m_start, hmsg->m_end,
 	hmsg->u_start, hmsg->u_end,

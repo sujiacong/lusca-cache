@@ -42,6 +42,8 @@ storeKeyText(const unsigned char *key)
 
 #define	META_BUFSIZ		4096
 
+int KidIdentifier = 0;
+
 int
 main(int argc, const char *argv[])
 {

@@ -68,7 +68,7 @@
 #define RFC850_STRFTIME "%A, %d-%b-%y %H:%M:%S GMT"
 #define RFC1123_STRFTIME "%a, %d %b %Y %H:%M:%S GMT"
 
-static const char *const w_space = " \t\r\n";
+//static const char *const w_space = " \t\r\n";
 
 static int make_month(const char *s);
 static int make_num(const char *s);

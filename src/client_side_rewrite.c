@@ -71,7 +71,7 @@ clientRedirectAccessCheckDone(int answer, void *data)
 void
 clientRedirectStart(clientHttpRequest * http)
 {
-    debug(33, 5) ("clientRedirectStart: '%s'\n", http->uri);
+    debugs(33, 5, "clientRedirectStart: '%s'", http->uri);
     if (Config.Program.url_rewrite.command == NULL) {
 	http->redirect_state = REDIRECT_PENDING;
 	if (Config.rewrites != NULL) {
@@ -97,7 +97,7 @@ clientRedirectDone(void *data, char *result)
     request_t *new_request = NULL;
     request_t *old_request = http->request;
     const char *urlgroup = http->conn->port->urlgroup;
-    debug(33, 5) ("clientRedirectDone: '%s' result=%s\n", http->uri,
+    debugs(33, 5, "clientRedirectDone: '%s' result=%s", http->uri,
 	result ? result : "NULL");
     assert(http->redirect_state == REDIRECT_PENDING);
     http->redirect_state = REDIRECT_DONE;
@@ -110,7 +110,7 @@ clientRedirectDone(void *data, char *result)
 		*t++ = '\0';
 		result = t;
 	    } else {
-		debug(33, 1) ("clientRedirectDone: bad input: %s\n", result);
+		debugs(33, 1, "clientRedirectDone: bad input: %s", result);
 	    }
 	}
 	status = (http_status) atoi(result);
@@ -124,7 +124,7 @@ clientRedirectDone(void *data, char *result)
 		http->redirect.location = xstrdup(t + 1);
 		goto redirect_parsed;
 	    } else {
-		debug(33, 1) ("clientRedirectDone: bad input: %s\n", result);
+		debugs(33, 1, "clientRedirectDone: bad input: %s", result);
 	    }
 	} else if (strcmp(result, http->uri))
 	    new_request = urlParse(old_request->method, result);

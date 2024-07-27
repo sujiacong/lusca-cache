@@ -49,7 +49,7 @@ logfileOpen(const char *path, size_t bufsz, int fatal_flag)
     const char *patharg;
     int ret;
 
-    debug(50, 1) ("logfileOpen: opening log %s\n", path);
+    debugs(50, 1, "logfileOpen: opening log %s", path);
 
     CBDATA_INIT_TYPE(Logfile);
     lf = cbdataAlloc(Logfile);
@@ -78,7 +78,7 @@ logfileOpen(const char *path, size_t bufsz, int fatal_flag)
 	if (fatal_flag)
 	    fatalf("logfileOpen: path %s: couldn't open!\n", path);
 	else
-	    debug(50, 1) ("logfileOpen: path %s: couldn't open!\n", path);
+	    debugs(50, 1, "logfileOpen: path %s: couldn't open!", path);
 	lf->f_close(lf);
 	cbdataFree(lf);
 	return NULL;
@@ -94,7 +94,7 @@ logfileOpen(const char *path, size_t bufsz, int fatal_flag)
 void
 logfileClose(Logfile * lf)
 {
-    debug(50, 1) ("logfileClose: closing log %s\n", lf->path);
+    debugs(50, 1, "logfileClose: closing log %s", lf->path);
     lf->f_flush(lf);
     lf->f_close(lf);
     cbdataFree(lf);
@@ -103,7 +103,7 @@ logfileClose(Logfile * lf)
 void
 logfileRotate(Logfile * lf)
 {
-    debug(50, 1) ("logfileRotate: %s\n", lf->path);
+    debugs(50, 1, "logfileRotate: %s", lf->path);
     lf->f_rotate(lf);
 }
 
@@ -156,7 +156,7 @@ logfilePrintf(va_alist)
     if (s > 0)
 	logfileWrite(lf, buf, (size_t) s);
     else
-	debug(50, 1) ("Failed to format log data for %s\n", lf->path);
+	debugs(50, 1, "Failed to format log data for %s", lf->path);
     va_end(args);
 }
 

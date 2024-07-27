@@ -100,7 +100,7 @@ storeAufsDirCreateDirectory(const char *path, int should_exist)
     getCurrentTime();
     if (0 == stat(path, &st)) {
 	if (S_ISDIR(st.st_mode)) {
-	    debug(47, should_exist ? 3 : 1) ("%s exists\n", path);
+	    debugs(47, should_exist ? 3 : 1,"%s exists", path);
 	} else {
 	    fatalf("Swap directory %s is not a directory.", path);
 	}
@@ -109,7 +109,7 @@ storeAufsDirCreateDirectory(const char *path, int should_exist)
 #else
     } else if (0 == mkdir(path, 0755)) {
 #endif
-	debug(47, should_exist ? 1 : 3) ("%s created\n", path);
+	debugs(47, should_exist ? 1 : 3, "%s created", path);
 	created = 1;
     } else {
 	fatalf("Failed to make swap directory %s: %s",
@@ -123,11 +123,11 @@ storeAufsDirVerifyDirectory(const char *path)
 {
     struct stat sb;
     if (stat(path, &sb) < 0) {
-	debug(47, 0) ("%s: %s\n", path, xstrerror());
+	debugs(47, 0, "%s: %s", path, xstrerror());
 	return -1;
     }
     if (S_ISDIR(sb.st_mode) == 0) {
-	debug(47, 0) ("%s is not a directory\n", path);
+	debugs(47, 0, "%s is not a directory", path);
 	return -1;
     }
     return 0;
@@ -168,7 +168,7 @@ storeAufsDirCreateSwapSubDirs(SwapDir * sd)
 	    should_exist = 0;
 	else
 	    should_exist = 1;
-	debug(47, 1) ("Making directories in %s\n", name);
+	debugs(47, 1, "Making directories in %s", name);
 	for (k = 0; k < aioinfo->l2; k++) {
 	    snprintf(name, MAXPATHLEN, "%s/%02X/%02X", sd->path, i, k);
 	    storeAufsDirCreateDirectory(name, should_exist);
@@ -226,7 +226,7 @@ storeAufsDirInit(SwapDir * sd)
 static void
 storeAufsDirNewfs(SwapDir * sd)
 {
-    debug(47, 3) ("Creating swap space in %s\n", sd->path);
+    debugs(47, 3, "Creating swap space in %s", sd->path);
     storeAufsDirCreateDirectory(sd->path, 0);
     storeAufsDirCreateSwapSubDirs(sd);
 }
@@ -268,11 +268,11 @@ storeAufsDirClean(int swap_index)
     D2 = ((swap_index / N0) / N1) % N2;
     snprintf(p1, SQUID_MAXPATHLEN, "%s/%02X/%02X",
 	Config.cacheSwap.swapDirs[D0].path, D1, D2);
-    debug(36, 3) ("storeDirClean: Cleaning directory %s\n", p1);
+    debugs(36, 3, "storeDirClean: Cleaning directory %s", p1);
     dp = opendir(p1);
     if (dp == NULL) {
 	if (errno == ENOENT) {
-	    debug(36, 0) ("storeDirClean: WARNING: Creating %s\n", p1);
+	    debugs(36, 0, "storeDirClean: WARNING: Creating %s", p1);
 #ifdef _SQUID_MSWIN_
 	    if (mkdir(p1) == 0)
 #else
@@ -280,7 +280,7 @@ storeAufsDirClean(int swap_index)
 #endif
 		return 0;
 	}
-	debug(50, 0) ("storeDirClean: %s: %s\n", p1, xstrerror());
+	debugs(50, 0, "storeDirClean: %s: %s", p1, xstrerror());
 	safeunlink(p1, 1);
 	return 0;
     }
@@ -306,7 +306,7 @@ storeAufsDirClean(int swap_index)
     if (k > 10)
 	k = 10;
     for (n = 0; n < k; n++) {
-	debug(36, 3) ("storeDirClean: Cleaning file %08X\n", files[n]);
+	debugs(36, 3, "storeDirClean: Cleaning file %08X", files[n]);
 	snprintf(p2, MAXPATHLEN + 1, "%s/%08X", p1, files[n]);
 #if USE_TRUNCATE
 	truncate(p2, 0);
@@ -315,7 +315,7 @@ storeAufsDirClean(int swap_index)
 #endif
 	statCounter.swap.files_cleaned++;
     }
-    debug(36, 3) ("Cleaned %d unused files from %s\n", k, p1);
+    debugs(36, 3, "Cleaned %d unused files from %s", k, p1);
     return k;
 }
 
@@ -416,7 +416,7 @@ storeAufsDirMaintain(SwapDir * SD)
 	 * This is kinda cheap, but so we need this priority hack?
 	 */
     }
-    debug(47, 3) ("storeMaintainSwapSpace: f=%f, max_scan=%d, max_remove=%d\n",
+    debugs(47, 3, "storeMaintainSwapSpace: f=%f, max_scan=%d, max_remove=%d",
 	f, max_scan, max_remove);
     walker = SD->repl->PurgeInit(SD->repl, max_scan);
     while (1) {
@@ -433,7 +433,7 @@ storeAufsDirMaintain(SwapDir * SD)
 	    break;
     }
     walker->Done(walker);
-    debug(47, (removed ? 2 : 3)) ("storeAufsDirMaintain: %s removed %d/%d f=%.03f max_scan=%d\n",
+    debugs(47, (removed ? 2 : 3), "storeAufsDirMaintain: %s removed %d/%d f=%.03f max_scan=%d",
 	SD->path, removed, max_remove, f, max_scan);
 }
 
@@ -472,7 +472,7 @@ storeAufsDirCheckLoadAv(SwapDir * SD, store_op_t op)
 void
 storeAufsDirRefObj(SwapDir * SD, StoreEntry * e)
 {
-    debug(47, 3) ("storeAufsDirRefObj: referencing %p %d/%d\n", e, e->swap_dirn,
+    debugs(47, 3, "storeAufsDirRefObj: referencing %p %d/%d", e, e->swap_dirn,
 	e->swap_filen);
     if (SD->repl->Referenced)
 	SD->repl->Referenced(SD->repl, e, &e->repl);
@@ -486,7 +486,7 @@ storeAufsDirRefObj(SwapDir * SD, StoreEntry * e)
 void
 storeAufsDirUnrefObj(SwapDir * SD, StoreEntry * e)
 {
-    debug(47, 3) ("storeAufsDirUnrefObj: referencing %p %d/%d\n", e, e->swap_dirn,
+    debugs(47, 3, "storeAufsDirUnrefObj: referencing %p %d/%d", e, e->swap_dirn,
 	e->swap_filen);
     if (SD->repl->Dereferenced)
 	SD->repl->Dereferenced(SD->repl, e, &e->repl);
@@ -502,7 +502,7 @@ storeAufsDirUnrefObj(SwapDir * SD, StoreEntry * e)
 void
 storeAufsDirUnlinkFile(SwapDir * SD, sfileno f)
 {
-    debug(79, 3) ("storeAufsDirUnlinkFile: unlinking fileno %08X\n", f);
+    debugs(79, 3, "storeAufsDirUnlinkFile: unlinking fileno %08X", f);
     /* storeAufsDirMapBitReset(SD, f); */
 #if USE_TRUNCATE
     aioTruncate(storeAufsDirFullPath(SD, f, NULL), 0, NULL, NULL);
@@ -519,7 +519,7 @@ storeAufsDirUnlinkFile(SwapDir * SD, sfileno f)
 void
 storeAufsDirReplAdd(SwapDir * SD, StoreEntry * e)
 {
-    debug(47, 4) ("storeAufsDirReplAdd: added node %p to dir %d\n", e,
+    debugs(47, 4, "storeAufsDirReplAdd: added node %p to dir %d", e,
 	SD->index);
     SD->repl->Add(SD->repl, e, &e->repl);
 }
@@ -529,7 +529,7 @@ void
 storeAufsDirReplRemove(StoreEntry * e)
 {
     SwapDir *SD = INDEXSD(e->swap_dirn);
-    debug(47, 4) ("storeAufsDirReplRemove: remove node %p from dir %d\n", e,
+    debugs(47, 4, "storeAufsDirReplRemove: remove node %p from dir %d", e,
 	SD->index);
     SD->repl->Remove(SD->repl, e, &e->repl);
 }
@@ -631,10 +631,10 @@ storeAufsDirReconfigure(SwapDir * sd, int index, char *path)
 
     /* just reconfigure it */
     if (size == sd->max_size)
-	debug(3, 1) ("Cache dir '%s' size remains unchanged at %d KB\n",
+	debugs(3, 1, "Cache dir '%s' size remains unchanged at %d KB",
 	    path, size);
     else
-	debug(3, 1) ("Cache dir '%s' size changed to %d KB\n",
+	debugs(3, 1, "Cache dir '%s' size changed to %d KB",
 	    path, size);
     sd->max_size = size;
 
@@ -698,19 +698,19 @@ storeAufsCleanupDoubleCheck(SwapDir * sd, StoreEntry * e)
 {
     struct stat sb;
     if (stat(storeAufsDirFullPath(sd, e->swap_filen, NULL), &sb) < 0) {
-	debug(47, 0) ("storeAufsCleanupDoubleCheck: MISSING SWAP FILE\n");
-	debug(47, 0) ("storeAufsCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
-	debug(47, 0) ("storeAufsCleanupDoubleCheck: PATH %s\n",
+	debugs(47, 0, "storeAufsCleanupDoubleCheck: MISSING SWAP FILE");
+	debugs(47, 0, "storeAufsCleanupDoubleCheck: FILENO %08X", e->swap_filen);
+	debugs(47, 0, "storeAufsCleanupDoubleCheck: PATH %s",
 	    storeAufsDirFullPath(sd, e->swap_filen, NULL));
 	storeEntryDump(e, 0);
 	return -1;
     }
     if (e->swap_file_sz != sb.st_size) {
-	debug(47, 0) ("storeAufsCleanupDoubleCheck: SIZE MISMATCH\n");
-	debug(47, 0) ("storeAufsCleanupDoubleCheck: FILENO %08X\n", e->swap_filen);
-	debug(47, 0) ("storeAufsCleanupDoubleCheck: PATH %s\n",
+	debugs(47, 0, "storeAufsCleanupDoubleCheck: SIZE MISMATCH");
+	debugs(47, 0, "storeAufsCleanupDoubleCheck: FILENO %08X", e->swap_filen);
+	debugs(47, 0, "storeAufsCleanupDoubleCheck: PATH %s",
 	    storeAufsDirFullPath(sd, e->swap_filen, NULL));
-	debug(47, 0) ("storeAufsCleanupDoubleCheck: ENTRY SIZE: %ld, FILE SIZE: %ld\n",
+	debugs(47, 0, "storeAufsCleanupDoubleCheck: ENTRY SIZE: %ld, FILE SIZE: %ld",
 	    (long int) e->swap_file_sz, (long int) sb.st_size);
 	storeEntryDump(e, 0);
 	return -1;

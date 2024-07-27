@@ -511,7 +511,7 @@ aclMatchExternal(void *data, aclCheck_t * ch)
     external_acl_data *acl = data;
     request_t *request;
     const char *key = "";
-    debug(82, 9) ("aclMatchExternal: acl=\"%s\"\n", acl->def->name);
+    debugs(82, 9, "aclMatchExternal: acl=\"%s\"", acl->def->name);
     request = ch->request;
     if (ch->extacl_entry) {
 	entry = ch->extacl_entry;
@@ -524,7 +524,7 @@ aclMatchExternal(void *data, aclCheck_t * ch)
 	int ti;
 	/* Make sure the user is authenticated */
 	if ((ti = aclAuthenticated(ch)) != 1) {
-	    debug(82, 2) ("aclMatchExternal: %s user not authenticated (%d)\n", acl->def->name, ti);
+	    debugs(82, 2, "aclMatchExternal: %s user not authenticated (%d)", acl->def->name, ti);
 	    return ti;
 	}
     }
@@ -554,16 +554,16 @@ aclMatchExternal(void *data, aclCheck_t * ch)
 		lookup_needed = 0;
 	}
 	if (lookup_needed) {
-	    debug(82, 2) ("aclMatchExternal: %s(\"%s\") = lookup needed\n", acl->def->name, key);
+	    debugs(82, 2, "aclMatchExternal: %s(\"%s\") = lookup needed", acl->def->name, key);
 	    if (!externalAclOverload(acl->def)) {
 		ch->state[ACL_EXTERNAL] = ACL_LOOKUP_NEEDED;
 		return -1;
 	    } else {
 		if (!entry) {
-		    debug(82, 1) ("aclMatchExternal: '%s' queue overload. Request rejected '%s'.\n", acl->def->name, key);
+		    debugs(82, 1, "aclMatchExternal: '%s' queue overload. Request rejected '%s'.", acl->def->name, key);
 		    return -1;
 		} else {
-		    debug(82, 1) ("aclMatchExternal: '%s' queue overload. Using stale result. '%s'\n", acl->def->name, key);
+		    debugs(82, 1, "aclMatchExternal: '%s' queue overload. Using stale result. '%s'", acl->def->name, key);
 		    /* Fall thru to processing below */
 		}
 	    }
@@ -573,7 +573,7 @@ aclMatchExternal(void *data, aclCheck_t * ch)
     result = entry->result;
     external_acl_message = entry->message;
 
-    debug(82, 2) ("aclMatchExternal: %s = %d\n", acl->def->name, result);
+    debugs(82, 2, "aclMatchExternal: %s = %d", acl->def->name, result);
     if (entry->user) {
 	safe_free(request->extacl_user);
 	request->extacl_user = xstrdup(entry->user);
@@ -842,9 +842,9 @@ static external_acl_entry *
 external_acl_cache_add(external_acl * def, const char *key, int result, char *user, char *passwd, char *message, char *log)
 {
     external_acl_entry *entry = hash_lookup(def->cache, key);
-    debug(82, 2) ("external_acl_cache_add: Adding '%s' = %d\n", key, result);
+    debugs(82, 2, "external_acl_cache_add: Adding '%s' = %d", key, result);
     if (entry) {
-	debug(82, 3) ("external_acl_cache_add: updating existing entry\n");
+	debugs(82, 3, "external_acl_cache_add: updating existing entry");
 	entry->date = squid_curtime;
 	entry->result = result;
 	safe_free(entry->user);
@@ -955,7 +955,7 @@ externalAclHandleReply(void *data, char *reply)
     char *log = NULL;
     external_acl_entry *entry = NULL;
 
-    debug(82, 2) ("externalAclHandleReply: reply=\"%s\"\n", reply);
+    debugs(82, 2, "externalAclHandleReply: reply=\"%s\"", reply);
 
     if (reply) {
 	status = strwordtok(reply, &t);
@@ -1052,19 +1052,19 @@ externalAclLookup(aclCheck_t * ch, void *acl_data, EAH * callback, void *callbac
 	int ti;
 	/* Make sure the user is authenticated */
 	if ((ti = aclAuthenticated(ch)) != 1) {
-	    debug(82, 1) ("externalAclLookup: %s user authentication failure (%d)\n", acl->def->name, ti);
+	    debugs(82, 1, "externalAclLookup: %s user authentication failure (%d)", acl->def->name, ti);
 	    callback(callback_data, NULL);
 	    return;
 	}
     }
     key = makeExternalAclKey(ch, acl);
     if (!key) {
-	debug(82, 1) ("externalAclLookup: lookup in '%s', prerequisit failure\n", def->name);
+	debugs(82, 1, "externalAclLookup: lookup in '%s', prerequisit failure", def->name);
 	external_acl_message = "MISSING REQUIRED INFORMATION";
 	callback(callback_data, NULL);
 	return;
     }
-    debug(82, 2) ("externalAclLookup: lookup in '%s' for '%s'\n", def->name, key);
+    debugs(82, 2, "externalAclLookup: lookup in '%s' for '%s'", def->name, key);
     entry = hash_lookup(def->cache, key);
     if (entry && external_acl_entry_expired(def, entry))
 	entry = NULL;
@@ -1104,7 +1104,7 @@ externalAclLookup(aclCheck_t * ch, void *acl_data, EAH * callback, void *callbac
     } else {
 	/* Check for queue overload */
 	if (externalAclOverload(def)) {
-	    debug(82, 1) ("externalAclLookup: '%s' queue overload\n", def->name);
+	    debugs(82, 1, "externalAclLookup: '%s' queue overload", def->name);
 	    cbdataFree(state);
 	    callback(callback_data, entry);
 	    return;
@@ -1133,7 +1133,7 @@ externalAclRequiresAuth(void *acl_data)
 }
 
 static void
-externalAclStats(StoreEntry * sentry)
+externalAclStats(StoreEntry * sentry, void* data)
 {
     external_acl *p;
 
@@ -1175,7 +1175,7 @@ externalAclInit(void)
 	firstTimeInit = 0;
 	cachemgrRegister("external_acl",
 	    "External ACL stats",
-	    externalAclStats, 0, 1);
+	    externalAclStats,  NULL, NULL, 0, 1, 0);
 	CBDATA_INIT_TYPE_FREECB(externalAclState, free_externalAclState);
     }
 }

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "../include/util.h"
 #include "../libcore/varargs.h"
@@ -95,9 +96,23 @@ _db_print_stderr(const char *format, va_list args)
     vfprintf(stderr, format, args);
 }
 
+static const char *
+debugLogKid(void)
+{
+    if (KidIdentifier != 0) {
+        static char buf[16];
+        if (!*buf) // optimization: fill only once after KidIdentifier is set
+            snprintf(buf, sizeof(buf), " kid%d", KidIdentifier);
+        return buf;
+    }
+
+    return "";
+}
+
+
 void
 #if STDC_HEADERS
-_db_print(const char *format,...)
+_db_print(const char *path, int line, const char* function, const char *format,...)
 {
 #else
 _db_print(va_alist)
@@ -105,9 +120,15 @@ _db_print(va_alist)
 {
     const char *format = NULL;
 #endif
-    static char f[BUFSIZ];
+    static char f[1024];
+	static char buffer[BUFSIZ];
+	static char __where[256];
     va_list args1;
     int i;
+
+#if STDC_HEADERS	
+	sprintf(__where, "%s(%d) %s", path,line,function);
+#endif
 
 #ifdef _SQUID_MSWIN_
     /* Multiple WIN32 threads may call this simultaneously */
@@ -145,8 +166,12 @@ _db_print(va_alist)
     format = va_arg(args1, const char *);
 #endif
 
+#if STDC_HEADERS
     /* "format" has no timestamp; "f" does! */
-    snprintf(f, BUFSIZ, "%s| %s", debugLogTime(squid_curtime), format);
+    snprintf(f, 1024, "%s%s| %s %s", debugLogTime(squid_curtime), debugLogKid(), __where, format);
+#else
+	snprintf(f, 1024, "%s%s| %s", debugLogTime(squid_curtime), debugLogKid(), format);
+#endif
 
     _db_print_stderr(f, args1);
     va_end(args1);
@@ -157,11 +182,13 @@ _db_print(va_alist)
         va_start(args1, format);
 #else
         format = va_arg(args1, const char *);
-#endif
+#endif		
         if (db_callbacks.cbs[i].do_timestamp) {
-		db_callbacks.cbs[i].cb(f, args1);
+		vsnprintf(buffer, BUFSIZ, f, args1);
+		db_callbacks.cbs[i].cb("%s\n", buffer);
 	} else {
-		db_callbacks.cbs[i].cb(format, args1);
+		vsnprintf(buffer, BUFSIZ, format, args1);
+		db_callbacks.cbs[i].cb("%s\n", buffer);
 	}
         va_end(args1);
     }
@@ -238,7 +265,7 @@ debugLogTime(time_t t)
 void
 xassert(const char *msg, const char *file, int line)
 {
-    debug(0, 0) ("assertion failed: %s:%d: \"%s\"\n", file, line, msg);
+    debugs(0, 0, "assertion failed: %s:%d: \"%s\"", file, line, msg);
 #ifdef PRINT_STACK_TRACE
 #ifdef _SQUID_HPUX_
     {
@@ -281,3 +308,108 @@ _db_init_log(const char *logfile)
     debugOpenLog(logfile);
 }   
 
+static void DumpAsciiLine(const unsigned char *payload, int len, int offset)
+{
+    int i;
+	int dbnum;
+    int gap;
+    const u_char *ch;
+
+	for (dbnum = 0; dbnum < db_callbacks.count; dbnum++) 
+	{
+	    // offset
+		db_callbacks.cbs[dbnum].cb("%05d   ", offset);
+
+	    // hex
+	    ch = payload;
+	    for(i = 0; i < len; i++)
+	    {
+			db_callbacks.cbs[dbnum].cb("%02x ", *ch);
+	        ch++;
+	        // print extra space after 8th byte for visual aid
+	        if (i == 7) db_callbacks.cbs[dbnum].cb("%s", " ");
+	    }
+	    
+	    // print space to handle line less than 8 bytes
+	    if (len < 8) db_callbacks.cbs[dbnum].cb("%s", " ");
+	    
+	    // fill hex gap with spaces if not full line 
+	    if (len < 16) 
+	    {
+	        gap = 16 - len;
+	        for (i = 0; i < gap; i++)
+				db_callbacks.cbs[dbnum].cb("%s", "   ");
+	    }
+		
+		db_callbacks.cbs[dbnum].cb("%s", "   ");
+
+	    // ascii (if printable)
+	    ch = payload;
+	    for(i = 0; i < len; i++) 
+	    {
+	        if (isprint(*ch)) db_callbacks.cbs[dbnum].cb("%c", *ch); 
+	        else              db_callbacks.cbs[dbnum].cb("%c", '.');
+	        ch++;
+	    }
+		
+		db_callbacks.cbs[dbnum].cb("%c", '\n');
+	}
+}
+
+void DumpData(unsigned char *payload, int len)
+{
+	len = (len > 512) ? 512: len;
+
+    int len_rem = len;
+    int line_width = 16;// number of bytes per line
+    int line_len;
+    int offset = 0;     // zero-based offset counter
+    const u_char *ch = payload;
+
+    if (len <= 0)   return;
+		
+    // data fits on one line
+    if (len <= line_width) 
+    {
+        DumpAsciiLine(ch, len, offset);
+        return;
+    }
+
+    // data spans multiple lines
+    for ( ;; ) 
+    {
+        // compute current line length
+        line_len = line_width % len_rem;
+        DumpAsciiLine(ch, line_len, offset);
+        // compute total remaining 
+        len_rem = len_rem - line_len;
+        ch = ch + line_len; // shift pointer to remaining bytes to print
+        offset = offset + line_width;
+
+        if (len_rem <= line_width) 
+        {
+            // print last line and get out
+            DumpAsciiLine(ch, len_rem, offset);
+            break;
+        }
+    }
+
+    return ;
+}
+
+static size_t BuildPrefixInit()
+{
+	// XXX: This must be kept in sync with the actual debug.cc location
+	const char *ThisFileNameTail = "libsqdebug/debug.c";
+	const char *file=__FILE__;
+	// Disable heuristic if it does not work.
+	if (!strstr(file, ThisFileNameTail))
+		return 0;
+	return strlen(file)-strlen(ThisFileNameTail);
+}
+
+const char* GSkipBuildPrefix(const char* path)
+{
+	size_t BuildPrefixLength = BuildPrefixInit();
+	return path+BuildPrefixLength;
+}

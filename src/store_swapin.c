@@ -47,19 +47,19 @@ storeSwapInStart(store_client * sc)
 	/* We're still reloading and haven't validated this entry yet */
 	return;
     }
-    debug(20, 3) ("storeSwapInStart: called for %d %08X %s \n",
+    debugs(20, 3, "storeSwapInStart: called for %d %08X %s ",
 	e->swap_dirn, e->swap_filen, storeKeyText(e->hash.key));
     if (e->swap_status != SWAPOUT_WRITING && e->swap_status != SWAPOUT_DONE) {
-	debug(20, 1) ("storeSwapInStart: bad swap_status (%s)\n",
+	debugs(20, 1, "storeSwapInStart: bad swap_status (%s)",
 	    swapStatusStr[e->swap_status]);
 	return;
     }
     if (e->swap_filen < 0) {
-	debug(20, 1) ("storeSwapInStart: swap_filen < 0\n");
+	debugs(20, 1, "storeSwapInStart: swap_filen < 0");
 	return;
     }
     assert(e->mem_obj != NULL);
-    debug(20, 3) ("storeSwapInStart: Opening fileno %08X\n",
+    debugs(20, 3, "storeSwapInStart: Opening fileno %08X",
 	e->swap_filen);
     sc->swapin_sio = storeOpen(e, storeSwapInFileNotify, storeSwapInFileClosed,
 	sc);
@@ -71,7 +71,7 @@ storeSwapInFileClosed(void *data, int errflag, storeIOState * sio)
 {
     STNCB *callback;
     store_client *sc = data;
-    debug(20, 3) ("storeSwapInFileClosed: sio=%p, errflag=%d\n",
+    debugs(20, 3, "storeSwapInFileClosed: sio=%p, errflag=%d",
 	sio, errflag);
     cbdataUnlock(sio);
     sc->swapin_sio = NULL;
@@ -101,7 +101,7 @@ storeSwapInFileNotify(void *data, int errflag, storeIOState * sio)
     store_client *sc = data;
     StoreEntry *e = sc->entry;
 
-    debug(1, 3) ("storeSwapInFileNotify: changing %d/%d to %d/%d\n", e->swap_filen, e->swap_dirn, sio->swap_filen, sio->swap_dirn);
+    debugs(1, 3, "storeSwapInFileNotify: changing %d/%d to %d/%d", e->swap_filen, e->swap_dirn, sio->swap_filen, sio->swap_dirn);
 
     e->swap_filen = sio->swap_filen;
     e->swap_dirn = sio->swap_dirn;

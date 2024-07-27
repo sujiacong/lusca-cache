@@ -57,7 +57,7 @@ redirectHandleReply(void *data, char *reply)
     redirectStateData *r = data;
     int valid;
     char *t;
-    debug(61, 5) ("redirectHandleReply: {%s}\n", reply ? reply : "<NULL>");
+    debugs(61, 5, "redirectHandleReply: {%s}", reply ? reply : "<NULL>");
     if (reply) {
 	if ((t = strchr(reply, ' ')))
 	    *t = '\0';
@@ -79,7 +79,7 @@ redirectStateFree(redirectStateData * r)
 }
 
 static void
-redirectStats(StoreEntry * sentry)
+redirectStats(StoreEntry * sentry, void* data)
 {
     storeAppendPrintf(sentry, "Redirector Statistics:\n");
     helperStats(sentry, redirectors);
@@ -102,7 +102,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
     char myaddr[20];
     assert(http);
     assert(handler);
-    debug(61, 5) ("redirectStart: '%s'\n", http->uri);
+    debugs(61, 5, "redirectStart: '%s'", http->uri);
     if (Config.onoff.redirector_bypass && redirectors->stats.queue_size) {
 	/* Skip redirector if there is one request queued */
 	n_bypassed++;
@@ -143,7 +143,7 @@ redirectStart(clientHttpRequest * http, RH * handler, void *data)
 	urlgroup ? urlgroup : "-",
 	myaddr,
 	http->request->my_port);
-    debug(61, 6) ("redirectStart: sending '%s' to the helper\n", buf);
+    debugs(61, 6, "redirectStart: sending '%s' to the helper", buf);
     strcat(buf, "\n");
     helperSubmit(redirectors, buf, redirectHandleReply, r);
 }
@@ -164,7 +164,7 @@ redirectInit(void)
     if (!init) {
 	cachemgrRegister("url_rewriter",
 	    "URL Rewriter Stats",
-	    redirectStats, 0, 1);
+	    redirectStats, NULL, NULL, 0, 1, 0);
 	init = 1;
 	CBDATA_INIT_TYPE(redirectStateData);
     }
@@ -255,7 +255,7 @@ newRedirectTokenStr(rewrite_token_type type, const char *str, size_t str_len,
     int urlEncode)
 {
     rewritetoken *dev = (rewritetoken *) xmalloc(sizeof(*dev));
-    debug(85, 3) ("newRedirectTokenStr(%s, '%s', %u)\n",
+    debugs(85, 3, "newRedirectTokenStr(%s, '%s', %u)",
 	tokenNames[type], str, (unsigned) str_len);
     dev->type = type;
     dev->str = str;
@@ -270,12 +270,12 @@ newRedirectToken(const char **str, int urlEncode)
 {
     rewritetoken *dev;
     const tokendesc *ptoken = findToken(*str);
-    debug(85, 5) ("newRedirectToken(%s)\n", *str);
+    debugs(85, 5, "newRedirectToken(%s)", *str);
     if (ptoken == NULL) {
-	debug(85, 3) ("newRedirectToken: %s => NULL\n", *str);
+	debugs(85, 3, "newRedirectToken: %s => NULL", *str);
 	return NULL;
     }
-    debug(85, 5) ("newRedirectToken: %s => %s\n", *str, tokenNames[ptoken->type]);
+    debugs(85, 5, "newRedirectToken: %s => %s", *str, tokenNames[ptoken->type]);
     dev = newRedirectTokenStr(ptoken->type, NULL, 0, urlEncode);
     *str += 2;
     return dev;
@@ -288,7 +288,7 @@ rewriteURLCompile(const char *urlfmt)
     rewritetoken **tail = &head;
     rewritetoken *_new = NULL;
     const char *stt = urlfmt;
-    debug(85, 3) ("rewriteURLCompile(%s)\n", urlfmt);
+    debugs(85, 3, "rewriteURLCompile(%s)", urlfmt);
     while (*urlfmt != '\0') {
 	int urlEncode = 0;
 	while (*urlfmt != '\0' && *urlfmt != '%')
@@ -356,7 +356,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 {
     char *dev = NULL;
     size_t len = 0;
-    debug(85, 5) ("internalRedirectProcessURL: start\n");
+    debugs(85, 5, "internalRedirectProcessURL: start");
     for (; head != NULL; head = head->next) {
 	const char *str = NULL;	/* string to append */
         const char *str2 = NULL;
@@ -365,7 +365,7 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	int do_free = 0;
 	unsigned long ulong = 0;
 	const char *ulong_fmt = "%lu";
-	debug(85, 5) ("internalRedirectProcessURL: token=%s str=%s urlEncode=%s\n",
+	debugs(85, 5, "internalRedirectProcessURL: token=%s str=%s urlEncode=%s",
 	    tokenNames[head->type], head->str, head->urlEncode ? "true" : "false");
 	switch (head->type) {
 	case RFT_STRING:
@@ -473,6 +473,6 @@ internalRedirectProcessURL(clientHttpRequest * req, rewritetoken * head)
 	if (do_free)
 		safe_free(str2);
     }
-    debug(85, 5) ("internalRedirectProcessURL: done: %s\n", dev);
+    debugs(85, 5, "internalRedirectProcessURL: done: %s", dev);
     return dev;
 }

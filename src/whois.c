@@ -79,7 +79,7 @@ static void
 whoisTimeout(int fd, void *data)
 {
     WhoisState *p = data;
-    debug(75, 1) ("whoisTimeout: %s\n", storeUrl(p->entry));
+    debugs(75, 1, "whoisTimeout: %s", storeUrl(p->entry));
     whoisClose(fd, p);
 }
 
@@ -94,8 +94,8 @@ whoisReadReply(int fd, void *data)
     CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, buf, 4095);
     buf[len] = '\0';
-    debug(75, 3) ("whoisReadReply: FD %d read %d bytes\n", fd, len);
-    debug(75, 5) ("{%s}\n", buf);
+    debugs(75, 3, "whoisReadReply: FD %d read %d bytes", fd, len);
+    debugs(75, 5, "{%s}", buf);
     if (len > 0) {
 	if (0 == mem->inmem_hi) {
 	    http_reply *reply = mem->reply;
@@ -110,7 +110,7 @@ whoisReadReply(int fd, void *data)
 	storeBufferFlush(entry);
 	commSetSelect(fd, COMM_SELECT_READ, whoisReadReply, p, Config.Timeout.read);
     } else if (len < 0) {
-	debug(50, 2) ("whoisReadReply: FD %d: read failure: %s.\n",
+	debugs(50, 2, "whoisReadReply: FD %d: read failure: %s.",
 	    fd, xstrerror());
 	if (ignoreErrno(errno)) {
 	    commSetSelect(fd, COMM_SELECT_READ, whoisReadReply, p, Config.Timeout.read);
@@ -127,7 +127,7 @@ whoisReadReply(int fd, void *data)
 	if (!EBIT_TEST(entry->flags, RELEASE_REQUEST))
 	    storeSetPublicKey(entry);
 	fwdComplete(p->fwd);
-	debug(75, 3) ("whoisReadReply: Done: %s\n", storeUrl(entry));
+	debugs(75, 3, "whoisReadReply: Done: %s", storeUrl(entry));
 	comm_close(fd);
     }
     memFree(buf, MEM_4K_BUF);
@@ -137,7 +137,7 @@ static void
 whoisClose(int fd, void *data)
 {
     WhoisState *p = data;
-    debug(75, 3) ("whoisClose: FD %d\n", fd);
+    debugs(75, 3, "whoisClose: FD %d", fd);
     storeUnlockObject(p->entry);
     cbdataFree(p);
 }

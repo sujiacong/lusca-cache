@@ -130,6 +130,26 @@ stringAppend(String * s, const char *str, int len)
     }
 }
 
+char *
+stringDupToCRange(const String *s, int start, int end)
+{
+	char *d;
+
+	/* This is horribly temporary [ahc] */
+	if (s->buf == NULL)
+		return NULL;
+
+	if(end < start || start >= s->len)
+		return NULL;
+
+	assert(end < s->len);
+	d = xmalloc(end + 1 - start);
+	memcpy(d, s->buf + start, end - start + 1);
+	d[end - start + 1] = '\0';
+	return d;
+}
+
+
 /*
  * This routine SHOULD REQUIRE the string to be something and not NULL
  * but plenty of code unfortunately doesn't check whether the string

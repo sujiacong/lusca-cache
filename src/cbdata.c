@@ -71,15 +71,15 @@ static OBJH cbdataDump;
 void
 cbdataLocalInit(void)
 {
-    debug(45, 3) ("cbdataLocalInit\n");
+    debugs(45, 3, "cbdataLocalInit");
     cachemgrRegister("cbdata",
 	"Callback Data Registry Contents",
-	cbdataDump, 0, 1);
+	cbdataDump, NULL, NULL, 0, 1, 0);
 }
 
 #if HASHED_CBDATA
 static void
-cbdataDump(StoreEntry * sentry)
+cbdataDump(StoreEntry * sentry, void* data)
 {
     cbdata *n;
 
@@ -98,7 +98,7 @@ cbdataDump(StoreEntry * sentry)
 }
 #else
 static void
-cbdataDump(StoreEntry * sentry)
+cbdataDump(StoreEntry * sentry, void* data)
 {
     storeAppendPrintf(sentry, "%d cbdata entries\n", cbdataCount);
     storeAppendPrintf(sentry, "see also memory pools section\n");

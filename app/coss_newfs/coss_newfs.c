@@ -24,6 +24,8 @@ int shutting_down = 0;	/* needed for debug routines for now */
 /*
  * Args: /path/to/cossdir <number of stripes> <stripesize>
  */
+int KidIdentifier = 0;
+
 int
 main(int argc, const char *argv[])
 {
@@ -65,11 +67,11 @@ main(int argc, const char *argv[])
 		exit(127);
 	}
 	buf = xcalloc(stripe_sz, sizeof(char));
-	debug(85, 1) ("coss_newfs: %s: initialising stripe\n", path);
+	debugs(85, 1, "coss_newfs: %s: initialising stripe", path);
 
 	for (i = 0; i < sz; i += 1) {
 		getCurrentTime();
-		debug(85, 5) ("seeking to stripe %d\n", i);
+		debugs(85, 5, "seeking to stripe %d", i);
 		r = lseek(fd, (off_t) i * (off_t) stripe_sz, SEEK_SET);
 		if (r < 0) {
 			perror("lseek");
@@ -82,7 +84,7 @@ main(int argc, const char *argv[])
 		}
 	}
 	safe_free(buf);
-	debug(85, 1) ("coss_newfs: %s: finished\n", path);
+	debugs(85, 1, "coss_newfs: %s: finished", path);
 	close(fd);
 	exit(0);
 }

@@ -110,12 +110,12 @@ httpStatusLineParse(HttpStatusLine * sline, const char *start, const char *end)
 	maj = maj + *s - '0';
     }
     if (s >= end || maj >= 65536) {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status major.\n");
+	debugs(57, 7, "httpStatusLineParse: Invalid HTTP reply status major.");
 	return 0;
     }
     /* next should be '.' */
     if (*s != '.') {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status line.\n");
+	debugs(57, 7, "httpStatusLineParse: Invalid HTTP reply status line.");
 	return 0;
     }
     s++;
@@ -126,7 +126,7 @@ httpStatusLineParse(HttpStatusLine * sline, const char *start, const char *end)
 	min = min + *s - '0';
     }
     if (s >= end || min >= 65536) {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status version minor.\n");
+	debugs(57, 7, "httpStatusLineParse: Invalid HTTP reply status version minor.");
 	return 0;
     }
     /* then a space */
@@ -140,7 +140,7 @@ httpStatusLineParse(HttpStatusLine * sline, const char *start, const char *end)
 	status = status + *s - '0';
     }
     if (s >= end) {
-	debug(57, 7) ("httpStatusLineParse: Invalid HTTP reply status code.\n");
+	debugs(57, 7, "httpStatusLineParse: Invalid HTTP reply status code.");
 	return 0;
     }
     /* then a space */
@@ -292,7 +292,7 @@ httpStatusString(http_status status)
 	break;
     default:
 	p = "Unknown";
-	debug(57, 3) ("Unknown HTTP status code: %d\n", status);
+	debugs(57, 3, "Unknown HTTP status code: %d", status);
 	break;
     }
     return p;

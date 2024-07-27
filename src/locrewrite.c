@@ -55,7 +55,7 @@ locationRewriteHandleReply(void *data, char *reply)
     rewriteStateData *r = data;
     int valid;
     char *t;
-    debug(29, 5) ("locationRewriteHandleReply: {%s}\n", reply ? reply : "<NULL>");
+    debugs(29, 5, "locationRewriteHandleReply: {%s}", reply ? reply : "<NULL>");
     if (reply) {
 	if ((t = strchr(reply, ' ')))
 	    *t = '\0';
@@ -77,7 +77,7 @@ locationRewriteStateFree(rewriteStateData * r)
 }
 
 static void
-locationRewriteStats(StoreEntry * sentry)
+locationRewriteStats(StoreEntry * sentry, void* data)
 {
     storeAppendPrintf(sentry, "Redirector Statistics:\n");
     helperStats(sentry, locrewriters);
@@ -106,7 +106,7 @@ locationRewriteStart(HttpReply * rep, clientHttpRequest * http, RH * handler, vo
     assert(handler);
     if (!urlgroup || !*urlgroup)
 	urlgroup = "-";
-    debug(29, 5) ("locationRewriteStart: '%s'\n", location);
+    debugs(29, 5, "locationRewriteStart: '%s'", location);
     if (Config.Program.location_rewrite.command == NULL) {
 	handler(data, NULL);
 	return;
@@ -143,7 +143,7 @@ locationRewriteInit(void)
     if (!init) {
 	cachemgrRegister("location_rewriter",
 	    "Location Rewriter Stats",
-	    locationRewriteStats, 0, 1);
+	    locationRewriteStats,  NULL, NULL, 0, 1, 0);
 	init = 1;
 	CBDATA_INIT_TYPE(rewriteStateData);
     }

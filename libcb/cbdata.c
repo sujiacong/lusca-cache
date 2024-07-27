@@ -160,7 +160,7 @@ cbdataAddType(cbdata_type type, const char *name, int size, FREE * free_func)
 void
 cbdataInit(void)
 {
-    debug(45, 3) ("cbdataInit\n");
+    debugs(45, 3, "cbdataInit");
 #if HASHED_CBDATA
     cbdata_pool = memPoolCreate("cbdata", sizeof(cbdata));
     cbdata_htable = hash_create(cbdata_cmp, 1 << 12, cbdata_hash);
@@ -212,7 +212,7 @@ cbdataInternalFree(void *p)
 {
     cbdata *c;
     FREE *free_func;
-    debug(45, 3) ("cbdataFree: %p\n", p);
+    debugs(45, 3, "cbdataFree: %p", p);
 #if HASHED_CBDATA
     c = (cbdata *) hash_lookup(cbdata_htable, p);
 #else
@@ -222,13 +222,13 @@ cbdataInternalFree(void *p)
     assert(c->valid);
     c->valid = 0;
     if (c->locks) {
-	debug(45, 3) ("cbdataFree: %p has %d locks, not freeing\n",
+	debugs(45, 3, "cbdataFree: %p has %d locks, not freeing",
 	    p, c->locks);
 	return NULL;
     }
     cbdataCount--;
     c->y = NULL;
-    debug(45, 3) ("cbdataFree: Freeing %p\n", p);
+    debugs(45, 3, "cbdataFree: Freeing %p", p);
     free_func = cbdata_index[c->type].free_func;
     if (free_func)
 	free_func((void *) p);
@@ -255,7 +255,7 @@ cbdataLocked(const void *p)
     assert(c->y == CBDATA_COOKIE(p));
     assert(c->locks || c->valid);
 
-    debug(45, 3) ("cbdataLocked: %p = %d\n", p, c->locks);
+    debugs(45, 3, "cbdataLocked: %p = %d", p, c->locks);
     assert(c != NULL);
     return c->locks;
 }
@@ -277,7 +277,7 @@ cbdataLock(const void *p)
 #endif
     assert(c->y == CBDATA_COOKIE(p));
     assert(c->locks || c->valid);
-    debug(45, 3) ("cbdataLock: %p\n", p);
+    debugs(45, 3, "cbdataLock: %p", p);
     assert(c != NULL);
     c->locks++;
 #if CBDATA_DEBUG
@@ -297,7 +297,7 @@ cbdataUnlock(const void *p)
     FREE *free_func;
     if (p == NULL)
 	return;
-    debug(45, 3) ("cbdataUnlock: %p\n", p);
+    debugs(45, 3, "cbdataUnlock: %p", p);
 #if HASHED_CBDATA
     c = (cbdata *) hash_lookup(cbdata_htable, p);
 #else
@@ -313,7 +313,7 @@ cbdataUnlock(const void *p)
     if (c->valid || c->locks)
 	return;
     cbdataCount--;
-    debug(45, 3) ("cbdataUnlock: Freeing %p\n", p);
+    debugs(45, 3, "cbdataUnlock: Freeing %p", p);
     free_func = cbdata_index[c->type].free_func;
     if (free_func)
 	free_func((void *) p);
@@ -332,7 +332,7 @@ cbdataValid(const void *p)
     cbdata *c;
     if (p == NULL)
 	return 1;		/* A NULL pointer cannot become invalid */
-    debug(45, 3) ("cbdataValid: %p\n", p);
+    debugs(45, 3, "cbdataValid: %p", p);
 #if HASHED_CBDATA
     c = (cbdata *) hash_lookup(cbdata_htable, p);
 #else

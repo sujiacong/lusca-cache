@@ -80,7 +80,7 @@ static DEFER sslDeferServerRead;
 static void
 sslAbort(SslStateData * sslState)
 {
-    debug(26, 3) ("sslAbort: FD %d/%d\n", sslState->client.fd, sslState->server.fd);
+    debugs(26, 3, "sslAbort: FD %d/%d", sslState->client.fd, sslState->server.fd);
     cbdataLock(sslState);
     if (sslState->client.fd > -1)
 	comm_close(sslState->client.fd);
@@ -93,7 +93,7 @@ static void
 sslServerClosed(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslServerClosed: FD %d\n", fd);
+    debugs(26, 3, "sslServerClosed: FD %d", fd);
     assert(fd == sslState->server.fd);
     sslState->server.fd = -1;
     if (sslState->client.fd == -1)
@@ -104,7 +104,7 @@ static void
 sslClientClosed(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslClientClosed: FD %d\n", fd);
+    debugs(26, 3, "sslClientClosed: FD %d", fd);
     assert(fd == sslState->client.fd);
     sslState->client.fd = -1;
     if (sslState->server.fd == -1)
@@ -116,7 +116,7 @@ sslClientClosed(int fd, void *data)
 static void
 sslStateFree(SslStateData * sslState)
 {
-    debug(26, 3) ("sslStateFree: sslState=%p\n", sslState);
+    debugs(26, 3, "sslStateFree: sslState=%p", sslState);
     assert(sslState != NULL);
     assert(sslState->client.fd == -1);
     assert(sslState->server.fd == -1);
@@ -213,7 +213,7 @@ sslReadServer(int fd, void *data)
     int len;
     size_t read_sz = SQUID_TCP_SO_RCVBUF - sslState->server.len;
     assert(fd == sslState->server.fd);
-    debug(26, 3) ("sslReadServer: FD %d, reading %d bytes at offset %d\n",
+    debugs(26, 3, "sslReadServer: FD %d, reading %d bytes at offset %d",
 	fd, (int) read_sz, sslState->server.len);
     errno = 0;
 #if DELAY_POOLS
@@ -221,7 +221,7 @@ sslReadServer(int fd, void *data)
 #endif
     CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd, sslState->server.buf + sslState->server.len, read_sz);
-    debug(26, 3) ("sslReadServer: FD %d, read   %d bytes\n", fd, len);
+    debugs(26, 3, "sslReadServer: FD %d, read   %d bytes", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 #if DELAY_POOLS
@@ -240,7 +240,7 @@ sslReadServer(int fd, void *data)
 #endif
 	if (ignoreErrno(errno))
 	    level = 3;
-	debug(50, level) ("sslReadServer: FD %d: read failure: %s\n", fd, xstrerror());
+	debugs(50, level, "sslReadServer: FD %d: read failure: %s", fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    comm_close(fd);
     } else if (len == 0) {
@@ -258,14 +258,14 @@ sslReadClient(int fd, void *data)
     SslStateData *sslState = data;
     int len;
     assert(fd == sslState->client.fd);
-    debug(26, 3) ("sslReadClient: FD %d, reading %d bytes at offset %d\n",
+    debugs(26, 3, "sslReadClient: FD %d, reading %d bytes at offset %d",
 	fd, SQUID_TCP_SO_RCVBUF - sslState->client.len,
 	sslState->client.len);
     CommStats.syscalls.sock.reads++;
     len = FD_READ_METHOD(fd,
 	sslState->client.buf + sslState->client.len,
 	SQUID_TCP_SO_RCVBUF - sslState->client.len);
-    debug(26, 3) ("sslReadClient: FD %d, read   %d bytes\n", fd, len);
+    debugs(26, 3, "sslReadClient: FD %d, read   %d bytes", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_READ);
 	kb_incr(&statCounter.client_http.kbytes_in, len);
@@ -280,7 +280,7 @@ sslReadClient(int fd, void *data)
 #endif
 	if (ignoreErrno(errno))
 	    level = 3;
-	debug(50, level) ("sslReadClient: FD %d: read failure: %s\n",
+	debugs(50, level, "sslReadClient: FD %d: read failure: %s",
 	    fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    sslAbort(sslState);
@@ -299,13 +299,13 @@ sslWriteServer(int fd, void *data)
     SslStateData *sslState = data;
     int len;
     assert(fd == sslState->server.fd);
-    debug(26, 3) ("sslWriteServer: FD %d, %d bytes to write\n",
+    debugs(26, 3, "sslWriteServer: FD %d, %d bytes to write",
 	fd, sslState->client.len);
     CommStats.syscalls.sock.writes++;
     len = FD_WRITE_METHOD(fd,
 	sslState->client.buf,
 	sslState->client.len);
-    debug(26, 3) ("sslWriteServer: FD %d, %d bytes written\n", fd, len);
+    debugs(26, 3, "sslWriteServer: FD %d, %d bytes written", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_WRITE);
 	kb_incr(&statCounter.server.all.kbytes_out, len);
@@ -327,8 +327,8 @@ sslWriteServer(int fd, void *data)
     }
     cbdataLock(sslState);
     if (len < 0) {
-	debug(50, ignoreErrno(errno) ? 3 : 1)
-	    ("sslWriteServer: FD %d: write failure: %s.\n", fd, xstrerror());
+	debugs(50, ignoreErrno(errno) ? 3 : 1,
+	    "sslWriteServer: FD %d: write failure: %s.\n", fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    sslAbort(sslState);
     }
@@ -344,13 +344,13 @@ sslWriteClient(int fd, void *data)
     SslStateData *sslState = data;
     int len;
     assert(fd == sslState->client.fd);
-    debug(26, 3) ("sslWriteClient: FD %d, %d bytes to write\n",
+    debugs(26, 3, "sslWriteClient: FD %d, %d bytes to write",
 	fd, sslState->server.len);
     CommStats.syscalls.sock.writes++;
     len = FD_WRITE_METHOD(fd,
 	sslState->server.buf,
 	sslState->server.len);
-    debug(26, 3) ("sslWriteClient: FD %d, %d bytes written\n", fd, len);
+    debugs(26, 3, "sslWriteClient: FD %d, %d bytes written", fd, len);
     if (len > 0) {
 	fd_bytes(fd, len, FD_WRITE);
 	kb_incr(&statCounter.client_http.kbytes_out, len);
@@ -371,8 +371,8 @@ sslWriteClient(int fd, void *data)
     }
     cbdataLock(sslState);
     if (len < 0) {
-	debug(50, ignoreErrno(errno) ? 3 : 1)
-	    ("sslWriteClient: FD %d: write failure: %s.\n", fd, xstrerror());
+	debugs(50, ignoreErrno(errno) ? 3 : 1,
+	    "sslWriteClient: FD %d: write failure: %s.\n", fd, xstrerror());
 	if (!ignoreErrno(errno))
 	    sslAbort(sslState);
     }
@@ -385,7 +385,7 @@ static void
 sslTimeout(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslTimeout: FD %d\n", fd);
+    debugs(26, 3, "sslTimeout: FD %d", fd);
     sslAbort(sslState);
 }
 
@@ -393,7 +393,7 @@ static void
 sslConnected(int fd, void *data)
 {
     SslStateData *sslState = data;
-    debug(26, 3) ("sslConnected: FD %d sslState=%p\n", fd, sslState);
+    debugs(26, 3, "sslConnected: FD %d sslState=%p", fd, sslState);
     *sslState->status_ptr = HTTP_OK;
     if (sslState->http11) {
 	xstrncpy(sslState->server.buf, conn_established_11, SQUID_TCP_SO_RCVBUF);
@@ -430,7 +430,7 @@ sslConnectDone(int fd, int status, void *data)
 	hierarchyNote(&sslState->request->hier, sslState->servers->code,
 	    sslState->host);
     if (status == COMM_ERR_DNS) {
-	debug(26, 4) ("sslConnectDone: Unknown host: %s\n", sslState->host);
+	debugs(26, 4, "sslConnectDone: Unknown host: %s", sslState->host);
 	comm_close(fd);
 	err = errorCon(ERR_DNS_FAIL, HTTP_GATEWAY_TIMEOUT, request);
 	*sslState->status_ptr = HTTP_NOT_FOUND;
@@ -517,7 +517,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
 	    return;
 	}
     }
-    debug(26, 3) ("sslStart: '%s %s'\n", urlMethodGetConstStr(request->method), url);
+    debugs(26, 3, "sslStart: '%s %s'", urlMethodGetConstStr(request->method), url);
     statCounter.server.all.requests++;
     statCounter.server.other.requests++;
     outgoing = getOutgoingAddr(request);
@@ -531,7 +531,7 @@ sslStart(clientHttpRequest * http, squid_off_t * size_ptr, int *status_ptr)
 	tos,
 	url);
     if (sock == COMM_ERROR) {
-	debug(26, 4) ("sslStart: Failed because we're out of sockets.\n");
+	debugs(26, 4, "sslStart: Failed because we're out of sockets.");
 	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR, request);
 	*status_ptr = HTTP_INTERNAL_SERVER_ERROR;
 	err->xerrno = errno;
@@ -589,7 +589,7 @@ sslProxyConnected(int fd, void *data)
     HttpHeader hdr_out;
     Packer p;
     http_state_flags flags;
-    debug(26, 3) ("sslProxyConnected: FD %d sslState=%p\n", fd, sslState);
+    debugs(26, 3, "sslProxyConnected: FD %d sslState=%p", fd, sslState);
     memset(&flags, '\0', sizeof(flags));
     flags.proxying = sslState->request->flags.proxying;
     memBufDefInit(&mb);
@@ -605,7 +605,7 @@ sslProxyConnected(int fd, void *data)
     packerClean(&p);
     memBufAppend(&mb, "\r\n", 2);
     xstrncpy(sslState->client.buf, mb.buf, SQUID_TCP_SO_RCVBUF);
-    debug(26, 3) ("sslProxyConnected: Sending {%s}\n", sslState->client.buf);
+    debugs(26, 3, "sslProxyConnected: Sending {%s}", sslState->client.buf);
     sslState->client.len = mb.size;
     memBufClean(&mb);
     sslSetSelect(sslState);

@@ -65,7 +65,7 @@ memConfigure(int enable, size_t limit, int dozero)
 #else
     if (RUNNING_ON_VALGRIND) {
 #endif
-	debug(63, 1) ("Disabling Memory pools for accurate leak checks\n");
+	debugs(63, 1, "Disabling Memory pools for accurate leak checks");
 	MemPoolConfig.enabled = 0;
     }
 #endif
@@ -83,7 +83,7 @@ memPoolInit(void)
 {
     memset(&TheMeter, 0, sizeof(TheMeter));
     stackInit(&Pools);
-    debug(63, 1) ("Memory pools are '%s'; limit: %.2f MB\n",
+    debugs(63, 1, "Memory pools are '%s'; limit: %.2f MB",
 	(MemPoolConfig.enabled ? "on" : "off"), toMB(mem_idle_limit));
 }
 
@@ -104,7 +104,7 @@ memPoolClean(void)
 	}
     }
     if (dirty_count)
-	debug(63, 2) ("memCleanModule: %d pools are left dirty\n", dirty_count);
+	debugs(63, 2, "memCleanModule: %d pools are left dirty", dirty_count);
     /* we clean the stack anyway */
     stackClean(&Pools);
 }
@@ -260,7 +260,7 @@ static void
 memPoolDescribe(const MemPool * pool)
 {
     assert(pool);
-    debug(63, 2) ("%-20s: %6d x %4d bytes = %5ld KB\n",
+    debugs(63, 2, "%-20s: %6d x %4d bytes = %5ld KB",
 	pool->label, memPoolInUseCount(pool), (int) pool->obj_size,
 	(long int) toKB(memPoolInUseSize(pool)));
 }

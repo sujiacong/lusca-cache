@@ -75,6 +75,9 @@ static void parse_zph_mode(enum zph_mode *mode);
 static void dump_zph_mode(StoreEntry * entry, const char *name, enum zph_mode mode);
 static void free_zph_mode(enum zph_mode *mode);
 
+static void parse_CpuAffinityMap(CPUAffinityMap **const cpuAffinityMap);
+static void dump_CpuAffinityMap(StoreEntry *const entry, const char *const name, const CPUAffinityMap *const cpuAffinityMap);
+static void free_CpuAffinityMap(CPUAffinityMap **const cpuAffinityMap);
 
 static struct cache_dir_option common_cachedir_options[] =
 {
@@ -293,6 +296,128 @@ parseManyConfigFiles(char *files, int depth)
     return error_count;
 }
 
+static const char*
+skip_ws(const char* s)
+{
+    while (xisspace(*s))
+        ++s;
+
+    return s;
+}
+
+static void
+ReplaceSubstr(char** str, int* len, unsigned substrIdx, unsigned substrLen, const char* newSubstr)
+{
+    assert(str != NULL && len != NULL && *str != NULL);
+    assert(newSubstr != NULL);
+
+    unsigned newSubstrLen = strlen(newSubstr);
+    if (newSubstrLen > substrLen)
+        *str = (char*)realloc(*str, *len - substrLen + newSubstrLen + 1);
+
+    // move tail part including zero
+    memmove(*str + substrIdx + newSubstrLen, *str + substrIdx + substrLen, *len - substrIdx - substrLen + 1);
+    // copy new substring in place
+    memcpy(*str + substrIdx, newSubstr, newSubstrLen);
+
+    *len = strlen(*str);
+}
+
+
+static void
+SubstituteMacro(char** line, int* len, const char* macroName, const char* substStr)
+{
+    assert(line != NULL && *line != NULL && len != NULL);
+    assert(macroName != NULL);
+    assert(substStr != NULL);
+    unsigned macroNameLen = strlen(macroName);
+	const char* macroPos;
+    while ((macroPos = strstr(*line, macroName)) != NULL) // we would replace all occurrences
+        ReplaceSubstr(line, len, macroPos - *line, macroNameLen, substStr);
+}
+
+static void
+ProcessMacros(char** line, int* len)
+{
+    SubstituteMacro(line, len, "${service_name}", APP_SHORTNAME);
+    SubstituteMacro(line, len, "${process_name}", TheKidName);
+    SubstituteMacro(line, len, "${process_number}", xitoa(KidIdentifier));
+}
+
+static void
+trim_trailing_ws(char* str)
+{
+    assert(str != NULL);
+    unsigned i = strlen(str);
+    while ((i > 0) && xisspace(str[i - 1]))
+        --i;
+    str[i] = '\0';
+}
+
+static int
+StrToInt(const char* str, long* number)
+{
+    assert(str != NULL);
+
+    char* end;
+    *number = strtol(str, &end, 0);
+
+    return (end != str) && (*end == '\0'); // returns 1 if string contains nothing except number
+}
+
+static const char*
+FindStatement(const char* line, const char* statement)
+{
+    assert(line != NULL);
+    assert(statement != NULL);
+
+    const char* str = skip_ws(line);
+    unsigned len = strlen(statement);
+    if (strncmp(str, statement, len) == 0) {
+        str += len;
+        if (*str == '\0')
+            return str;
+        else if (xisspace(*str))
+            return skip_ws(str);
+    }
+
+    return NULL;
+}
+
+
+#define IF_STAT_TRUE  1
+#define IF_STAT_FALSE 2
+#define IF_STAT_EMPTY 0
+
+static int
+EvalBoolExpr(const char* expr)
+{
+    assert(expr != NULL);
+	const char* equation;
+    if (strcmp(expr, "true") == 0) {
+        return IF_STAT_TRUE;
+    } else if (strcmp(expr, "false") == 0) {
+        return IF_STAT_FALSE;
+    } else if ((equation = strchr(expr, '=')) != NULL) {
+        const char* rvalue = skip_ws(equation + 1);
+        char* lvalue = (char*)xmalloc(equation - expr + 1);
+        xstrncpy(lvalue, expr, equation - expr + 1);
+        trim_trailing_ws(lvalue);
+
+        long number1;
+        if (!StrToInt(lvalue, &number1))
+            fatalf("String is not a integer number: '%s'\n", lvalue);
+        long number2;
+        if (!StrToInt(rvalue, &number2))
+            fatalf("String is not a integer number: '%s'\n", rvalue);
+
+        xfree(lvalue);
+        return number1 == number2 ? IF_STAT_TRUE : IF_STAT_FALSE;
+    }
+    fatalf("Unable to evaluate expression '%s'\n", expr);
+    return IF_STAT_FALSE; // this place cannot be reached
+}
+
 static int
 parseOneConfigFile(const char *file_name, int depth)
 {
@@ -305,9 +430,13 @@ parseOneConfigFile(const char *file_name, int depth)
     size_t config_input_line_len;
     int err_count = 0;
 
-    debug(3, 1) ("Including Configuration File: %s (depth %d)\n", file_name, depth);
+	int if_states[100];
+	int states_size = 0;
+	memset(if_states, 0, sizeof(if_states));
+
+    debugs(3, 1, "Including Configuration File: %s (depth %d)", file_name, depth);
     if (depth > 16) {
-	debug(0, 0) ("WARNING: can't include %s: includes are nested too deeply (>16)!\n", file_name);
+	debugs(0, 0, "WARNING: can't include %s: includes are nested too deeply (>16)!", file_name);
 	return 1;
     }
     if ((fp = fopen(file_name, "r")) == NULL)
@@ -340,27 +469,46 @@ parseOneConfigFile(const char *file_name, int depth)
 	tmp_line_len += config_input_line_len;
 
 	if (tmp_line[tmp_line_len - 1] == '\\') {
-	    debug(3, 5) ("parseOneConfigFile: tmp_line='%s'\n", tmp_line);
+	    debugs(3, 5, "parseOneConfigFile: tmp_line='%s'", tmp_line);
 	    tmp_line[--tmp_line_len] = '\0';
 	    continue;
 	}
-	debug(3, 5) ("Processing: '%s'\n", tmp_line);
-
-	/* Handle includes here */
-	if (tmp_line_len >= 9 &&
-	    strncmp(tmp_line, "include", 7) == 0 &&
-	    xisspace(tmp_line[7])) {
-	    err_count += parseManyConfigFiles(tmp_line + 8, depth + 1);
-	} else if (!parse_line(tmp_line)) {
-	    debug(3, 0) ("parseConfigFile: %s:%d unrecognized: '%s'\n",
-		cfg_filename,
-		config_lineno,
-		tmp_line);
-	    err_count++;
+	trim_trailing_ws(tmp_line);
+    ProcessMacros(&tmp_line, &tmp_line_len);
+	debugs(3, 5, "Processing: '%s'", tmp_line);
+	const char* expr;
+	if ((expr = FindStatement(tmp_line, "if")) != NULL) {
+		if_states[states_size++] = EvalBoolExpr(expr); // store last if-statement meaning
+		assert(states_size < 100);
+	} else if (FindStatement(tmp_line, "endif")) {
+		if (states_size)
+			if_states[states_size-- - 1] = IF_STAT_EMPTY; // remove last if-statement meaning
+		else
+			fatalf("'endif' without 'if'\n");
+	} else if (FindStatement(tmp_line, "else")) {
+		if (states_size)
+			if_states[states_size - 1] = (if_states[states_size - 1] == IF_STAT_FALSE ? IF_STAT_FALSE : IF_STAT_TRUE);
+		else
+			fatalf("'else' without 'if'\n");
+	} else if (!states_size || if_states[states_size - 1] == IF_STAT_TRUE) { // test last if-statement meaning if present
+		/* Handle includes here */
+		if (tmp_line_len >= 9 && strncmp(tmp_line, "include", 7) == 0 && xisspace(tmp_line[7])) {
+			err_count += parseManyConfigFiles(tmp_line + 8, depth + 1);
+		} else if (!parse_line(tmp_line)) {
+			debugs(3, 0, "parseConfigFile: %s:%d unrecognized: '%s'",
+			cfg_filename,
+			config_lineno,
+			tmp_line);
+			err_count++;
+		}
 	}
 	safe_free(tmp_line);
 	tmp_line_len = 0;
     }
+	
+	if (states_size)
+    fatalf("if-statement without 'endif'\n");
+		
     fclose(fp);
     cfg_filename = orig_cfg_filename;
     config_lineno = orig_config_lineno;
@@ -381,8 +529,8 @@ parseConfigFile(const char *file_name)
     if (opt_send_signal == -1) {
 	cachemgrRegister("config",
 	    "Current Squid Configuration",
-	    dump_config,
-	    1, 1);
+	    dump_config, NULL, NULL, 
+	    1, 1, 0);
     }
     return ret;
 }
@@ -394,15 +542,15 @@ configDoConfigure(void)
     /* init memory as early as possible */
     memConfigure(Config.onoff.mem_pools, Config.MemPools.limit, Config.onoff.zero_buffers);
     /* Sanity checks */
-    if (Config.cacheSwap.swapDirs == NULL)
-	fatal("No cache_dir's specified in config file");
+    //if (Config.cacheSwap.swapDirs == NULL)
+	//fatal("No cache_dir's specified in config file");
     /* calculate Config.Swap.maxSize */
     storeDirConfigure();
     if (0 == Config.Swap.maxSize)
 	/* people might want a zero-sized cache on purpose */
 	(void) 0;
     else if (Config.Swap.maxSize < (Config.memMaxSize >> 10))
-	debug(3, 0) ("WARNING cache_mem is larger than total disk cache space!\n");
+	debugs(3, 0, "WARNING cache_mem is larger than total disk cache space!");
     if (Config.Announce.period > 0) {
 	Config.onoff.announce = 1;
     } else if (Config.Announce.period < 1) {
@@ -454,7 +602,7 @@ configDoConfigure(void)
     if (Config.retry.maxtries > 10)
 	fatal("maximum_single_addr_tries cannot be larger than 10");
     if (Config.retry.maxtries < 1) {
-	debug(3, 0) ("WARNING: resetting 'maximum_single_addr_tries to 1\n");
+	debugs(3, 0, "WARNING: resetting 'maximum_single_addr_tries to 1");
 	Config.retry.maxtries = 1;
     }
     requirePathnameExists("MIME Config Table", Config.mimeTablePathname);
@@ -468,6 +616,7 @@ configDoConfigure(void)
 	requirePathnameExists("location_rewrite_program", Config.Program.location_rewrite.command->key);
     requirePathnameExists("Icon Directory", Config.icons.directory);
     requirePathnameExists("Error Directory", Config.errorDirectory);
+	requirePathnameExists("Error errorStylesheet", Config.errorStylesheet);
     requirePathnameExists("UFS rebuild helper", Config.Program.ufs_log_build);
     requirePathnameExists("COSS rebuild helper", Config.Program.coss_log_build);
     authenticateConfigure(&Config.authConfig);
@@ -479,25 +628,25 @@ configDoConfigure(void)
 	for (R = Config.Refresh; R; R = R->next) {
 	    if (!R->flags.override_expire)
 		continue;
-	    debug(22, 1) ("WARNING: use of 'override-expire' in 'refresh_pattern' violates HTTP\n");
+	    debugs(22, 1, "WARNING: use of 'override-expire' in 'refresh_pattern' violates HTTP");
 	    break;
 	}
 	for (R = Config.Refresh; R; R = R->next) {
 	    if (!R->flags.override_lastmod)
 		continue;
-	    debug(22, 1) ("WARNING: use of 'override-lastmod' in 'refresh_pattern' violates HTTP\n");
+	    debugs(22, 1, "WARNING: use of 'override-lastmod' in 'refresh_pattern' violates HTTP");
 	    break;
 	}
 	for (R = Config.Refresh; R; R = R->next) {
             if (!R->flags.ignore_must_revalidate)
                 continue;
-            debug(22, 1) ("WARNING: use of 'ignore-must-revalidate' in 'refresh_pattern' violates HTTP\n");
+            debugs(22, 1, "WARNING: use of 'ignore-must-revalidate' in 'refresh_pattern' violates HTTP");
             break;
 	}
 	for (R = Config.Refresh; R; R = R->next) {
 	    if (R->stale_while_revalidate <= 0)
 		continue;
-	    debug(22, 1) ("WARNING: use of 'stale-while-revalidate' in 'refresh_pattern' violates HTTP\n");
+	    debugs(22, 1, "WARNING: use of 'stale-while-revalidate' in 'refresh_pattern' violates HTTP");
 	    break;
 	}
     }
@@ -506,7 +655,7 @@ configDoConfigure(void)
     Config.onoff.via = 1;
 #else
     if (!Config.onoff.via)
-	debug(22, 1) ("WARNING: HTTP requires the use of Via\n");
+	debugs(22, 1, "WARNING: HTTP requires the use of Via");
 #endif
     if (aclPurgeMethodInUse(Config.accessList.http))
 	Config2.onoff.enable_purge = 1;
@@ -552,37 +701,37 @@ configDoConfigure(void)
 	for (a = Config.aclList; a; a = a->next) {
 	    if (ACL_MAXCONN != a->type)
 		continue;
-	    debug(22, 0) ("WARNING: 'maxconn' ACL (%s) won't work with client_db disabled\n", a->name);
+	    debugs(22, 0, "WARNING: 'maxconn' ACL (%s) won't work with client_db disabled", a->name);
 	}
     }
     if (Config.negativeDnsTtl <= 0) {
-	debug(22, 0) ("WARNING: resetting negative_dns_ttl to 1 second\n");
+	debugs(22, 0, "WARNING: resetting negative_dns_ttl to 1 second");
 	Config.negativeDnsTtl = 1;
     }
     if (Config.positiveDnsTtl < Config.negativeDnsTtl) {
-	debug(22, 0) ("NOTICE: positive_dns_ttl must be larger than negative_dns_ttl. Resetting negative_dns_ttl to match\n");
+	debugs(22, 0, "NOTICE: positive_dns_ttl must be larger than negative_dns_ttl. Resetting negative_dns_ttl to match");
 	Config.positiveDnsTtl = Config.negativeDnsTtl;
     }
 #if SIZEOF_SQUID_FILE_SZ <= 4
 #if SIZEOF_SQUID_OFF_T <= 4
     if (Config.Store.maxObjectSize > 0x7FFF0000) {
-	debug(22, 0) ("NOTICE: maximum_object_size limited to %d KB due to hardware limitations\n", 0x7FFF0000 / 1024);
+	debugs(22, 0, "NOTICE: maximum_object_size limited to %d KB due to hardware limitations", 0x7FFF0000 / 1024);
 	Config.Store.maxObjectSize = 0x7FFF0000;
     }
 #elif SIZEOF_OFF_T <= 4
     if (Config.Store.maxObjectSize > 0xFFFF0000) {
-	debug(22, 0) ("NOTICE: maximum_object_size limited to %d KB due to OS limitations\n", 0xFFFF0000 / 1024);
+	debugs(22, 0, "NOTICE: maximum_object_size limited to %d KB due to OS limitations", 0xFFFF0000 / 1024);
 	Config.Store.maxObjectSize = 0xFFFF0000;
     }
 #else
     if (Config.Store.maxObjectSize > 0xFFFF0000) {
-	debug(22, 0) ("NOTICE: maximum_object_size limited to %d KB to keep compatibility with existing cache\n", 0xFFFF0000 / 1024);
+	debugs(22, 0, "NOTICE: maximum_object_size limited to %d KB to keep compatibility with existing cache", 0xFFFF0000 / 1024);
 	Config.Store.maxObjectSize = 0xFFFF0000;
     }
 #endif
 #endif
     if (Config.Store.maxInMemObjSize > 8 * 1024 * 1024)
-	debug(22, 0) ("WARNING: Very large maximum_object_size_in_memory settings can have negative impact on performance\n");
+	debugs(22, 0, "WARNING: Very large maximum_object_size_in_memory settings can have negative impact on performance");
 #if USE_SSL
     Config.ssl_client.sslContext = sslCreateClientContext(Config.ssl_client.cert, Config.ssl_client.key, Config.ssl_client.version, Config.ssl_client.cipher, Config.ssl_client.options, Config.ssl_client.flags, Config.ssl_client.cafile, Config.ssl_client.capath, Config.ssl_client.crlfile);
 #endif
@@ -606,7 +755,7 @@ parseTimeLine(time_t * tptr, const char *units)
     if (0 == d)
 	(void) 0;
     else if ((token = strtok(NULL, w_space)) == NULL)
-	debug(3, 0) ("WARNING: No units on '%s', assuming %f %s\n",
+	debugs(3, 0, "WARNING: No units on '%s', assuming %f %s",
 	    config_input_line, d, units);
     else if ((m = parseTimeUnits(token)) == 0)
 	self_destruct();
@@ -634,7 +783,7 @@ parseTimeUnits(const char *unit)
 	return 86400 * 365.2522;
     if (!strncasecmp(unit, T_DECADE_STR, strlen(T_DECADE_STR)))
 	return 86400 * 365.2522 * 10;
-    debug(3, 1) ("parseTimeUnits: unknown time unit '%s'\n", unit);
+    debugs(3, 1, "parseTimeUnits: unknown time unit '%s'", unit);
     return 0;
 }
 
@@ -658,7 +807,7 @@ parseBytesLine(squid_off_t * bptr, const char *units)
     if (0.0 == d)
 	(void) 0;
     else if ((token = strtok(NULL, w_space)) == NULL)
-	debug(3, 0) ("WARNING: No units on '%s', assuming %f %s\n",
+	debugs(3, 0, "WARNING: No units on '%s', assuming %f %s",
 	    config_input_line, d, units);
     else if ((m = parseBytesUnits(token)) == 0)
 	self_destruct();
@@ -678,7 +827,7 @@ parseBytesUnits(const char *unit)
 	return 1 << 20;
     if (!strncasecmp(unit, B_GBYTES_STR, strlen(B_GBYTES_STR)))
 	return 1 << 30;
-    debug(3, 1) ("parseBytesUnits: unknown bytes unit '%s'\n", unit);
+    debugs(3, 1, "parseBytesUnits: unknown bytes unit '%s'", unit);
     return 0;
 }
 
@@ -690,7 +839,7 @@ static void
 dump_acl(StoreEntry * entry, const char *name, acl * ae)
 {
     while (ae != NULL) {
-	debug(3, 3) ("dump_acl: %s %s\n", name, ae->name);
+	debugs(3, 3, "dump_acl: %s %s", name, ae->name);
 	if (strstr(ae->cfgline, " \""))
 	    storeAppendPrintf(entry, "%s\n", ae->cfgline);
 	else {
@@ -698,7 +847,7 @@ dump_acl(StoreEntry * entry, const char *name, acl * ae)
 	    wordlist *v;
 	    v = w = aclDumpGeneric(ae);
 	    while (v != NULL) {
-		debug(3, 3) ("dump_acl: %s %s %s\n", name, ae->name, v->key);
+		debugs(3, 3, "dump_acl: %s %s %s", name, ae->name, v->key);
 		storeAppendPrintf(entry, "%s %s %s %s\n",
 		    name,
 		    ae->name,
@@ -1016,7 +1165,7 @@ static void
 parse_delay_pool_count(delayConfig * cfg)
 {
     if (cfg->pools) {
-	debug(3, 0) ("parse_delay_pool_count: multiple delay_pools lines, aborting all previous delay_pools config\n");
+	debugs(3, 0, "parse_delay_pool_count: multiple delay_pools lines, aborting all previous delay_pools config");
 	free_delay_pool_count(cfg);
     }
     parse_ushort(&cfg->pools);
@@ -1035,12 +1184,12 @@ parse_delay_pool_class(delayConfig * cfg)
 
     parse_ushort(&pool);
     if (pool < 1 || pool > cfg->pools) {
-	debug(3, 0) ("parse_delay_pool_class: Ignoring pool %d not in 1 .. %d\n", pool, cfg->pools);
+	debugs(3, 0, "parse_delay_pool_class: Ignoring pool %d not in 1 .. %d", pool, cfg->pools);
 	return;
     }
     parse_ushort(&class);
     if (class < 1 || class > 3) {
-	debug(3, 0) ("parse_delay_pool_class: Ignoring pool %d class %d not in 1 .. 3\n", pool, class);
+	debugs(3, 0, "parse_delay_pool_class: Ignoring pool %d class %d not in 1 .. 3", pool, class);
 	return;
     }
     pool--;
@@ -1069,13 +1218,13 @@ parse_delay_pool_rates(delayConfig * cfg)
 
     parse_ushort(&pool);
     if (pool < 1 || pool > cfg->pools) {
-	debug(3, 0) ("parse_delay_pool_rates: Ignoring pool %d not in 1 .. %d\n", pool, cfg->pools);
+	debugs(3, 0, "parse_delay_pool_rates: Ignoring pool %d not in 1 .. %d", pool, cfg->pools);
 	return;
     }
     pool--;
     class = cfg->class[pool];
     if (class == 0) {
-	debug(3, 0) ("parse_delay_pool_rates: Ignoring pool %d attempt to set rates with class not set\n", pool + 1);
+	debugs(3, 0, "parse_delay_pool_rates: Ignoring pool %d attempt to set rates with class not set", pool + 1);
 	return;
     }
     ptr = (delaySpec *) cfg->rates[pool];
@@ -1111,7 +1260,7 @@ parse_delay_pool_access(delayConfig * cfg)
 
     parse_ushort(&pool);
     if (pool < 1 || pool > cfg->pools) {
-	debug(3, 0) ("parse_delay_pool_access: Ignoring pool %d not in 1 .. %d\n", pool, cfg->pools);
+	debugs(3, 0, "parse_delay_pool_access: Ignoring pool %d not in 1 .. %d", pool, cfg->pools);
 	return;
     }
     aclParseAccessLine(&cfg->access[pool - 1]);
@@ -1146,9 +1295,9 @@ parse_http_header_access(header_mangler header[])
     int id, i;
     char *t = NULL;
     if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(3, 0) ("%s line %d: %s\n",
+	debugs(3, 0, "%s line %d: %s",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_access: missing header name.\n");
+	debugs(3, 0, "parse_http_header_access: missing header name.");
 	return;
     }
     /* Now lookup index of header. */
@@ -1232,9 +1381,9 @@ parse_http_header_replace(header_mangler header[])
     int id, i;
     char *t = NULL;
     if ((t = strtok(NULL, w_space)) == NULL) {
-	debug(3, 0) ("%s line %d: %s\n",
+	debugs(3, 0, "%s line %d: %s",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(3, 0) ("parse_http_header_replace: missing header name.\n");
+	debugs(3, 0, "parse_http_header_replace: missing header name.");
 	return;
     }
     /* Now lookup index of header. */
@@ -1365,7 +1514,7 @@ parse_authparam(authConfig * config)
 	self_destruct();
 
     if ((type = authenticateAuthSchemeId(type_str)) == -1) {
-	debug(3, 0) ("Parsing Config File: Unknown authentication scheme '%s'.\n", type_str);
+	debugs(3, 0, "Parsing Config File: Unknown authentication scheme '%s'.", type_str);
 	return;
     }
     for (i = 0; i < config->n_configured; i++) {
@@ -1450,6 +1599,21 @@ parse_cachedir(cacheSwap * swap)
     SwapDir *sd;
     int i;
     int fs;
+	
+    // The workers option must preceed cache_dir for the IamWorkerProcess check
+    // below to work. TODO: Redo IamWorkerProcess to work w/o Config and remove
+    if (KidIdentifier > 1 && Config.workers == 1) {
+        debugs(3, 0, "FATAL: cache_dir found before the workers option. Reorder.");
+        self_destruct();
+    }
+
+    // Among all processes, only workers may need and can handle cache_dir.
+    if (!IamWorkerProcess())
+        return;
+    
+    debugs(3, 1, "parse_cachedir");
+
+	debugs(3, 1, "parse_cachedir");
 
     if ((type_str = strtok(NULL, w_space)) == NULL)
 	self_destruct();
@@ -1466,7 +1630,7 @@ parse_cachedir(cacheSwap * swap)
 	if ((strcasecmp(path_str, swap->swapDirs[i].path) == 0)) {
 	    sd = swap->swapDirs + i;
 	    if (sd->type != storefs_list[fs].typestr) {
-		debug(3, 0) ("ERROR: Can't change type of existing cache_dir %s %s to %s. Restart required\n", sd->type, sd->path, type_str);
+		debugs(3, 0, "ERROR: Can't change type of existing cache_dir %s %s to %s. Restart required", sd->type, sd->path, type_str);
 		return;
 	    }
 	    storefs_list[fs].reconfigurefunc(sd, i, path_str);
@@ -1521,7 +1685,7 @@ parse_cachedir_option_minsize(SwapDir * sd, const char *option, const char *valu
     size = strto_off_t(value, NULL, 10);
 
     if (reconfiguring && sd->min_objsize != size)
-	debug(3, 1) ("Cache dir '%s' min object size now %ld\n", sd->path, (long int) size);
+	debugs(3, 1, "Cache dir '%s' min object size now %ld", sd->path, (long int) size);
 
     sd->min_objsize = size;
 }
@@ -1544,7 +1708,7 @@ parse_cachedir_option_maxsize(SwapDir * sd, const char *option, const char *valu
     size = strto_off_t(value, NULL, 10);
 
     if (reconfiguring && sd->max_objsize != size)
-	debug(3, 1) ("Cache dir '%s' max object size now %ld\n", sd->path, (long int) size);
+	debugs(3, 1, "Cache dir '%s' max object size now %ld", sd->path, (long int) size);
 
     sd->max_objsize = size;
 }
@@ -1593,7 +1757,7 @@ parse_cachedir_options(SwapDir * sd, struct cache_dir_option *options, int recon
      */
     if (reconfiguring) {
 	if (old_read_only != sd->flags.read_only) {
-	    debug(3, 1) ("Cache dir '%s' now %s\n",
+	    debugs(3, 1, "Cache dir '%s' now %s",
 		sd->path, sd->flags.read_only ? "No-Store" : "Read-Write");
 	}
     }
@@ -1900,7 +2064,7 @@ parse_peer(peer ** head)
 	} else if (strcmp(token, "no-tproxy") == 0) {
 	    p->options.no_tproxy = 1;
 	} else {
-	    debug(3, 0) ("parse_peer: token='%s'\n", token);
+	    debugs(3, 0, "parse_peer: token='%s'", token);
 	    self_destruct();
 	}
     }
@@ -1996,7 +2160,7 @@ parse_cachemgrpasswd(cachemgr_passwd ** head)
 	    for (u = actions; u; u = u->next) {
 		if (strcmp(w->key, u->key))
 		    continue;
-		debug(0, 0) ("WARNING: action '%s' (line %d) already has a password\n",
+		debugs(0, 0, "WARNING: action '%s' (line %d) already has a password",
 		    u->key, config_lineno);
 	    }
 	}
@@ -2063,7 +2227,7 @@ parse_peer_access(void)
     if (!(host = strtok(NULL, w_space)))
 	self_destruct();
     if ((p = peerFindByName(host)) == NULL) {
-	debug(15, 0) ("%s, line %d: No cache_peer '%s'\n",
+	debugs(15, 0, "%s, line %d: No cache_peer '%s'",
 	    cfg_filename, config_lineno, host);
 	return;
     }
@@ -2082,7 +2246,7 @@ parse_hostdomain(void)
 	domain_ping **L = NULL;
 	peer *p;
 	if ((p = peerFindByName(host)) == NULL) {
-	    debug(15, 0) ("%s, line %d: No cache_peer '%s'\n",
+	    debugs(15, 0, "%s, line %d: No cache_peer '%s'",
 		cfg_filename, config_lineno, host);
 	    continue;
 	}
@@ -2113,7 +2277,7 @@ parse_hostdomaintype(void)
 	domain_type **L = NULL;
 	peer *p;
 	if ((p = peerFindByName(host)) == NULL) {
-	    debug(15, 0) ("%s, line %d: No cache_peer '%s'\n",
+	    debugs(15, 0, "%s, line %d: No cache_peer '%s'",
 		cfg_filename, config_lineno, host);
 	    return;
 	}
@@ -2370,16 +2534,16 @@ parse_refreshpattern(refresh_t ** head)
 	} else if (!strcmp(token, "store-stale")) {
 	    store_stale = 1;
 	} else {
-	    debug(22, 0) ("parse_refreshpattern: Unknown option '%s': %s\n",
+	    debugs(22, 0, "parse_refreshpattern: Unknown option '%s': %s",
 		pattern, token);
 	}
     }
     if ((errcode = regcomp(&comp, pattern, flags)) != 0) {
 	char errbuf[256];
 	regerror(errcode, &comp, errbuf, sizeof errbuf);
-	debug(22, 0) ("%s line %d: %s\n",
+	debugs(22, 0, "%s line %d: %s",
 	    cfg_filename, config_lineno, config_input_line);
-	debug(22, 0) ("parse_refreshpattern: Invalid regular expression '%s': %s\n",
+	debugs(22, 0, "parse_refreshpattern: Invalid regular expression '%s': %s",
 	    pattern, errbuf);
 	return;
     }
@@ -2560,7 +2724,7 @@ parse_delay_body_size_t(dlink_list * bodylist)
 
     parse_ushort(&pool);
     if (pool < 1 || pool > Config.Delay.pools) {
-	debug(3, 0) ("parse_delay_body_size_t: Ignoring pool %d not in 1 .. %d\n", pool, Config.Delay.pools);
+	debugs(3, 0, "parse_delay_body_size_t: Ignoring pool %d not in 1 .. %d", pool, Config.Delay.pools);
 	return;
     }
     dbs->pool = pool - 1;
@@ -2815,7 +2979,7 @@ parse_errormap(errormap ** head)
 	if (!e->status)
 	    e->status = -errorPageId(token);
 	if (!e->status)
-	    debug(15, 0) ("WARNING: Unknown errormap code: %s\n", token);
+	    debugs(15, 0, "WARNING: Unknown errormap code: %s", token);
 	*tail = e;
 	tail = &e->next;
     }
@@ -2922,7 +3086,7 @@ parseNeighborType(const char *s)
 	return PEER_SIBLING;
     if (!strcasecmp(s, "multicast"))
 	return PEER_MULTICAST;
-    debug(15, 0) ("WARNING: Unknown neighbor type: %s\n", s);
+    debugs(15, 0, "WARNING: Unknown neighbor type: %s", s);
     return PEER_SIBLING;
 }
 
@@ -3070,7 +3234,7 @@ static void
 verify_http_port_options(http_port_list * s)
 {
     if (s->accel && s->transparent) {
-	debug(28, 0) ("Can't be both a transparent proxy and web server accelerator on the same port\n");
+	debugs(28, 0, "Can't be both a transparent proxy and web server accelerator on the same port");
 	self_destruct();
     }
 }
@@ -3109,7 +3273,10 @@ parse_http_port_list(http_port_list ** head)
     }
     verify_http_port_options(s);
     while (*head)
-	head = &(*head)->next;
+    {
+    	debugs(28, 1, "parse_http_port_list add port %d",ntohs(s->s.sin_port));
+		head = &(*head)->next;
+    }
     *head = s;
 }
 
@@ -3367,7 +3534,7 @@ strtokFile(void)
 		t++;
 	    *t = '\0';
 	    if ((wordFile = fopen(fn, "r")) == NULL) {
-		debug(28, 0) ("strtokFile: %s not found\n", fn);
+		debugs(28, 0, "strtokFile: %s not found", fn);
 		return (NULL);
 	    }
 #ifdef _SQUID_WIN32_
@@ -3418,7 +3585,7 @@ parse_logformat(logformat ** logformat_definitions)
     if ((def = strtok(NULL, "\r\n")) == NULL)
 	self_destruct();
 
-    debug(3, 1) ("Logformat for '%s' is '%s'\n", name, def);
+    debugs(3, 1, "Logformat for '%s' is '%s'", name, def);
 
     nlf = xcalloc(1, sizeof(logformat));
     nlf->name = xstrdup(name);
@@ -3447,14 +3614,14 @@ parse_access_log(customlog ** logs)
     if ((logdef_name = strtok(NULL, w_space)) == NULL)
 	logdef_name = "auto";
 
-    debug(3, 9) ("Log definition name '%s' file '%s'\n", logdef_name, filename);
+    debugs(3, 9, "Log definition name '%s' file '%s'", logdef_name, filename);
 
     cl->filename = xstrdup(filename);
 
     /* look for the definition pointer corresponding to this name */
     lf = Config.Log.logformats;
     while (lf != NULL) {
-	debug(3, 9) ("Comparing against '%s'\n", lf->name);
+	debugs(3, 9, "Comparing against '%s'", lf->name);
 	if (strcmp(lf->name, logdef_name) == 0)
 	    break;
 	lf = lf->next;
@@ -3469,7 +3636,7 @@ parse_access_log(customlog ** logs)
     } else if (strcmp(logdef_name, "common") == 0) {
 	cl->type = CLF_COMMON;
     } else {
-	debug(3, 0) ("Log format '%s' is not defined\n", logdef_name);
+	debugs(3, 0, "Log format '%s' is not defined", logdef_name);
 	self_destruct();
     }
 
@@ -3637,7 +3804,7 @@ parse_zph_mode(enum zph_mode *mode)
     else if (strcmp(token, "option") == 0)
 	*mode = ZPH_OPTION;
     else {
-	debug(3, 0) ("WARNING: unsupported zph_mode argument '%s'\n", token);
+	debugs(3, 0, "WARNING: unsupported zph_mode argument '%s'", token);
     }
 }
 
@@ -3667,3 +3834,111 @@ free_zph_mode(enum zph_mode *mode)
 {
     *mode = ZPH_OFF;
 }
+
+int StringToInt(const char *s, int* result, const char **p, int base)
+{
+    if (s) {
+        char *ptr = 0;
+        const int h = (int) strtol(s, &ptr, base);
+
+        if (ptr != s && ptr) {
+            *result = h;
+
+            if (p)
+                *p = ptr;
+
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+/// parses list of integers form name=N1,N2,N3,...
+static int
+parseNamedIntList(const char *data, const char* name, int lists[], int* count)
+{
+	int index = 0;
+    if (data && (strncmp(data, name, strlen(name)) == 0)) {
+        data += strlen(name);
+        if (*data == '=') {
+            while (1) {
+                ++data;
+                int value = 0;
+                if (!StringToInt(data, &value, &data, 10))
+                    break;
+
+                lists[index++]=value;
+				
+                if (*data == '\0' || *data != ',')
+                    break;
+            }
+        }
+    }
+	
+	*count = index;
+		
+    return (data && *data == '\0');
+}
+
+static void
+parse_CpuAffinityMap(CPUAffinityMap **const cpuAffinityMap)
+{
+#if !HAVE_CPU_AFFINITY
+    debugs(3, 0, "FATAL: Squid built with no CPU affinity support, do not set 'cpu_affinity_map'");
+    self_destruct();
+#endif /* HAVE_CPU_AFFINITY */
+
+    if (!*cpuAffinityMap)
+        *cpuAffinityMap = xcalloc(1,sizeof(CPUAffinityMap));
+
+    const char *const pToken = strtok(NULL, w_space);
+    const char *const cToken = strtok(NULL, w_space);
+	
+    int processes[MAX_KID_SUPPORT],cores[MAX_KID_SUPPORT];
+	int processescount = 0;
+	int corescount = 0;
+	memset(processes,0,sizeof(int)*MAX_KID_SUPPORT);
+	memset(cores,0,sizeof(int)*MAX_KID_SUPPORT);
+	
+    if (!parseNamedIntList(pToken, "process_numbers", processes, &processescount)) {
+        debugs(3, 0, "FATAL: bad 'process_numbers' parameter in 'cpu_affinity_map'");
+        self_destruct();
+    } else if (!parseNamedIntList(cToken, "cores", cores, &corescount)) {
+        debugs(3, 0, "FATAL: bad 'cores' parameter in 'cpu_affinity_map'");
+        self_destruct();
+    } else if (!cpuAffinityMapAdd(*cpuAffinityMap, processes, cores, processescount, corescount)) {
+        debugs(3, 0, "FATAL: bad 'cpu_affinity_map'; process_numbers and cores lists differ in length or contain numbers <= 0");
+        self_destruct();
+    }
+}
+
+static void
+dump_CpuAffinityMap(StoreEntry *const entry, const char *const name, const CPUAffinityMap *const cpuAffinityMap)
+{
+    if (cpuAffinityMap) {
+        storeAppendPrintf(entry, "%s process_numbers=", name);
+		size_t i;
+        for (i = 0; i < cpuAffinityMap->processessize; ++i) {
+            storeAppendPrintf(entry, "%s%d", (i ? "," : ""),
+                              cpuAffinityMap->theProcesses[i]);
+        }
+        storeAppendPrintf(entry, " cores=");
+        for (i = 0; i < cpuAffinityMap->processessize; ++i) {
+            storeAppendPrintf(entry, "%s%d", (i ? "," : ""),
+                              cpuAffinityMap->theCores[i]);
+        }
+        storeAppendPrintf(entry, "\n");
+    }
+}
+
+static void
+free_CpuAffinityMap(CPUAffinityMap **const cpuAffinityMap)
+{
+    if(*cpuAffinityMap)
+    {
+    	xfree(*cpuAffinityMap);
+    	*cpuAffinityMap = NULL;
+    }
+}
+

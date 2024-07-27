@@ -35,7 +35,7 @@
 
 #include "squid.h"
 
-void fqdnStats(StoreEntry * sentry);
+void fqdnStats(StoreEntry * sentry, void* data);
 
 void
 fqdncache_local_params(void)
@@ -51,13 +51,13 @@ fqdncache_init_local(void)
 	static int registered = 0;
 	if (! registered) {
 		registered = 1;
-		cachemgrRegister("fqdncache", "FQDN Cache Stats and Contents", fqdnStats, 0, 1);
+		cachemgrRegister("fqdncache", "FQDN Cache Stats and Contents", fqdnStats, NULL, NULL, 0, 1, 0);
  	}
 }
 
 /* process objects list */
 void
-fqdnStats(StoreEntry * sentry)
+fqdnStats(StoreEntry * sentry, void* data)
 {
     fqdncache_entry *f = NULL;
     int k;
@@ -102,7 +102,7 @@ variable_list *
 snmp_netFqdnFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_netFqdnFn: Processing request:\n");
+    debugs(49, 5, "snmp_netFqdnFn: Processing request:");
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_NET + 1]) {

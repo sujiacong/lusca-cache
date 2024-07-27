@@ -132,12 +132,12 @@ unlinkdUnlink(const char *path)
     x = write(unlinkd_wfd, buf, l);
 #endif
     if (x < 0) {
-	debug(2, 1) ("unlinkdUnlink: write FD %d failed: %s\n",
+	debugs(2, 1, "unlinkdUnlink: write FD %d failed: %s",
 	    unlinkd_wfd, xstrerror());
 	safeunlink(path, 0);
 	return;
     } else if (x != l) {
-	debug(2, 1) ("unlinkdUnlink: FD %d only wrote %d of %d bytes\n",
+	debugs(2, 1, "unlinkdUnlink: FD %d only wrote %d of %d bytes",
 	    unlinkd_wfd, x, l);
 	safeunlink(path, 0);
 	return;
@@ -152,7 +152,7 @@ unlinkdClose(void)
 {
 #ifdef _SQUID_MSWIN_
     if (unlinkd_wfd > -1) {
-	debug(2, 1) ("Closing unlinkd pipe on FD %d\n", unlinkd_wfd);
+	debugs(2, 1, "Closing unlinkd pipe on FD %d", unlinkd_wfd);
 	shutdown(unlinkd_wfd, SD_BOTH);
 	comm_close(unlinkd_wfd);
 	if (unlinkd_wfd != unlinkd_rfd)
@@ -160,7 +160,7 @@ unlinkdClose(void)
 	unlinkd_wfd = -1;
 	unlinkd_rfd = -1;
     } else
-	debug(2, 0) ("unlinkdClose: WARNING: unlinkd_wfd is %d\n",
+	debugs(2, 0, "unlinkdClose: WARNING: unlinkd_wfd is %d",
 	    unlinkd_wfd);
     if (hIpc) {
 	if (WaitForSingleObject(hIpc, 5000) != WAIT_OBJECT_0) {
@@ -174,7 +174,7 @@ unlinkdClose(void)
 #else
     if (unlinkd_wfd < 0)
 	return;
-    debug(2, 1) ("Closing unlinkd pipe on FD %d\n", unlinkd_wfd);
+    debugs(2, 1, "Closing unlinkd pipe on FD %d", unlinkd_wfd);
     file_close(unlinkd_wfd);
     if (unlinkd_wfd != unlinkd_rfd)
 	file_close(unlinkd_rfd);
@@ -224,7 +224,7 @@ unlinkdInit(void)
     assert(fd_table[unlinkd_rfd].flags.nonblocking);
     if (FD_PIPE == fd_table[unlinkd_wfd].type)
 	commUnsetNonBlocking(unlinkd_wfd);
-    debug(2, 1) ("Unlinkd pipe opened on FD %d\n", unlinkd_wfd);
+    debugs(2, 1, "Unlinkd pipe opened on FD %d", unlinkd_wfd);
 }
 
 #endif /* ndef UNLINK_DAEMON */

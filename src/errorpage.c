@@ -83,6 +83,7 @@ static Stack ErrorDynamicPages;
 static const int error_hard_text_count = sizeof(error_hard_text) / sizeof(*error_hard_text);
 static char **error_text = NULL;
 static int error_page_count = 0;
+static MemBuf error_stylesheet;
 
 static char *errorTryLoadText(const char *page_name, const char *dir);
 static char *errorLoadText(const char *page_name);
@@ -92,6 +93,34 @@ static void errorDynamicPageInfoDestroy(ErrorDynamicPageInfo * info);
 static MemBuf errorBuildContent(ErrorState * err);
 const char *errorConvert(char token, ErrorState * err);
 static CWCB errorSendComplete;
+
+static char *
+LoadTextFromFile(char *path)
+{
+    int fd;
+    struct stat sb;
+    char *text;
+#ifdef _SQUID_MSWIN_
+    fd = file_open(path, O_RDONLY | O_BINARY);
+#else
+    fd = file_open(path, O_RDONLY | O_TEXT);
+#endif
+    if (fd < 0 || fstat(fd, &sb) < 0) {
+	debugs(4, 0, "errorTryLoadText: '%s': %s", path, xstrerror());
+	if (fd >= 0)
+	    file_close(fd);
+	return NULL;
+    }
+    text = xcalloc((size_t) sb.st_size + 2 + 1, 1);	/* 2 == space for %S */
+    if (FD_READ_METHOD(fd, text, (int) sb.st_size) != sb.st_size) {
+	debugs(4, 0, "errorTryLoadText: failed to fully read: '%s': %s",
+	    path, xstrerror());
+	safe_free(text);
+    }
+    file_close(fd);
+    return text;
+}
+
 
 /*
  * Function:  errorInitialize
@@ -127,6 +156,15 @@ errorInitialize(void)
 	    }
 	}
     }
+	
+	memBufReset(&error_stylesheet);
+
+    // look for and load stylesheet into global MemBuf for it.
+    if (Config.errorStylesheet) {
+		char* text = LoadTextFromFile(Config.errorStylesheet);
+		if(text)
+		memBufPrintf(&error_stylesheet, "%s", text);
+    }	
 }
 
 void
@@ -168,37 +206,24 @@ errorLoadText(const char *page_name)
     return text;
 }
 
+
 static char *
 errorTryLoadText(const char *page_name, const char *dir)
 {
-    int fd;
     char path[MAXPATHLEN];
-    struct stat sb;
-    char *text;
+	
+    char *text = NULL;
 
     snprintf(path, sizeof(path), "%s/%s", dir, page_name);
-#ifdef _SQUID_MSWIN_
-    fd = file_open(path, O_RDONLY | O_BINARY);
-#else
-    fd = file_open(path, O_RDONLY | O_TEXT);
-#endif
-    if (fd < 0 || fstat(fd, &sb) < 0) {
-	debug(4, 0) ("errorTryLoadText: '%s': %s\n", path, xstrerror());
-	if (fd >= 0)
-	    file_close(fd);
-	return NULL;
-    }
-    text = xcalloc((size_t) sb.st_size + 2 + 1, 1);	/* 2 == space for %S */
-    if (FD_READ_METHOD(fd, text, (int) sb.st_size) != sb.st_size) {
-	debug(4, 0) ("errorTryLoadText: failed to fully read: '%s': %s\n",
-	    path, xstrerror());
-	safe_free(text);
-    }
-    file_close(fd);
+
+	text = LoadTextFromFile(path);
+	
     if (text && strstr(text, "%s") == NULL)
 	strcat(text, "%S");	/* add signature */
     return text;
+	
 }
+
 
 static ErrorDynamicPageInfo *
 errorDynamicPageInfoCreate(int id, const char *page_name)
@@ -311,7 +336,7 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
     }
     if (err->page_id == TCP_RESET) {
 	if (err->request) {
-	    debug(4, 2) ("RSTing this reply\n");
+	    debugs(4, 2, "RSTing this reply");
 	    err->request->flags.reset_tcp = 1;
 	}
     }
@@ -323,7 +348,7 @@ errorAppendEntry(StoreEntry * entry, ErrorState * err)
      */
     if (Config.onoff.tcp_reset_on_all_errors) {
 	if (err->request) {
-	    debug(4, 2) ("RSTing this reply: tcp_reset_on_all_errors was set!\n");
+	    debugs(4, 2, "RSTing this reply: tcp_reset_on_all_errors was set!");
 	    err->request->flags.reset_tcp = 1;
         }
     }
@@ -370,7 +395,7 @@ void
 errorSend(int fd, ErrorState * err)
 {
     HttpReply *rep;
-    debug(4, 3) ("errorSend: FD %d, err=%p\n", fd, err);
+    debugs(4, 3, "errorSend: FD %d, err=%p", fd, err);
     assert(fd >= 0);
     /*
      * ugh, this is how we make sure error codes get back to
@@ -398,14 +423,14 @@ static void
 errorSendComplete(int fd, char *bufnotused, size_t size, int errflag, void *data)
 {
     ErrorState *err = data;
-    debug(4, 3) ("errorSendComplete: FD %d, size=%ld\n", fd, (long int) size);
+    debugs(4, 3, "errorSendComplete: FD %d, size=%ld", fd, (long int) size);
     if (errflag != COMM_ERR_CLOSING) {
 	if (err->callback) {
-	    debug(4, 3) ("errorSendComplete: callback\n");
+	    debugs(4, 3, "errorSendComplete: callback");
 	    err->callback(fd, err->callback_data, size);
 	} else {
 	    comm_close(fd);
-	    debug(4, 3) ("errorSendComplete: comm_close\n");
+	    debugs(4, 3, "errorSendComplete: comm_close");
 	}
     }
     errorStateFree(err);
@@ -537,6 +562,10 @@ errorConvert(char token, ErrorState * err)
 	} else
 	    p = "[not available]";
 	break;
+    case 'l':
+	memBufAppend(&mb,error_stylesheet.buf, error_stylesheet.size);
+    do_quote = 0;
+    break;
     case 'm':
 	p = authenticateAuthUserRequestMessage(err->auth_user_request) ? authenticateAuthUserRequestMessage(err->auth_user_request) : "[not available]";
 	break;
@@ -629,7 +658,7 @@ errorConvert(char token, ErrorState * err)
     if (!p)
 	p = mb.buf;		/* do not use mb after this assignment! */
     assert(p);
-    debug(4, 3) ("errorConvert: %%%c --> '%s'\n", token, p);
+    debugs(4, 3, "errorConvert: %%%c --> '%s'", token, p);
     if (do_quote)
 	p = html_quote(p);
     return p;

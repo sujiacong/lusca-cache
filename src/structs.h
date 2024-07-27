@@ -414,6 +414,7 @@ struct _SquidConfig {
 	int highWaterMark;
 	int lowWaterMark;
     } Swap;
+	int memShared;
     squid_off_t memMaxSize;
     struct {
 	squid_off_t min;
@@ -745,6 +746,7 @@ struct _SquidConfig {
 	int use_short_names;
     } icons;
     char *errorDirectory;
+	char *errorStylesheet;
     struct {
 	int maxtries;
 	int onerror;
@@ -843,6 +845,9 @@ struct _SquidConfig {
     } aiops;
     /* XXX I'm not sure where these should live .. */
     squid_off_t client_socksize;
+
+    int workers;
+    CPUAffinityMap *cpuAffinityMap;
 };
 
 struct _SquidConfig2 {
@@ -1775,6 +1780,20 @@ struct _ErrorState {
     char *request_hdrs;
 };
 
+struct _action_table {
+    char *action;
+    char *desc;
+    OBJH *handler;
+	ADD *add;
+	COL *collect;
+    struct {
+	unsigned int pw_req:1;
+	unsigned int atomic:1;
+	unsigned int aggregatable:1;
+    } flags;
+    struct _action_table *next;
+};
+
 /*
  * if you add a field to StatCounters, 
  * you MUST sync statCountersInitSpecial, statCountersClean, and statCountersCopy
@@ -1862,6 +1881,7 @@ struct _StatCounters {
     StatHist comm_icp_incoming;
     StatHist comm_dns_incoming;
     StatHist comm_http_incoming;
+	StatHist select_fds_hist;
 #if 0
     struct {
 	struct {
@@ -1895,6 +1915,251 @@ struct _StatCounters {
     } swap;
 };
 
+struct _InfoActionData
+{
+    struct timeval squid_start;
+    struct timeval current_time;
+    double client_http_clients;
+    double client_http_requests;
+    double icp_pkts_recv;
+    double icp_pkts_sent;
+    double icp_replies_queued;
+#if USE_HTCP
+    double htcp_pkts_recv;
+    double htcp_pkts_sent;
+#endif
+    double request_failure_ratio;
+    double avg_client_http_requests;
+    double avg_icp_messages;
+    double select_loops;
+    double avg_loop_time;
+    double request_hit_ratio5;
+    double request_hit_ratio60;
+    double byte_hit_ratio5;
+    double byte_hit_ratio60;
+    double request_hit_mem_ratio5;
+    double request_hit_mem_ratio60;
+    double request_hit_disk_ratio5;
+    double request_hit_disk_ratio60;
+
+    //StoreInfoStats store; ///< disk and memory cache statistics
+	double storeswapsize;
+	double storememsize; 
+	double meanobjectsize;
+	struct mallinfo mp;
+
+    double unlink_requests;
+    double http_requests5;
+    double http_requests60;
+    double cache_misses5;
+    double cache_misses60;
+    double cache_hits5;
+    double cache_hits60;
+    double near_hits5;
+    double near_hits60;
+    double not_modified_replies5;
+    double not_modified_replies60;
+    double dns_lookups5;
+    double dns_lookups60;
+    double icp_queries5;
+    double icp_queries60;
+    double up_time;
+    double cpu_time;
+    double cpu_usage;
+    double cpu_usage5;
+    double cpu_usage60;
+    double maxrss;
+    double page_faults;
+#if HAVE_MSTATS && HAVE_GNUMALLOC_H
+    double ms_bytes_total;
+    double ms_bytes_free;
+	int    ms_free_percent;
+#endif
+    double total_accounted;
+    double alloc_calls;
+    double free_calls;
+    double max_fd;
+    double biggest_fd;
+    double number_fd;
+    double opening_fd;
+    double num_fd_free;
+    double reserved_fd;
+	double open_disk_fd;
+	
+	double store_entry_count;
+	double store_mem_object_count;
+	double store_mem_count;
+	double store_swap_count;
+	
+    unsigned int count;
+};
+
+struct _IntervalActionData
+{
+    struct timeval sample_start_time;
+    struct timeval sample_end_time;
+    double client_http_requests;
+    double client_http_hits;
+    double client_http_errors;
+    double client_http_kbytes_in;
+    double client_http_kbytes_out;
+    double client_http_all_median_svc_time;
+    double client_http_miss_median_svc_time;
+    double client_http_nm_median_svc_time;
+    double client_http_nh_median_svc_time;
+    double client_http_hit_median_svc_time;
+    double server_all_requests;
+    double server_all_errors;
+    double server_all_kbytes_in;
+    double server_all_kbytes_out;
+    double server_http_requests;
+    double server_http_errors;
+    double server_http_kbytes_in;
+    double server_http_kbytes_out;
+    double server_ftp_requests;
+    double server_ftp_errors;
+    double server_ftp_kbytes_in;
+    double server_ftp_kbytes_out;
+    double server_other_requests;
+    double server_other_errors;
+    double server_other_kbytes_in;
+    double server_other_kbytes_out;
+    double icp_pkts_sent;
+    double icp_pkts_recv;
+    double icp_queries_sent;
+    double icp_replies_sent;
+    double icp_queries_recv;
+    double icp_replies_recv;
+    double icp_replies_queued;
+    double icp_query_timeouts;
+    double icp_kbytes_sent;
+    double icp_kbytes_recv;
+    double icp_q_kbytes_sent;
+    double icp_r_kbytes_sent;
+    double icp_q_kbytes_recv;
+    double icp_r_kbytes_recv;
+    double icp_query_median_svc_time;
+    double icp_reply_median_svc_time;
+    double dns_median_svc_time;
+    double unlink_requests;
+    double page_faults;
+#if 0	
+    double select_loops;
+    double select_fds;
+    double average_select_fd_period;
+#endif	
+    double median_select_fds;
+    double swap_outs;
+    double swap_ins;
+    double swap_files_cleaned;
+    double aborted_requests;
+#if 0	
+    double syscalls_disk_opens;
+    double syscalls_disk_closes;
+    double syscalls_disk_reads;
+    double syscalls_disk_writes;
+    double syscalls_disk_seeks;
+    double syscalls_disk_unlinks;
+    double syscalls_sock_accepts;
+    double syscalls_sock_sockets;
+    double syscalls_sock_connects;
+    double syscalls_sock_binds;
+    double syscalls_sock_closes;
+    double syscalls_sock_reads;
+    double syscalls_sock_writes;
+    double syscalls_sock_recvfroms;
+    double syscalls_sock_sendtos;
+    double syscalls_selects;
+#endif
+    double cpu_time;
+    double wall_time;
+    unsigned int count;
+};
+
+struct _IoActionData
+{
+    double http_reads;
+    double ftp_reads;
+    double gopher_reads;
+    double http_read_hist[16];
+    double ftp_read_hist[16];
+    double gopher_read_hist[16];
+};
+
+struct _StoreIoActionData
+{
+    double create_calls;
+    double create_select_fail;
+    double create_create_fail;
+    double create_success;
+	double open_calls;
+	double open_success;
+	double loadav_fail;
+	double open_fail;	
+};
+
+struct _CountersActionData
+{
+    struct timeval sample_time;
+    double client_http_requests;
+    double client_http_hits;
+    double client_http_errors;
+    double client_http_kbytes_in;
+    double client_http_kbytes_out;
+    double client_http_hit_kbytes_out;
+    double server_all_requests;
+    double server_all_errors;
+    double server_all_kbytes_in;
+    double server_all_kbytes_out;
+    double server_http_requests;
+    double server_http_errors;
+    double server_http_kbytes_in;
+    double server_http_kbytes_out;
+    double server_ftp_requests;
+    double server_ftp_errors;
+    double server_ftp_kbytes_in;
+    double server_ftp_kbytes_out;
+    double server_other_requests;
+    double server_other_errors;
+    double server_other_kbytes_in;
+    double server_other_kbytes_out;
+    double icp_pkts_sent;
+    double icp_pkts_recv;
+    double icp_queries_sent;
+    double icp_replies_sent;
+    double icp_queries_recv;
+    double icp_replies_recv;
+    double icp_replies_queued;
+    double icp_query_timeouts;
+    double icp_kbytes_sent;
+    double icp_kbytes_recv;
+    double icp_q_kbytes_sent;
+    double icp_r_kbytes_sent;
+    double icp_q_kbytes_recv;
+    double icp_r_kbytes_recv;
+#if USE_CACHE_DIGESTS
+    double icp_times_used;
+    double cd_times_used;
+    double cd_msgs_sent;
+    double cd_msgs_recv;
+    double cd_memory;
+    double cd_local_memory;
+    double cd_kbytes_sent;
+    double cd_kbytes_recv;
+#endif
+    double unlink_requests;
+    double page_faults;
+#if 0	
+    double select_loops;
+#endif
+    double cpu_time;
+    double wall_time;
+    double swap_outs;
+    double swap_ins;
+    double swap_files_cleaned;
+    double aborted_requests;
+};
+
 struct _CacheDigest {
     /* public, read-only */
     char *mask;			/* bit mask */
@@ -1904,6 +2169,7 @@ struct _CacheDigest {
     int count;			/* number of digested entries */
     int del_count;		/* number of deletions performed so far */
 };
+
 
 struct _FwdServer {
     peer *peer;			/* NULL --> origin server */
@@ -2066,5 +2332,37 @@ struct _rewrite {
     acl_list *aclList;
     rewrite *next;
 };
+
+typedef enum {ptInt = 1, ptString} ParamType;
+
+struct _QueryParam{
+	char* key;
+	union{
+		int* 	intvalue;
+		char* 	strvalue;
+	}value;
+	int len;
+	int size;
+	ParamType type;
+};
+
+struct _QueryParams{
+	QueryParam** param;
+	int paramsize;
+	int maxsize;
+};
+
+struct _ActionParams
+{
+	method_code_t method;
+	request_flags flags;
+	char *url;
+	char *origin;
+	char *action;
+    char *user_name;
+    char *passwd;	
+	QueryParams params;
+};
+
 
 #endif /* SQUID_STRUCTS_H */

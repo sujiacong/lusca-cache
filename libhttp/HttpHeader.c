@@ -159,7 +159,7 @@ httpHeaderInit(HttpHeader * hdr, http_hdr_owner_type owner)
 {
     assert(hdr);
     assert(owner > hoNone && owner <= hoReply);
-    debug(55, 7) ("init-ing hdr: %p owner: %d\n", hdr, owner);
+    debugs(55, 7, "init-ing hdr: %p owner: %d", hdr, owner);
     memset(hdr, 0, sizeof(*hdr));
     hdr->owner = owner;
     arrayInit(&hdr->entries);
@@ -192,7 +192,7 @@ httpHeaderClean(HttpHeader * hdr)
 
     assert(hdr);
     assert(hdr->owner > hoNone && hdr->owner <= hoReply);
-    debug(55, 7) ("cleaning hdr: %p owner: %d\n", hdr, hdr->owner);
+    debugs(55, 7, "cleaning hdr: %p owner: %d", hdr, hdr->owner);
 
     /*
      * An unfortunate bug.  The hdr->entries array is initialized
@@ -211,7 +211,7 @@ httpHeaderClean(HttpHeader * hdr)
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         /* tmp hack to try to avoid coredumps */
         if (e->id >= HDR_ENUM_END) {
-            debug(55, 0) ("httpHeaderClean BUG: entry[%d] is invalid (%d). Ignored.\n",
+            debugs(55, 0, "httpHeaderClean BUG: entry[%d] is invalid (%d). Ignored.",
                 (int) pos, e->id);
         } else {
             statHistCount(&HttpHeaderStats[hdr->owner].fieldTypeDistr, e->id);
@@ -277,7 +277,7 @@ httpHeaderAddInfo(HttpHeader *hdr, HttpHeaderEntry *e)
 void
 httpHeaderAddEntry(HttpHeader * hdr, HttpHeaderEntry * e)
 {
-    debug(55, 7) ("%p adding entry: %d at %d\n", hdr, e->id, hdr->entries.count);
+    debugs(55, 7, "%p adding entry: %d at %d", hdr, e->id, hdr->entries.count);
     httpHeaderAddInfo(hdr, e);
     arrayAppend(&hdr->entries, e);
 }
@@ -365,7 +365,7 @@ httpHeaderInsertEntryStr(HttpHeader *hdr, int pos, http_hdr_type id, const char 
 void
 httpHeaderInsertEntry(HttpHeader * hdr, HttpHeaderEntry * e, int pos)
 {
-    debug(55, 7) ("%p adding entry: %d at %d\n", hdr, e->id, hdr->entries.count);
+    debugs(55, 7, "%p adding entry: %d at %d", hdr, e->id, hdr->entries.count);
     httpHeaderAddInfo(hdr, e);
     arrayInsert(&hdr->entries, e, pos);
 }
@@ -412,7 +412,7 @@ httpHeaderAppend(HttpHeader * dest, const HttpHeader * src)
     HttpHeaderPos pos = HttpHeaderInitPos;
     assert(src && dest);
     assert(src != dest);
-    debug(55, 7) ("appending hdr: %p += %p\n", dest, src);
+    debugs(55, 7, "appending hdr: %p += %p", dest, src);
 
     while ((e = httpHeaderGetEntry(src, &pos))) {
         httpHeaderAddClone(dest, e);
@@ -429,7 +429,7 @@ httpHeaderDelByName(HttpHeader * hdr, const char *name)
     HttpHeaderPos pos = HttpHeaderInitPos;
     HttpHeaderEntry *e;
     httpHeaderMaskInit(&hdr->mask, 0);  /* temporal inconsistency */
-    debug(55, 7) ("deleting '%s' fields in hdr %p\n", name, hdr);
+    debugs(55, 7, "deleting '%s' fields in hdr %p", name, hdr);
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         if (!strCaseCmp(e->name, name)) {
             httpHeaderDelAt(hdr, pos);
@@ -447,7 +447,7 @@ httpHeaderDelById(HttpHeader * hdr, http_hdr_type id)
     int count = 0;
     HttpHeaderPos pos = HttpHeaderInitPos;
     HttpHeaderEntry *e;
-    debug(55, 8) ("%p del-by-id %d\n", hdr, id);
+    debugs(55, 8, "%p del-by-id %d", hdr, id);
     assert(hdr);
     assert_eid(id);
     assert(id != HDR_OTHER);    /* does not make sense */
@@ -597,7 +597,7 @@ httpHeaderHas(const HttpHeader * hdr, http_hdr_type id)
     assert(hdr);
     assert_eid(id);
     assert(id != HDR_OTHER);
-    debug(55, 7) ("%p lookup for %d\n", hdr, id);
+    debugs(55, 7, "%p lookup for %d", hdr, id);
     return CBIT_TEST(hdr->mask, id); 
 }
 
@@ -610,7 +610,7 @@ httpHeaderRefreshMask(HttpHeader * hdr)
     HttpHeaderPos pos = HttpHeaderInitPos;
     HttpHeaderEntry *e;
     httpHeaderMaskInit(&hdr->mask, 0);
-    debug(55, 7) ("refreshing the mask in hdr %p\n", hdr);
+    debugs(55, 7, "refreshing the mask in hdr %p", hdr);
     while ((e = httpHeaderGetEntry(hdr, &pos))) {
         CBIT_SET(hdr->mask, e->id);
     }
@@ -647,7 +647,7 @@ httpHeaderUpdate(HttpHeader * old, const HttpHeader * fresh, const HttpHeaderMas
 
     assert(old && fresh);
     assert(old != fresh);
-    debug(55, 7) ("updating hdr: %p <- %p\n", old, fresh);
+    debugs(55, 7, "updating hdr: %p <- %p", old, fresh);
 
     while ((e = httpHeaderGetEntry(fresh, &pos))) {
         /* deny bad guys (ok to check for HDR_OTHER) here */

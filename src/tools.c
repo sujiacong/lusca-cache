@@ -60,6 +60,7 @@ and report the trace back to squid-bugs@squid-cache.org.\n\
 \n\
 Thanks!\n"
 
+int DebugSignal = -1;
 static void fatal_common(const char *);
 static void mail_warranty(void);
 #if MEM_GEN_TRACE
@@ -326,6 +327,9 @@ void
 sigusr2_handle(int sig)
 {
     static int state = 0;
+
+	DebugSignal = sig;
+	
     /* no debug() here; bad things happen if the signal is delivered during _db_print() */
     if (state == 0) {
 #ifndef MEM_GEN_TRACE
@@ -456,7 +460,7 @@ debug_trap(const char *message)
 {
     if (!opt_catch_signals)
 	fatal_dump(message);
-    _db_print("WARNING: %s\n", message);
+    _db_print(GSkipBuildPrefix(__FILE__),__LINE__,__FUNCTION__,"WARNING: %s\n", message);
 }
 
 void
@@ -516,7 +520,7 @@ getMyHostname(void)
 	    /* DNS lookup successful */
 	    /* use the official name from DNS lookup */
 	    xstrncpy(host, h->h_name, SQUIDHOSTNAMELEN);
-	    debug(50, 4) ("getMyHostname: resolved %s to '%s'\n",
+	    debugs(50, 4, "getMyHostname: resolved %s to '%s'",
 		inet_ntoa(sa),
 		host);
 	    present = 1;
@@ -524,18 +528,18 @@ getMyHostname(void)
 		return host;
 
 	}
-	debug(50, 1) ("WARNING: failed to resolve %s to a fully qualified hostname\n",
+	debugs(50, 1, "WARNING: failed to resolve %s to a fully qualified hostname",
 	    inet_ntoa(sa));
     }
     /*
      * Get the host name and store it in host to return
      */
     if (gethostname(host, SQUIDHOSTNAMELEN) < 0) {
-	debug(50, 1) ("WARNING: gethostname failed: %s\n", xstrerror());
+	debugs(50, 1, "WARNING: gethostname failed: %s", xstrerror());
     } else if ((h = gethostbyname(host)) == NULL) {
-	debug(50, 1) ("WARNING: gethostbyname failed for %s\n", host);
+	debugs(50, 1, "WARNING: gethostbyname failed for %s", host);
     } else {
-	debug(50, 6) ("getMyHostname: '%s' resolved into '%s'\n",
+	debugs(50, 6, "getMyHostname: '%s' resolved into '%s'",
 	    host, h->h_name);
 	/* DNS lookup successful */
 	/* use the official name from DNS lookup */
@@ -545,7 +549,7 @@ getMyHostname(void)
 	    return host;
     }
     if (opt_send_signal == -1)
-	debug(50, 1) ("Could not determine fully qualified hostname.  Please set 'visible_hostname'\n");
+	debugs(50, 1, "Could not determine fully qualified hostname.  Please set 'visible_hostname'");
     if (host[0])
 	return host;
     else
@@ -563,7 +567,7 @@ safeunlink(const char *s, int quiet)
 {
     CommStats.syscalls.disk.unlinks++;
     if (unlink(s) < 0 && !quiet)
-	debug(50, 1) ("safeunlink: Couldn't delete %s: %s\n", s, xstrerror());
+	debugs(50, 1, "safeunlink: Couldn't delete %s: %s", s, xstrerror());
 }
 
 /* Should get called after any operation which may make the OS disable core dumps */
@@ -578,7 +582,7 @@ enableCoredumps(void)
 #if HAVE_PRCTL && defined(PR_SET_DUMPABLE)
     /* Set Linux DUMPABLE flag */
     if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) != 0)
-	debug(50, 2) ("prctl: %s\n", xstrerror());
+	debugs(50, 2, "prctl: %s", xstrerror());
 #endif
 #if HAVE_SETRLIMIT && defined(RLIMIT_CORE)
     /* Make sure coredumps are not limited */
@@ -601,39 +605,39 @@ enableCoredumps(void)
 void
 leave_suid(void)
 {
-    debug(21, 3) ("leave_suid: PID %d called\n", (int) getpid());
+    debugs(21, 3, "leave_suid: PID %d called", (int) getpid());
     if (Config.effectiveGroup) {
 #if HAVE_SETGROUPS
 	setgroups(1, &Config2.effectiveGroupID);
 #endif
 	if (setgid(Config2.effectiveGroupID) < 0)
-	    debug(50, 0) ("ALERT: setgid: %s\n", xstrerror());
+	    debugs(50, 0, "ALERT: setgid: %s", xstrerror());
     }
     if (geteuid() != 0)
 	return;
     /* Started as a root, check suid option */
     if (Config.effectiveUser == NULL)
 	return;
-    debug(21, 3) ("leave_suid: PID %d giving up root, becoming '%s'\n",
+    debugs(21, 3, "leave_suid: PID %d giving up root, becoming '%s'",
 	(int) getpid(), Config.effectiveUser);
     if (!Config.effectiveGroup) {
 	if (setgid(Config2.effectiveGroupID) < 0)
-	    debug(50, 0) ("ALERT: setgid: %s\n", xstrerror());
+	    debugs(50, 0, "ALERT: setgid: %s", xstrerror());
 	if (initgroups(Config.effectiveUser, Config2.effectiveGroupID) < 0) {
-	    debug(50, 0) ("ALERT: initgroups: unable to set groups for User %s "
+	    debugs(50, 0, "ALERT: initgroups: unable to set groups for User %s "
 		"and Group %u", Config.effectiveUser,
 		(unsigned) Config2.effectiveGroupID);
 	}
     }
 #if HAVE_SETRESUID
     if (setresuid(Config2.effectiveUserID, Config2.effectiveUserID, 0) < 0)
-	debug(50, 0) ("ALERT: setresuid: %s\n", xstrerror());
+	debugs(50, 0, "ALERT: setresuid: %s", xstrerror());
 #elif HAVE_SETEUID
     if (seteuid(Config2.effectiveUserID) < 0)
-	debug(50, 0) ("ALERT: seteuid: %s\n", xstrerror());
+	debugs(50, 0, "ALERT: seteuid: %s", xstrerror());
 #else
     if (setuid(Config2.effectiveUserID) < 0)
-	debug(50, 0) ("ALERT: setuid: %s\n", xstrerror());
+	debugs(50, 0, "ALERT: setuid: %s", xstrerror());
 #endif
     restoreCapabilities(1);
     /* Changing user ID usually blocks core dumps. Get them back! */
@@ -644,7 +648,7 @@ leave_suid(void)
 void
 enter_suid(void)
 {
-    debug(21, 3) ("enter_suid: PID %d taking root priveleges\n", (int) getpid());
+    debugs(21, 3, "enter_suid: PID %d taking root priveleges", (int) getpid());
 #if HAVE_SETRESUID
     setresuid(-1, 0, -1);
 #else
@@ -662,10 +666,10 @@ no_suid(void)
     uid_t uid;
     leave_suid();
     uid = geteuid();
-    debug(21, 3) ("no_suid: PID %d giving up root priveleges forever\n", (int) getpid());
+    debugs(21, 3, "no_suid: PID %d giving up root priveleges forever", (int) getpid());
     setuid(0);
     if (setuid(uid) < 0)
-	debug(50, 1) ("no_suid: setuid: %s\n", xstrerror());
+	debugs(50, 1, "no_suid: setuid: %s", xstrerror());
     restoreCapabilities(0);
     enableCoredumps();
 }
@@ -677,6 +681,10 @@ writePidFile(void)
     const char *f = NULL;
     mode_t old_umask;
     char buf[32];
+	
+    if (!IamPrimaryProcess())
+        return;
+	
     if ((f = Config.pidFilename) == NULL)
 	return;
     if (!strcmp(Config.pidFilename, "none"))
@@ -687,7 +695,7 @@ writePidFile(void)
     umask(old_umask);
     leave_suid();
     if (fd < 0) {
-	debug(50, 0) ("%s: %s\n", f, xstrerror());
+	debugs(50, 0, "%s: %s", f, xstrerror());
 	debug_trap("Could not write pid file");
 	return;
     }
@@ -741,81 +749,104 @@ readPidFile(void)
 #endif
 #endif
 
-/* Figure out the number of supported filedescriptors */
+/** Figure out the number of supported filedescriptors */
 void
 setMaxFD(void)
 {
-/* RLIMIT_NOFILE doesn't work on Cygwin */
-#if HAVE_SETRLIMIT && defined(RLIMIT_NOFILE) && !defined(_SQUID_CYGWIN_)
+#if HAVE_SETRLIMIT && defined(RLIMIT_NOFILE)
+
+    /* On Linux with 64-bit file support the sys/resource.h header
+     * uses #define to change the function definition to require rlimit64
+     */
+#if defined(getrlimit)
+    struct rlimit64 rl; // Assume its a 64-bit redefine anyways.
+#else
     struct rlimit rl;
+#endif
+
     if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
-	debug(50, 0) ("setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
+        debugs(50, DBG_CRITICAL, "getrlimit: RLIMIT_NOFILE: %s", xstrerror());
     } else if (Config.max_filedescriptors > 0) {
-	rl.rlim_cur = Config.max_filedescriptors;
-	if (rl.rlim_cur > rl.rlim_max)
-	    rl.rlim_max = rl.rlim_cur;
-	if (setrlimit(RLIMIT_NOFILE, &rl)) {
-	    debug(50, 0) ("setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
-	    getrlimit(RLIMIT_NOFILE, &rl);
-	    rl.rlim_cur = rl.rlim_max;
-	    if (setrlimit(RLIMIT_NOFILE, &rl)) {
-		debug(50, 0) ("setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
-	    }
-	}
+#if USE_SELECT || USE_SELECT_WIN32
+        /* select() breaks if this gets set too big */
+        if (Config.max_filedescriptors > FD_SETSIZE) {
+            rl.rlim_cur = FD_SETSIZE;
+            debugs(50, DBG_CRITICAL, "WARNING: 'max_filedescriptors %d does not work with select()", Config.max_filedescriptors);
+        } else
+#endif
+            rl.rlim_cur = Config.max_filedescriptors;
+        if (rl.rlim_cur > rl.rlim_max)
+            rl.rlim_max = rl.rlim_cur;
+        if (setrlimit(RLIMIT_NOFILE, &rl)) {
+            debugs(50, DBG_CRITICAL, "ERROR: setrlimit: RLIMIT_NOFILE: %s", xstrerror());
+            getrlimit(RLIMIT_NOFILE, &rl);
+            rl.rlim_cur = rl.rlim_max;
+            if (setrlimit(RLIMIT_NOFILE, &rl)) {
+                debugs(50, DBG_CRITICAL, "ERROR: setrlimit: RLIMIT_NOFILE: %s", xstrerror());
+            }
+        }
     }
     if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
-	debug(50, 0) ("setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
+        debugs(50, DBG_CRITICAL, "ERROR: getrlimit: RLIMIT_NOFILE: %s", xstrerror());
     } else {
-	Squid_MaxFD = rl.rlim_cur;
+        Squid_MaxFD = rl.rlim_cur;
     }
+
 #endif /* HAVE_SETRLIMIT */
 }
 
 void
 setSystemLimits(void)
 {
-#if HAVE_SETRLIMIT
-    struct rlimit rl;
-#endif /* HAVE_SETRLIMIT */
-/* RLIMIT_NOFILE doesn't work on Cygwin */
-#if HAVE_SETRLIMIT && defined(RLIMIT_NOFILE) && !defined(_SQUID_CYGWIN_)
+#if HAVE_SETRLIMIT && defined(RLIMIT_NOFILE) && !_SQUID_CYGWIN_
     /* limit system filedescriptors to our own limit */
+
+    /* On Linux with 64-bit file support the sys/resource.h header
+     * uses #define to change the function definition to require rlimit64
+     */
+#if defined(getrlimit)
+    struct rlimit64 rl; // Assume its a 64-bit redefine anyways.
+#else
+    struct rlimit rl;
+#endif
+
     if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
-	debug(50, 0) ("setrlimit: RLIMIT_NOFILE: %s\n", xstrerror());
+        debugs(50, DBG_CRITICAL, "getrlimit: RLIMIT_NOFILE: %s", xstrerror());
     } else {
-	rl.rlim_cur = Squid_MaxFD;
-	if (setrlimit(RLIMIT_NOFILE, &rl) < 0) {
-	    snprintf(tmp_error_buf, ERROR_BUF_SZ,
-		"setrlimit: RLIMIT_NOFILE: %s", xstrerror());
-	    fatal_dump(tmp_error_buf);
-	}
+        rl.rlim_cur = Squid_MaxFD;
+        if (setrlimit(RLIMIT_NOFILE, &rl) < 0) {
+            snprintf(tmp_error_buf, ERROR_BUF_SZ, "setrlimit: RLIMIT_NOFILE: %s", xstrerror());
+            fatal_dump(tmp_error_buf);
+        }
     }
-#endif /* RLIMIT_NOFILE */
-    if (Config.max_filedescriptors > Squid_MaxFD) {
-	debug(50, 1) ("NOTICE: Could not increase the number of filedescriptors\n");
-    }
-#if HAVE_SETRLIMIT && defined(RLIMIT_DATA)
+#endif /* HAVE_SETRLIMIT */
+
+#if HAVE_SETRLIMIT && defined(RLIMIT_DATA) && !_SQUID_CYGWIN_
     if (getrlimit(RLIMIT_DATA, &rl) < 0) {
-	debug(50, 0) ("getrlimit: RLIMIT_DATA: %s\n", xstrerror());
+        debugs(50, DBG_CRITICAL, "getrlimit: RLIMIT_DATA: %s", xstrerror());
     } else if (rl.rlim_max > rl.rlim_cur) {
-	rl.rlim_cur = rl.rlim_max;	/* set it to the max */
-	if (setrlimit(RLIMIT_DATA, &rl) < 0) {
-	    snprintf(tmp_error_buf, ERROR_BUF_SZ,
-		"setrlimit: RLIMIT_DATA: %s", xstrerror());
-	    fatal_dump(tmp_error_buf);
-	}
+        rl.rlim_cur = rl.rlim_max;  /* set it to the max */
+
+        if (setrlimit(RLIMIT_DATA, &rl) < 0) {
+            snprintf(tmp_error_buf, ERROR_BUF_SZ, "setrlimit: RLIMIT_DATA: %s", xstrerror());
+            fatal_dump(tmp_error_buf);
+        }
     }
 #endif /* RLIMIT_DATA */
-#if HAVE_SETRLIMIT && defined(RLIMIT_VMEM)
+    if (Config.max_filedescriptors > Squid_MaxFD) {
+        debugs(50, DBG_IMPORTANT, "NOTICE: Could not increase the number of filedescriptors");
+    }
+
+#if HAVE_SETRLIMIT && defined(RLIMIT_VMEM) && !_SQUID_CYGWIN_
     if (getrlimit(RLIMIT_VMEM, &rl) < 0) {
-	debug(50, 0) ("getrlimit: RLIMIT_VMEM: %s\n", xstrerror());
+        debugs(50, DBG_CRITICAL, "getrlimit: RLIMIT_VMEM: %s", xstrerror());
     } else if (rl.rlim_max > rl.rlim_cur) {
-	rl.rlim_cur = rl.rlim_max;	/* set it to the max */
-	if (setrlimit(RLIMIT_VMEM, &rl) < 0) {
-	    snprintf(tmp_error_buf, ERROR_BUF_SZ,
-		"setrlimit: RLIMIT_VMEM: %s", xstrerror());
-	    fatal_dump(tmp_error_buf);
-	}
+        rl.rlim_cur = rl.rlim_max;  /* set it to the max */
+
+        if (setrlimit(RLIMIT_VMEM, &rl) < 0) {
+            snprintf(tmp_error_buf, ERROR_BUF_SZ, "setrlimit: RLIMIT_VMEM: %s", xstrerror());
+            fatal_dump(tmp_error_buf);
+        }
     }
 #endif /* RLIMIT_VMEM */
 }
@@ -861,7 +892,7 @@ debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
     memBufDefInit(&mb);
     packerToMemInit(&p, &mb);
     (*pm) (obj, &p);
-    debug(section, level) ("%s%s", label, mb.buf);
+    debugs(section, level, "%s%s", label, mb.buf);
     packerClean(&p);
     memBufClean(&mb);
 }
@@ -874,13 +905,13 @@ debugObj(int section, int level, const char *label, void *obj, ObjPackMethod pm)
 int
 xrename(const char *from, const char *to)
 {
-    debug(21, 2) ("xrename: renaming %s to %s\n", from, to);
+    debugs(21, 2, "xrename: renaming %s to %s", from, to);
 #if defined(_SQUID_OS2_) || defined(_SQUID_WIN32_)
     remove(to);
 #endif
     if (0 == rename(from, to))
 	return 0;
-    debug(21, errno == ENOENT ? 2 : 1) ("xrename: Cannot rename %s to %s: %s\n",
+    debugs(21, errno == ENOENT ? 2 : 1, "xrename: Cannot rename %s to %s: %s",
 	from, to, xstrerror());
     return -1;
 }
@@ -927,7 +958,7 @@ parseEtcHosts(void)
 	return;
     fp = fopen(Config.etcHostsPath, "r");
     if (fp == NULL) {
-	debug(1, 1) ("parseEtcHosts: %s: %s\n",
+	debugs(1, 1, "parseEtcHosts: %s: %s",
 	    Config.etcHostsPath, xstrerror());
 	return;
     }
@@ -942,22 +973,22 @@ parseEtcHosts(void)
 	strtok(buf, "#");	/* chop everything following a comment marker */
 	lt = buf;
 	addr = buf;
-	debug(1, 5) ("etc_hosts: line is '%s'\n", buf);
+	debugs(1, 5, "etc_hosts: line is '%s'", buf);
 	nt = strpbrk(lt, w_space);
 	if (nt == NULL)		/* empty line */
 	    continue;
 	*nt = '\0';		/* null-terminate the address */
-	debug(1, 5) ("etc_hosts: address is '%s'\n", addr);
+	debugs(1, 5, "etc_hosts: address is '%s'", addr);
 	lt = nt + 1;
 	while ((nt = strpbrk(lt, w_space))) {
 	    char *host = NULL;
 	    if (nt == lt) {	/* multiple spaces */
-		debug(1, 5) ("etc_hosts: multiple spaces, skipping\n");
+		debugs(1, 5, "etc_hosts: multiple spaces, skipping");
 		lt = nt + 1;
 		continue;
 	    }
 	    *nt = '\0';
-	    debug(1, 5) ("etc_hosts: got hostname '%s'\n", lt);
+	    debugs(1, 5, "etc_hosts: got hostname '%s'", lt);
 	    if (Config.appendDomain && !strchr(lt, '.')) {
 		/* I know it's ugly, but it's only at reconfig */
 		strncpy(buf2, lt, 512);

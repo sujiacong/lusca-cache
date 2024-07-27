@@ -137,7 +137,7 @@ comm_flush_updates(void)
     if (devpoll_update.cur == -1)
 	return;
 
-    debug(5, 5) ("comm_flush_updates: %d fds queued\n", devpoll_update.cur + 1);
+    debugs(5, 5, "comm_flush_updates: %d fds queued", devpoll_update.cur + 1);
 
     i = write(devpoll_fd, devpoll_update.pfds, (devpoll_update.cur + 1) * sizeof(struct pollfd));
     assert(i > 0);
@@ -155,11 +155,11 @@ comm_flush_updates(void)
 static void
 comm_update_fd(int fd, int events)
 {
-    debug(5, 5) ("comm_update_fd: fd %d: events %d\n", fd, events);
+    debugs(5, 5, "comm_update_fd: fd %d: events %d", fd, events);
     if (devpoll_update.cur != -1 && (devpoll_update.cur == devpoll_update.size))
 	comm_flush_updates();
     devpoll_update.cur++;
-    debug(5, 5) ("  -> new slot (%d)\n", devpoll_update.cur);
+    debugs(5, 5, "  -> new slot (%d)", devpoll_update.cur);
     devpoll_state[fd].update_offset = devpoll_update.cur;
     devpoll_update.pfds[devpoll_update.cur].fd = fd;
     devpoll_update.pfds[devpoll_update.cur].events = events;
@@ -169,7 +169,7 @@ comm_update_fd(int fd, int events)
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using /dev/poll for the IO loop\n");
+    debugs(5, 1, "Using /dev/poll for the IO loop");
 }
 
 static void
@@ -190,7 +190,7 @@ comm_select_status(void)
 void
 commOpen(int fd)
 {
-    debug(5, 5) ("commOpen: %d\n", fd);
+    debugs(5, 5, "commOpen: %d", fd);
     devpoll_state[fd].state = 0;
     devpoll_state[fd].update_offset = -1;
 }
@@ -198,7 +198,7 @@ commOpen(int fd)
 void
 commClose(int fd)
 {
-    debug(5, 5) ("commClose: %d\n", fd);
+    debugs(5, 5, "commClose: %d", fd);
     comm_update_fd(fd, POLLREMOVE);
 }
 
@@ -211,7 +211,7 @@ commSetEvents(int fd, int need_read, int need_write)
     if (fd_table[fd].flags.closing)
 	return;
 
-    debug(5, 5) ("commSetEvents(fd=%d, read=%d, write=%d)\n", fd, need_read, need_write);
+    debugs(5, 5, "commSetEvents(fd=%d, read=%d, write=%d)", fd, need_read, need_write);
 
     st_change = devpoll_state[fd].state ^ st_new;
     if (!st_change)
@@ -235,18 +235,18 @@ do_comm_select(int msec)
     do_poll.dp_nfds = dpoll_nfds;
     /* dp_fds is already allocated */
 
-    debug(5, 5) ("do_comm_select: begin\n");
+    debugs(5, 5, "do_comm_select: begin");
     comm_flush_updates();
 
     num = ioctl(devpoll_fd, DP_POLL, &do_poll);
     saved_errno = errno;
     getCurrentTime();
-    debug(5, 5) ("do_comm_select: %d fds ready\n", num);
+    debugs(5, 5, "do_comm_select: %d fds ready", num);
     if (num < 0) {
 	if (ignoreErrno(saved_errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: devpoll ioctl(DP_POLL) failure: %s\n", xstrerror());
+	debugs(5, 1, "comm_select: devpoll ioctl(DP_POLL) failure: %s", xstrerror());
 	return COMM_ERROR;
     }
     statHistCount(&statCounter.select_fds_hist, num);
@@ -256,7 +256,7 @@ do_comm_select(int msec)
     for (i = 0; i < num; i++) {
 	int fd = (int) do_poll.dp_fds[i].fd;
 	if (do_poll.dp_fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-	    debug(5, 1) ("comm_select: devpoll event error: fd %d\n", fd);
+	    debugs(5, 1, "comm_select: devpoll event error: fd %d", fd);
 	    continue;		/* XXX! */
 	}
 	if (do_poll.dp_fds[i].revents & POLLIN) {

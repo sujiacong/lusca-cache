@@ -21,7 +21,7 @@ squid_signal(int sig, SIGHDLR * func, int flags)
     sa.sa_flags = flags;
     sigemptyset(&sa.sa_mask);
     if (sigaction(sig, &sa, NULL) < 0)
-        debug(50, 0) ("sigaction: sig=%d func=%p: %s\n", sig, func, xstrerror());
+        debugs(50, 0, "sigaction: sig=%d func=%p: %s", sig, func, xstrerror());
 #else
 #ifdef _SQUID_MSWIN_
 /*

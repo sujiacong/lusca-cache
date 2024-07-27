@@ -62,7 +62,7 @@ cacheDigestInit(CacheDigest * cd, int capacity, int bpe)
     cd->bits_per_entry = bpe;
     cd->mask_size = mask_size;
     cd->mask = xcalloc(cd->mask_size, 1);
-    debug(70, 2) ("cacheDigestInit: capacity: %d entries, bpe: %d; size: %d bytes\n",
+    debugs(70, 2, "cacheDigestInit: capacity: %d entries, bpe: %d; size: %d bytes",
 	cd->capacity, cd->bits_per_entry, cd->mask_size);
 }
 
@@ -316,7 +316,7 @@ cacheDigestHashKey(const CacheDigest * cd, const cache_key * key)
     hashed_keys[1] = htonl(tmp_keys[1]) % bit_count;
     hashed_keys[2] = htonl(tmp_keys[2]) % bit_count;
     hashed_keys[3] = htonl(tmp_keys[3]) % bit_count;
-    debug(70, 9) ("cacheDigestHashKey: %s -(%d)-> %d %d %d %d\n",
+    debugs(70, 9, "cacheDigestHashKey: %s -(%d)-> %d %d %d %d",
 	storeKeyText(key), bit_count,
 	hashed_keys[0], hashed_keys[1], hashed_keys[2], hashed_keys[3]);
 }

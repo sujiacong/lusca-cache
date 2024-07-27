@@ -28,6 +28,7 @@ usage(const char *cmd)
 	printf("  where the block and stripe sizes are in bytes\n");
 	printf("  and <command> is, for now, 'rebuild'\n");
 }
+int KidIdentifier = 0;
 
 int
 main(int argc, const char *argv[])

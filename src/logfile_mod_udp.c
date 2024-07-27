@@ -59,10 +59,10 @@ logfile_mod_udp_write(Logfile * lf, const char *buf, size_t len)
     fd_bytes(ll->fd, s, FD_WRITE);
 #if 0
     if (s < 0) {
-	debug(1, 1) ("logfile (udp): got errno %d (%s)\n", errno, xstrerror());
+	debugs(1, 1, "logfile (udp): got errno %d (%s)", errno, xstrerror());
     }
     if (s != len) {
-	debug(1, 1) ("logfile (udp): len %d, wrote %d\n", len, s);
+	debugs(1, 1, "logfile (udp): len %d, wrote %d", len, s);
     }
 #endif
 
@@ -171,7 +171,7 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 	if (lf->flags.fatal) {
 	    fatalf("Invalid UDP logging address '%s'\n", lf->path);
 	} else {
-	    debug(50, 1) ("Invalid UDP logging address '%s'\n", lf->path);
+	    debugs(50, 1, "Invalid UDP logging address '%s'", lf->path);
 	    safe_free(strAddr);
 	    return FALSE;
 	}
@@ -189,7 +189,7 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 	if (lf->flags.fatal) {
 	    fatalf("Unable to open UDP socket for logging\n");
 	} else {
-	    debug(50, 1) ("Unable to open UDP socket for logging\n");
+	    debugs(50, 1, "Unable to open UDP socket for logging");
 	    return FALSE;
 	}
     }
@@ -199,7 +199,7 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 	if (lf->flags.fatal) {
 	    fatalf("Unable to connect to %s for UDP log: %s\n", lf->path, xstrerror());
 	} else {
-	    debug(50, 1) ("Unable to connect to %s for UDP log: %s\n", lf->path, xstrerror());
+	    debugs(50, 1, "Unable to connect to %s for UDP log: %s", lf->path, xstrerror());
 	    sqinet_done(&address);
 	    return FALSE;
 	}
@@ -216,7 +216,7 @@ logfile_mod_udp_open(Logfile * lf, const char *path, size_t bufsz, int fatal_fla
 		"\tuser '%s', which is the cache_effective_user\n"
 		"\tset in squid.conf.", path, Config.effectiveUser);
 	} else {
-	    debug(50, 1) ("logfileOpen (stdio): %s: %s\n", path, xstrerror());
+	    debugs(50, 1, "logfileOpen (stdio): %s: %s", path, xstrerror());
 	    return 0;
 	}
     }

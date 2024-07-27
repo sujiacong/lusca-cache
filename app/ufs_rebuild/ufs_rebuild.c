@@ -47,7 +47,7 @@ usage(const char *cmdname)
 	printf("  where <command> is one of rebuild-dir, rebuild-log or rebuild.\n");
 }
 
-
+int KidIdentifier = 0;
 int
 main(int argc, char *argv[])
 {
@@ -76,7 +76,7 @@ main(int argc, char *argv[])
 	_db_set_stderr_debug(99);
 	getCurrentTime();
 
-	debug(86, 2) ("ufs_rebuild: cmd=%s, dir=%s, l1=%d, l2=%d, swaplog=%s\n", argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
+	debugs(86, 2, "ufs_rebuild: cmd=%s, dir=%s, l1=%d, l2=%d, swaplog=%s", argv[1], argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
 
 	store_ufs_init(&store_ufs_info, argv[2], atoi(argv[3]), atoi(argv[4]), argv[5]);
 
@@ -97,7 +97,7 @@ main(int argc, char *argv[])
 #endif
 	(void) storeSwapLogPrintHeader(stdout);
 
-	debug(86, 1) ("ufs_rebuild: %s: rebuild type: %s\n", store_ufs_info.path, rebuild_type == REBUILD_DISK ? "REBUILD_DISK" : "REBUILD_LOG");
+	debugs(86, 1, "ufs_rebuild: %s: rebuild type: %s", store_ufs_info.path, rebuild_type == REBUILD_DISK ? "REBUILD_DISK" : "REBUILD_LOG");
 
 	if (rebuild_type == REBUILD_DISK)
 		rebuild_from_dir(&store_ufs_info);

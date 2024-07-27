@@ -216,7 +216,7 @@ requestReadBody(request_t * request, char *buf, size_t size, CBCB * callback, vo
 	if (cbdataValid(request->body_reader_data)) {
 	    request->body_reader(request, buf, size, callback, cbdata);
 	} else {
-	    debug(73, 1) ("requestReadBody: Aborted\n");
+	    debugs(73, 1, "requestReadBody: Aborted");
 	    request->body_reader = NULL;
 	    cbdataUnlock(request->body_reader_data);
 	    request->body_reader_data = NULL;
@@ -235,7 +235,7 @@ requestAbortBody(request_t * request)
     if (request->body_reader) {
 	void *cbdata = request->body_reader_data;
 	BODY_HANDLER *handler = request->body_reader;
-	debug(73, 2) ("requestAbortBody: Aborted\n");
+	debugs(73, 2, "requestAbortBody: Aborted");
 	request->body_reader = NULL;
 	request->body_reader_data = NULL;
 	if (cbdataValid(cbdata))

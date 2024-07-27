@@ -40,7 +40,7 @@ clientAccessCheckDone2(int answer, void *data)
     http_status status;
     ErrorState *err = NULL;
     char *proxy_auth_msg = NULL;
-    debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
+    debugs(33, 2, "The request %s %s is %s, because it matched '%s'",
 	urlMethodGetConstStr(http->request->method), http->uri,
 	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
 	AclMatchedName ? AclMatchedName : "NO ACL's");
@@ -50,11 +50,11 @@ clientAccessCheckDone2(int answer, void *data)
 	clientCheckNoCache(http);
     } else {
 	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName));
-	debug(33, 5) ("Access Denied: %s\n", http->uri);
-	debug(33, 5) ("AclMatchedName = %s\n",
+	debugs(33, 5, "Access Denied: %s", http->uri);
+	debugs(33, 5, "AclMatchedName = %s",
 	    AclMatchedName ? AclMatchedName : "<null>");
 	if (require_auth)
-	    debug(33, 5) ("Proxy Auth Message = %s\n",
+	    debugs(33, 5, "Proxy Auth Message = %s",
 		proxy_auth_msg ? proxy_auth_msg : "<null>");
 	/*
 	 * NOTE: get page_id here, based on AclMatchedName because
@@ -135,7 +135,7 @@ clientAccessCheckDone(int answer, void *data)
     http_status status;
     ErrorState *err = NULL;
     char *proxy_auth_msg = NULL;
-    debug(33, 2) ("The request %s %s is %s, because it matched '%s'\n",
+    debugs(33, 2, "The request %s %s is %s, because it matched '%s'",
 	urlMethodGetConstStr(http->request->method), http->uri,
 	answer == ACCESS_ALLOWED ? "ALLOWED" : "DENIED",
 	AclMatchedName ? AclMatchedName : "NO ACL's");
@@ -149,10 +149,10 @@ clientAccessCheckDone(int answer, void *data)
 	clientRedirectStart(http);
     } else {
 	int require_auth = (answer == ACCESS_REQ_PROXY_AUTH || aclIsProxyAuth(AclMatchedName)) && !http->request->flags.transparent;
-	debug(33, 5) ("Access Denied: %s\n", http->uri);
-	debug(33, 5) ("AclMatchedName = %s\n",
+	debugs(33, 5, "Access Denied: %s", http->uri);
+	debugs(33, 5, "AclMatchedName = %s",
 	    AclMatchedName ? AclMatchedName : "<null>");
-	debug(33, 5) ("Proxy Auth Message = %s\n",
+	debugs(33, 5, "Proxy Auth Message = %s",
 	    proxy_auth_msg ? proxy_auth_msg : "<null>");
 	/*
 	 * NOTE: get page_id here, based on AclMatchedName because
@@ -225,7 +225,7 @@ clientFollowXForwardedForStart(void *data)
     request_t *request = http->request;
     request->x_forwarded_for_iterator = httpHeaderGetList(
 	&request->header, HDR_X_FORWARDED_FOR);
-    debug(33, 5) ("clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%.*s'\n",
+    debugs(33, 5, "clientFollowXForwardedForStart: indirect_client_addr=%s XFF='%.*s'",
 	inet_ntoa(request->indirect_client_addr),
 	strLen2(request->x_forwarded_for_iterator),
 	strBuf2(request->x_forwarded_for_iterator));
@@ -237,7 +237,7 @@ clientFollowXForwardedForNext(void *data)
 {
     clientHttpRequest *http = data;
     request_t *request = http->request;
-    debug(33, 5) ("clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%.*s'\n",
+    debugs(33, 5, "clientFollowXForwardedForNext: indirect_client_addr=%s XFF='%.*s'",
 	inet_ntoa(request->indirect_client_addr),
 	strLen2(request->x_forwarded_for_iterator),
 	strBuf2(request->x_forwarded_for_iterator));
@@ -248,7 +248,7 @@ clientFollowXForwardedForNext(void *data)
 	aclNBCheck(http->acl_checklist, clientFollowXForwardedForDone, http);
     } else {
 	/* nothing left to follow */
-	debug(33, 5) ("clientFollowXForwardedForNext: nothing more to do\n");
+	debugs(33, 5, "clientFollowXForwardedForNext: nothing more to do");
 	clientFollowXForwardedForDone(-1, http);
     }
 }
@@ -274,7 +274,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	char *asciiaddr;
 	int l;
 	struct in_addr addr;
-	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s is trusted\n",
+	debugs(33, 5, "clientFollowXForwardedForDone: indirect_client_addr=%s is trusted",
 	    inet_ntoa(request->indirect_client_addr));
 	p = strBuf2(request->x_forwarded_for_iterator);
 	l = strLen2(request->x_forwarded_for_iterator);
@@ -301,12 +301,12 @@ clientFollowXForwardedForDone(int answer, void *data)
         asciiaddr = stringDupToCOffset(&request->x_forwarded_for_iterator, l);
 	if (inet_aton(asciiaddr, &addr) == 0) {
 	    /* the address is not well formed; do not use it */
-	    debug(33, 3) ("clientFollowXForwardedForDone: malformed address '%s'\n",
+	    debugs(33, 3, "clientFollowXForwardedForDone: malformed address '%s'",
 		asciiaddr);
 	    safe_free(asciiaddr);
 	    goto done;
 	}
-	debug(33, 3) ("clientFollowXForwardedForDone: changing indirect_client_addr from %s to '%s'\n",
+	debugs(33, 3, "clientFollowXForwardedForDone: changing indirect_client_addr from %s to '%s'",
 	    inet_ntoa(request->indirect_client_addr),
 	    asciiaddr);
 	safe_free(asciiaddr);
@@ -322,15 +322,15 @@ clientFollowXForwardedForDone(int answer, void *data)
 	clientFollowXForwardedForNext(http);
 	return;
     } else if (answer == ACCESS_DENIED) {
-	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s not trusted\n",
+	debugs(33, 5, "clientFollowXForwardedForDone: indirect_client_addr=%s not trusted",
 	    inet_ntoa(request->indirect_client_addr));
     } else {
-	debug(33, 5) ("clientFollowXForwardedForDone: indirect_client_addr=%s nothing more to do\n",
+	debugs(33, 5, "clientFollowXForwardedForDone: indirect_client_addr=%s nothing more to do",
 	    inet_ntoa(request->indirect_client_addr));
     }
   done:
     /* clean up, and pass control to clientAccessCheck */
-    debug(33, 6) ("clientFollowXForwardedForDone: cleanup\n");
+    debugs(33, 6, "clientFollowXForwardedForDone: cleanup");
     if (Config.onoff.log_uses_indirect_client) {
 	/*
 	 * Ensure that the access log shows the indirect client
@@ -339,7 +339,7 @@ clientFollowXForwardedForDone(int answer, void *data)
 	ConnStateData *conn = http->conn;
 	conn->log_addr = request->indirect_client_addr;
 	conn->log_addr.s_addr &= Config.Addrs.client_netmask.s_addr;
-	debug(33, 3) ("clientFollowXForwardedForDone: setting log_addr=%s\n",
+	debugs(33, 3, "clientFollowXForwardedForDone: setting log_addr=%s",
 	    inet_ntoa(conn->log_addr));
     }
     stringClean(&request->x_forwarded_for_iterator);

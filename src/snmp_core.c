@@ -36,6 +36,7 @@
 #include "cache_snmp.h"
 
 #include "../include/strsep.h"
+#include "../libmutiprocess/ipcsupport.h"
 
 #define SNMP_REQUEST_SIZE 4096
 #define MAX_PROTOSTAT 5
@@ -51,14 +52,18 @@ struct _mib_tree_entry {
     int children;
     struct _mib_tree_entry **leaves;
     struct _mib_tree_entry *parent;
+	AggrType aggrType;
 };
+
 
 mib_tree_entry *mib_tree_head;
 mib_tree_entry *mib_tree_last;
 
-static mib_tree_entry * snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instance_Fn * instancefunction);
+extern void StartSnmpForwarder(struct snmp_pdu* PDU, struct snmp_session* session, int sock, struct sockaddr_in* from);
+
+static mib_tree_entry * snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instance_Fn * instancefunction, AggrType aggrType);
 #if STDC_HEADERS
-static mib_tree_entry *snmpAddNode(oid * name, int len, oid_ParseFn * parsefunction, instance_Fn * instancefunction, int children,...);
+static mib_tree_entry *snmpAddNode(oid * name, int len, oid_ParseFn * parsefunction, instance_Fn * instancefunction, AggrType aggrType, int children,...);
 static oid *snmpCreateOid(int length,...);
 #else
 static mib_tree_entry *snmpAddNode();
@@ -71,12 +76,10 @@ static oid *static_Inst(oid * name, snint * len, mib_tree_entry * current, oid_P
 static oid *time_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
 static oid *peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
-#if 0
 static oid *client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn);
-#endif
+
 static void snmpDecodePacket(snmp_request_t * rq);
 static void snmpConstructReponse(snmp_request_t * rq);
-static struct snmp_pdu *snmpAgentResponse(struct snmp_pdu *PDU);
 static oid_ParseFn *snmpTreeNext(oid * Current, snint CurrentLen, oid ** Next, snint * NextLen);
 static oid_ParseFn *snmpTreeGet(oid * Current, snint CurrentLen);
 static mib_tree_entry *snmpTreeEntry(oid entry, snint len, mib_tree_entry * current);
@@ -100,9 +103,9 @@ snmpInit(void)
 {
     mib_tree_entry * n, *m2;
 
-    debug(49, 5) ("snmpInit: Called.\n");
+    debugs(49, 5, "snmpInit: Called.");
 
-    debug(49, 5) ("snmpInit: Building SNMP mib tree structure\n");
+    debugs(49, 5, "snmpInit: Building SNMP mib tree structure");
 
     snmplib_debug_hook = snmpSnmplibDebug;
 
@@ -111,239 +114,339 @@ snmpInit(void)
 	 * without having a "search" function. A search function should be written
 	 * to make this and the other code much less evil.
 	 */
-	mib_tree_head = snmpAddNode(snmpCreateOid(1, 1), 1, NULL, NULL, 0);
+	mib_tree_head = snmpAddNode(snmpCreateOid(1, 1), 1, NULL, NULL, atNone, 0);
 	assert(mib_tree_head);
-	debug(49, 5) ("snmpInit: root is %p\n", mib_tree_head);
-	snmpAddNodeStr("1", 3, NULL, NULL);
+	debugs(49, 5, "snmpInit: root is %p", mib_tree_head);
+	snmpAddNodeStr("1", 3, NULL, NULL, atNone);
 
-	snmpAddNodeStr("1.3", 6, NULL, NULL);
-	snmpAddNodeStr("1.3.6", 1, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1", 4, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4", 1, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1", 3495, NULL, NULL);
-	m2 = snmpAddNodeStr("1.3.6.1.4.1.3495", 1, NULL, NULL);
+	snmpAddNodeStr("1.3", 6, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6", 1, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1", 4, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4", 1, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1", 3495, NULL, NULL, atNone);
+	m2 = snmpAddNodeStr("1.3.6.1.4.1.3495", 1, NULL, NULL, atNone);
 
 	n = snmpLookupNodeStr(NULL, "1.3.6.1.4.1.3495.1");
 	assert(m2 == n);
 
 	/* SQ_SYS - 1.3.6.1.4.1.3495.1.1 */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 1, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 1, snmp_sysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 2, snmp_sysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 3, snmp_sysFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 1, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 1, snmp_sysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 2, snmp_sysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.1", 3, snmp_sysFn, static_Inst, atMax);
 
 	/* SQ_CONF - 1.3.6.1.4.1.3495.1.2 */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 2, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_ADMIN, snmp_confFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_VERSION, snmp_confFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_VERSION_ID, snmp_confFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_LOG_FAC, snmp_confFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 2, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_ADMIN, snmp_confFn, static_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_VERSION, snmp_confFn, static_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_VERSION_ID, snmp_confFn, static_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_LOG_FAC, snmp_confFn, static_Inst, atNone);
 
 	/* SQ_CONF + CONF_STORAGE - 1.3.6.1.4.1.3495.1.5 */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_STORAGE, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 1, snmp_confFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 2, snmp_confFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 3, snmp_confFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 4, snmp_confFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_STORAGE, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 1, snmp_confFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 2, snmp_confFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 3, snmp_confFn, static_Inst, atMin);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2.5", 4, snmp_confFn, static_Inst, atMin);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_UNIQNAME, snmp_confFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.2", CONF_UNIQNAME, snmp_confFn, static_Inst, atNone);
 
 	/* SQ_PRF - 1.3.6.1.4.1.3495.1.3 */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 3, NULL, NULL);			/* SQ_PRF */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 3, NULL, NULL, atNone);			/* SQ_PRF */
 
 	/* PERF_SYS - 1.3.6.1.4.1.3495.1.3.1 */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3", PERF_SYS, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_PF, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_NUMR, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_MEMUSAGE, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CPUTIME, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CPUUSAGE, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_MAXRESSZ, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_NUMOBJCNT, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURLRUEXP, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURUNLREQ, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURUNUSED_FD, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURRESERVED_FD, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURUSED_FD, snmp_prfSysFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURMAX_FD, snmp_prfSysFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3", PERF_SYS, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_PF, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_NUMR, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_MEMUSAGE, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CPUTIME, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CPUUSAGE, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_MAXRESSZ, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_NUMOBJCNT, snmp_prfSysFn, static_Inst, atSum);
+	/*
+      Amos comments:
+      The meaning of LRU is "oldest timestamped object in cache,  if LRU algorithm is
+      used"...
+      What this SMP support needs to do is aggregate via a special filter equivalent to
+      min() to retain the semantic oldest-object meaning. A special one is needed that
+      works as unsigned and ignores '0' values.
+     */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURLRUEXP, snmp_prfSysFn, static_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURUNLREQ, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURUNUSED_FD, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURRESERVED_FD, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURUSED_FD, snmp_prfSysFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.1", PERF_SYS_CURMAX_FD, snmp_prfSysFn, static_Inst, atMax);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3", PERF_PROTO, NULL, NULL);
-
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2", PERF_PROTOSTAT_AGGR, NULL, NULL);
-
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_REQ, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_HITS, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_ERRORS, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_KBYTES_IN, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_KBYTES_OUT, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_S, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_R, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_SKB, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_RKB, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_REQ, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ERRORS, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_KBYTES_IN, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_KBYTES_OUT, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_CURSWAP, snmp_prfProtoFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_CLIENTS, snmp_prfProtoFn, static_Inst);
+	/* PERF_PROTO - 1.3.6.1.4.1.3495.1.3.2 */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3", PERF_PROTO, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2", PERF_PROTOSTAT_AGGR, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_REQ, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_HITS, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_ERRORS, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_KBYTES_IN, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_HTTP_KBYTES_OUT, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_S, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_R, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_SKB, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ICP_RKB, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_REQ, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_ERRORS, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_KBYTES_IN, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_KBYTES_OUT, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_CURSWAP, snmp_prfProtoFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.1", PERF_PROTOSTAT_AGGR_CLIENTS, snmp_prfProtoFn, static_Inst, atSum);
 
 	/* Note this is time-series rather than 'static' */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2", PERF_PROTOSTAT_MEDIAN, NULL, NULL);
-	/* Not sure what this is.. cacheMedianSvcEntry ? */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2", 1, NULL, NULL);
-
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_TIME, snmp_prfProtoFn, time_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_ALL, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_MISS, snmp_prfProtoFn, time_Inst);  
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_NM, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_HIT, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_ICP_QUERY, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_ICP_REPLY, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_DNS, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_RHR, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_BHR, snmp_prfProtoFn, time_Inst); 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_NH, snmp_prfProtoFn, time_Inst); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2", PERF_PROTOSTAT_MEDIAN, NULL, NULL, atNone);
+	
+	/* cacheMedianSvcEntry */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2", 1, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_TIME, snmp_prfProtoFn, time_Inst, atAverage);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_ALL, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_MISS, snmp_prfProtoFn, time_Inst, atAverage);  
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_NM, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_HIT, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_ICP_QUERY, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_ICP_REPLY, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_DNS, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_RHR, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_BHR, snmp_prfProtoFn, time_Inst, atAverage); 
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.3.2.2.1", PERF_MEDIAN_HTTP_NH, snmp_prfProtoFn, time_Inst, atAverage); 
 
 	/* SQ_NET - 1.3.6.1.4.1.3495.1.4 */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.", 4, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.", 4, NULL, NULL, atNone);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_IP_CACHE, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_ENT, snmp_netIpFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_REQ, snmp_netIpFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_HITS, snmp_netIpFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_PENDHIT, snmp_netIpFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_NEGHIT, snmp_netIpFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_MISS, snmp_netIpFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_GHBN, snmp_netIpFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_LOC, snmp_netIpFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_IP_CACHE, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_ENT, snmp_netIpFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_REQ, snmp_netIpFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_HITS, snmp_netIpFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_PENDHIT, snmp_netIpFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_NEGHIT, snmp_netIpFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_MISS, snmp_netIpFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_GHBN, snmp_netIpFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.1", IP_LOC, snmp_netIpFn, static_Inst, atSum);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_FQDN_CACHE, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_ENT, snmp_netFqdnFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_REQ, snmp_netFqdnFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_HITS, snmp_netFqdnFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_PENDHIT, snmp_netFqdnFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_NEGHIT, snmp_netFqdnFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_MISS, snmp_netFqdnFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_GHBN, snmp_netFqdnFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_FQDN_CACHE, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_ENT, snmp_netFqdnFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_REQ, snmp_netFqdnFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_HITS, snmp_netFqdnFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_PENDHIT, snmp_netFqdnFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_NEGHIT, snmp_netFqdnFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_MISS, snmp_netFqdnFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.2", FQDN_GHBN, snmp_netFqdnFn, static_Inst, atSum);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REQ, snmp_netIdnsFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REP, snmp_netIdnsFn, static_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_SERVERS, snmp_netIdnsFn, static_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4", NET_DNS_CACHE, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REQ, snmp_netIdnsFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_REP, snmp_netIdnsFn, static_Inst, atSum);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.4.3", DNS_SERVERS, snmp_netIdnsFn, static_Inst, atSum);
 
 	/* SQ_MESH - 1.3.6.1.4.1.3495.1.5 */
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 5, NULL, NULL);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1", 5, NULL, NULL, atNone);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5", 1, NULL, NULL);
+	/* cachePeerTable - 1.3.6.1.4.1.3495.1.5.1 */
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5", 1, NULL, NULL, atNone);
+	
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1", 1, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 1, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 2, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 3, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 4, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 5, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 6, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 7, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 8, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 9, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 10, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 11, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 12, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 13, snmp_meshPtblFn, peer_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 15, snmp_meshPtblFn, peer_Inst, atNone);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1", 1, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 1, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 2, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 3, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 4, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 5, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 6, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 7, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 8, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 9, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 10, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 11, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 12, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 13, snmp_meshPtblFn, peer_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.1", 15, snmp_meshPtblFn, peer_Inst);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1", 2, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 1, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 2, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 3, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 4, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 5, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 6, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 7, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 8, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 9, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 10, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 11, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 12, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 13, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 14, snmp_meshPtblFn, peer_InstIndex, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 15, snmp_meshPtblFn, peer_InstIndex, atNone);
 
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1", 2, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 1, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 2, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 3, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 4, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 5, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 6, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 7, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 8, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 9, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 10, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 11, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 12, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 13, snmp_meshPtblFn, peer_InstIndex);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 14, snmp_meshPtblFn, peer_InstIndex);
-	mib_tree_last = snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.1.2", 15, snmp_meshPtblFn, peer_InstIndex);
-
-#if 0
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5", 2, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2", 1, NULL, NULL);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 1, snmp_meshCtblFn, client_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 2, snmp_meshCtblFn, client_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 3, snmp_meshCtblFn, client_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 4, snmp_meshCtblFn, client_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 5, snmp_meshCtblFn, client_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 6, snmp_meshCtblFn, client_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 7, snmp_meshCtblFn, client_Inst);
-	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 8, snmp_meshCtblFn, client_Inst);
-	mib_tree_last = snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 9, snmp_meshCtblFn, client_Inst);
+#if 1
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5", 2, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2", 1, NULL, NULL, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 1, snmp_meshCtblFn, client_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 2, snmp_meshCtblFn, client_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 3, snmp_meshCtblFn, client_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 4, snmp_meshCtblFn, client_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 5, snmp_meshCtblFn, client_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 6, snmp_meshCtblFn, client_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 7, snmp_meshCtblFn, client_Inst, atNone);
+	snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 8, snmp_meshCtblFn, client_Inst, atNone);
+	mib_tree_last = snmpAddNodeStr("1.3.6.1.4.1.3495.1.5.2.1", 9, snmp_meshCtblFn, client_Inst, atNone);
 #endif
 
-    debug(49, 9) ("snmpInit: Completed SNMP mib tree structure\n");
+    debugs(49, 9, "snmpInit: Completed SNMP mib tree structure");
+}
+
+void
+snmpIncomingConnectionOpened(int fd, void* data)
+{
+    struct sockaddr_in xaddr;
+    socklen_t len;
+    int x;
+
+    debugs(49, 5, "snmpIncomingConnectionOpened: Called");
+
+	if (fd < 0)
+		fatal("Cannot open snmp Port");
+
+	theInSnmpConnection = fd;
+
+	commSetSelect(theInSnmpConnection, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
+
+	fd_note(theInSnmpConnection, "Incoming SNMP socket");
+	
+	debugs(1, 1, "Accepting SNMP messages on port %d, FD %d.", (int) Config.Port.snmp, theInSnmpConnection);
+
+	if (IsNoAddr(&Config.Addrs.snmp_outgoing)) {
+		
+		theOutSnmpConnection = theInSnmpConnection;
+
+		memset(&theOutSNMPAddr, '\0', sizeof(struct in_addr));
+		len = sizeof(struct sockaddr_in);
+		memset(&xaddr, '\0', len);
+		x = getsockname(theOutSnmpConnection,
+		    (struct sockaddr *) &xaddr, &len);
+		if (x < 0)
+		    debugs(51, 1, "theOutSnmpConnection FD %d: getsockname: %s",
+			theOutSnmpConnection, xstrerror());
+		else
+		    theOutSNMPAddr = xaddr.sin_addr;		
+	}
+}
+
+void
+snmpOutgoingConnectionOpened(int fd, void* data)
+{
+	struct sockaddr_in xaddr;
+	socklen_t len;
+	int x;
+
+	debugs(49, 5, "snmpOutgoingConnectionOpened: Called");
+
+	if (fd < 0)
+		fatal("Cannot open snmp Port");
+
+	theOutSnmpConnection = fd;
+
+	commSetSelect(theOutSnmpConnection, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
+
+	fd_note(theOutSnmpConnection, "Outgoing SNMP socket");
+	
+	debugs(1, 1, "Outgoing SNMP messages on port %d, FD %d.",(int) Config.Port.snmp, theOutSnmpConnection);
+
+	memset(&theOutSNMPAddr, '\0', sizeof(struct in_addr));
+	len = sizeof(struct sockaddr_in);
+	memset(&xaddr, '\0', len);
+	x = getsockname(theOutSnmpConnection,
+		(struct sockaddr *) &xaddr, &len);
+	if (x < 0)
+		debugs(51, 1, "theOutSnmpConnection FD %d: getsockname: %s",
+		theOutSnmpConnection, xstrerror());
+	else
+		theOutSNMPAddr = xaddr.sin_addr;
+	
+}
+
+void
+snmpConnectionSMPOpen(void)
+{
+    u_short port;
+    if ((port = Config.Port.snmp) > (u_short) 0) {
+		debugs(1, 1, "StrandStartListen netsnmp in port %d", port);
+		StrandStartListenRequest(SOCK_DGRAM, IPPROTO_UDP, fdnInSnmpSocket, COMM_NONBLOCKING, &Config.Addrs.snmp_incoming, port, NULL, snmpIncomingConnectionOpened);
+		if (!IsNoAddr(&Config.Addrs.snmp_outgoing)) {
+			StrandStartListenRequest(SOCK_DGRAM, IPPROTO_UDP, fdnOutSnmpSocket, COMM_NONBLOCKING, &Config.Addrs.snmp_outgoing, port, NULL, snmpOutgoingConnectionOpened);	
+		}
+    }
 }
 
 void
 snmpConnectionOpen(void)
 {
-    u_short port;
-    struct sockaddr_in xaddr;
-    socklen_t len;
-    int x;
-
-    debug(49, 5) ("snmpConnectionOpen: Called\n");
-    if ((port = Config.Port.snmp) > (u_short) 0) {
-	enter_suid();
-	theInSnmpConnection = comm_open(SOCK_DGRAM,
-	    IPPROTO_UDP,
-	    Config.Addrs.snmp_incoming,
-	    port,
-	    COMM_NONBLOCKING,
-	    COMM_TOS_DEFAULT,
-	    "SNMP Port");
-	leave_suid();
-	if (theInSnmpConnection < 0)
-	    fatal("Cannot open snmp Port");
-	commSetSelect(theInSnmpConnection, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
-	debug(1, 1) ("Accepting SNMP messages on port %d, FD %d.\n",
-	    (int) port, theInSnmpConnection);
-	if (! IsNoAddr(&Config.Addrs.snmp_outgoing)) {
-	    enter_suid();
-	    theOutSnmpConnection = comm_open(SOCK_DGRAM,
-		IPPROTO_UDP,
-		Config.Addrs.snmp_outgoing,
-		port,
-		COMM_NONBLOCKING,
-	        COMM_TOS_DEFAULT,
-		"SNMP Port");
-	    leave_suid();
-	    if (theOutSnmpConnection < 0)
-		fatal("Cannot open Outgoing SNMP Port");
-	    commSetSelect(theOutSnmpConnection,
-		COMM_SELECT_READ,
-		snmpHandleUdp,
-		NULL, 0);
-	    debug(1, 1) ("Outgoing SNMP messages on port %d, FD %d.\n",
-		(int) port, theOutSnmpConnection);
-	    fd_note(theOutSnmpConnection, "Outgoing SNMP socket");
-	    fd_note(theInSnmpConnection, "Incoming SNMP socket");
-	} else {
-	    theOutSnmpConnection = theInSnmpConnection;
+	if(UsingSmp())
+	{
+		snmpConnectionSMPOpen();
 	}
-	memset(&theOutSNMPAddr, '\0', sizeof(struct in_addr));
-	len = sizeof(struct sockaddr_in);
-	memset(&xaddr, '\0', len);
-	x = getsockname(theOutSnmpConnection,
-	    (struct sockaddr *) &xaddr, &len);
-	if (x < 0)
-	    debug(51, 1) ("theOutSnmpConnection FD %d: getsockname: %s\n",
-		theOutSnmpConnection, xstrerror());
 	else
-	    theOutSNMPAddr = xaddr.sin_addr;
-    }
+	{
+	    u_short port;
+	    struct sockaddr_in xaddr;
+	    socklen_t len;
+	    int x;
+
+	    debugs(49, 5,"snmpConnectionOpen: Called\n");
+	    if ((port = Config.Port.snmp) > (u_short) 0) {
+		enter_suid();
+		theInSnmpConnection = comm_open(SOCK_DGRAM,
+		    IPPROTO_UDP,
+		    Config.Addrs.snmp_incoming,
+		    port,
+		    COMM_NONBLOCKING,
+		    COMM_TOS_DEFAULT,
+		    "SNMP Port");
+		leave_suid();
+		if (theInSnmpConnection < 0)
+		    fatal("Cannot open snmp Port");
+		commSetSelect(theInSnmpConnection, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
+		debugs(1, 1,"Accepting SNMP messages on port %d, FD %d.\n",
+		    (int) port, theInSnmpConnection);
+		if (! IsNoAddr(&Config.Addrs.snmp_outgoing)) {
+		    enter_suid();
+		    theOutSnmpConnection = comm_open(SOCK_DGRAM,
+			IPPROTO_UDP,
+			Config.Addrs.snmp_outgoing,
+			port,
+			COMM_NONBLOCKING,
+		        COMM_TOS_DEFAULT,
+			"SNMP Port");
+		    leave_suid();
+		    if (theOutSnmpConnection < 0)
+			fatal("Cannot open Outgoing SNMP Port");
+		    commSetSelect(theOutSnmpConnection,
+			COMM_SELECT_READ,
+			snmpHandleUdp,
+			NULL, 0);
+		    debugs(1, 1, "Outgoing SNMP messages on port %d, FD %d.\n",
+			(int) port, theOutSnmpConnection);
+		    fd_note(theOutSnmpConnection, "Outgoing SNMP socket");
+		    fd_note(theInSnmpConnection, "Incoming SNMP socket");
+		} else {
+		    theOutSnmpConnection = theInSnmpConnection;
+		}
+		memset(&theOutSNMPAddr, '\0', sizeof(struct in_addr));
+		len = sizeof(struct sockaddr_in);
+		memset(&xaddr, '\0', len);
+		x = getsockname(theOutSnmpConnection,
+		    (struct sockaddr *) &xaddr, &len);
+		if (x < 0)
+		    debugs(51, 1, "theOutSnmpConnection FD %d: getsockname: %s\n",
+			theOutSnmpConnection, xstrerror());
+		else
+		    theOutSNMPAddr = xaddr.sin_addr;
+	    }
+	}
 }
+
 
 void
 snmpConnectionShutdown(void)
@@ -351,7 +454,7 @@ snmpConnectionShutdown(void)
     if (theInSnmpConnection < 0)
 	return;
     if (theInSnmpConnection != theOutSnmpConnection) {
-	debug(49, 1) ("FD %d Closing SNMP socket\n", theInSnmpConnection);
+	debugs(49, 1, "FD %d Closing SNMP socket", theInSnmpConnection);
 	comm_close(theInSnmpConnection);
     }
     /*
@@ -375,7 +478,7 @@ snmpConnectionClose(void)
 {
     snmpConnectionShutdown();
     if (theOutSnmpConnection > -1) {
-	debug(49, 1) ("FD %d Closing SNMP socket\n", theOutSnmpConnection);
+	debugs(49, 1, "FD %d Closing SNMP socket", theOutSnmpConnection);
 	comm_close(theOutSnmpConnection);
     }
 }
@@ -396,7 +499,7 @@ snmpHandleUdp(int sock, void *not_used)
     snmp_request_t *snmp_rq;
     int len;
 
-    debug(49, 5) ("snmpHandleUdp: Called.\n");
+    debugs(49, 5, "snmpHandleUdp: Called.");
 
     commSetSelect(sock, COMM_SELECT_READ, snmpHandleUdp, NULL, 0);
     from_len = sizeof(struct sockaddr_in);
@@ -414,7 +517,7 @@ snmpHandleUdp(int sock, void *not_used)
 
     if (len > 0) {
 	buf[len] = '\0';
-	debug(49, 3) ("snmpHandleUdp: FD %d: received %d bytes from %s.\n",
+	debugs(49, 3, "snmpHandleUdp: FD %d: received %d bytes from %s.",
 	    sock,
 	    len,
 	    inet_ntoa(from.sin_addr));
@@ -429,7 +532,7 @@ snmpHandleUdp(int sock, void *not_used)
 	xfree(snmp_rq->outbuf);
 	xfree(snmp_rq);
     } else {
-	debug(49, 1) ("snmpHandleUdp: FD %d recvfrom: %s\n", sock, xstrerror());
+	debugs(49, 1, "snmpHandleUdp: FD %d recvfrom: %s", sock, xstrerror());
     }
 }
 
@@ -446,7 +549,7 @@ snmpDecodePacket(snmp_request_t * rq)
     int len = rq->len;
     int allow = 0;
 
-    debug(49, 5) ("snmpDecodePacket: Called.\n");
+    debugs(49, 5, "snmpDecodePacket: Called.");
     /* Now that we have the data, turn it into a PDU */
     PDU = snmp_pdu_create(0);
     rq->session.Version = SNMP_VERSION_1;
@@ -460,10 +563,10 @@ snmpDecodePacket(snmp_request_t * rq)
     if ((snmp_coexist_V2toV1(PDU)) && (Community) && (allow)) {
 	rq->community = Community;
 	rq->PDU = PDU;
-	debug(49, 5) ("snmpDecodePacket: reqid=[%d]\n", PDU->reqid);
+	debugs(49, 5, "snmpDecodePacket: reqid=[%d]", PDU->reqid);
 	snmpConstructReponse(rq);
     } else {
-	debug(49, 1) ("Failed SNMP agent query from : %s.\n",
+	debugs(49, 1, "Failed SNMP agent query from : %s.",
 	    inet_ntoa(rq->from.sin_addr));
 	snmp_free_pdu(PDU);
     }
@@ -479,7 +582,14 @@ snmpConstructReponse(snmp_request_t * rq)
 {
     struct snmp_pdu *RespPDU;
 
-    debug(49, 5) ("snmpConstructReponse: Called.\n");
+    debugs(49, 5, "snmpConstructReponse: Called.");
+
+    if (UsingSmp() && IamWorkerProcess()) {
+        StartSnmpForwarder(rq->PDU, &rq->session, rq->sock, &rq->from);
+        snmp_free_pdu(rq->PDU);
+        return;
+    }
+	
     RespPDU = snmpAgentResponse(rq->PDU);
     snmp_free_pdu(rq->PDU);
     if (RespPDU != NULL) {
@@ -493,12 +603,12 @@ snmpConstructReponse(snmp_request_t * rq)
  * Decide how to respond to the request, construct a response and
  * return the response to the requester.
  */
-static struct snmp_pdu *
+struct snmp_pdu *
 snmpAgentResponse(struct snmp_pdu *PDU)
 {
     struct snmp_pdu *Answer = NULL;
 
-    debug(49, 5) ("snmpAgentResponse: Called.\n");
+    debugs(49, 5, "snmpAgentResponse: Called.");
 
     if ((Answer = snmp_pdu_create(SNMP_PDU_RESPONSE))) {
 	Answer->reqid = PDU->reqid;
@@ -525,7 +635,7 @@ snmpAgentResponse(struct snmp_pdu *PDU)
 		    ParseFn = snmpTreeGet(VarPtr->name, VarPtr->name_length);
 		if (ParseFn == NULL) {
 		    Answer->errstat = SNMP_ERR_NOSUCHNAME;
-		    debug(49, 5) ("snmpAgentResponse: No such oid.\n");
+		    debugs(49, 5, "snmpAgentResponse: No such oid.");
 		} else {
 		    int *errstatTmp;
 		    if (get_next) {
@@ -541,7 +651,7 @@ snmpAgentResponse(struct snmp_pdu *PDU)
 		/* Was there an error? */
 		if ((Answer->errstat != SNMP_ERR_NOERROR) || (VarNew == NULL)) {
 		    Answer->errindex = index;
-		    debug(49, 5) ("snmpAgentResponse: error.\n");
+		    debugs(49, 5, "snmpAgentResponse: error.");
 		    if (VarNew)
 			snmp_var_free(VarNew);
 		    /* Free the already processed results, if any */
@@ -571,9 +681,9 @@ snmpTreeGet(oid * Current, snint CurrentLen)
     mib_tree_entry *mibTreeEntry = NULL;
     int count = 0;
 
-    debug(49, 5) ("snmpTreeGet: Called\n");
+    debugs(49, 5, "snmpTreeGet: Called");
 
-    debug(49, 6) ("snmpTreeGet: Current : \n");
+    debugs(49, 6, "snmpTreeGet: Current : ");
     snmpDebugOid(6, Current, CurrentLen);
 
     mibTreeEntry = mib_tree_head;
@@ -586,9 +696,31 @@ snmpTreeGet(oid * Current, snint CurrentLen)
     }
     if (mibTreeEntry && mibTreeEntry->parsefunction)
 	Fn = mibTreeEntry->parsefunction;
-    debug(49, 5) ("snmpTreeGet: return\n");
+    debugs(49, 5, "snmpTreeGet: return");
     return (Fn);
 }
+
+AggrType
+snmpAggrType(oid* Current, snint CurrentLen)
+{
+    mib_tree_entry* mibTreeEntry = mib_tree_head;
+    AggrType type = atNone;
+    int count = 0;
+
+    if (Current[count] == mibTreeEntry->name[count]) {
+        ++count;
+
+        while (mibTreeEntry != NULL && count < CurrentLen) {
+            mibTreeEntry = snmpTreeEntry(Current[count], count, mibTreeEntry);
+            if (mibTreeEntry != NULL)
+                type = mibTreeEntry->aggrType;
+            ++count;
+        }
+    }
+
+    return type;
+}
+
 
 static oid_ParseFn *
 snmpTreeNext(oid * Current, snint CurrentLen, oid ** Next, snint * NextLen)
@@ -597,9 +729,9 @@ snmpTreeNext(oid * Current, snint CurrentLen, oid ** Next, snint * NextLen)
     mib_tree_entry *mibTreeEntry = NULL, *nextoid = NULL;
     int count = 0;
 
-    debug(49, 5) ("snmpTreeNext: Called\n");
+    debugs(49, 5, "snmpTreeNext: Called");
 
-    debug(49, 6) ("snmpTreeNext: Current : \n");
+    debugs(49, 6, "snmpTreeNext: Current : ");
     snmpDebugOid(6, Current, CurrentLen);
 
     mibTreeEntry = mib_tree_head;
@@ -613,7 +745,7 @@ snmpTreeNext(oid * Current, snint CurrentLen, oid ** Next, snint * NextLen)
 		mibTreeEntry = nextmibTreeEntry;
 	    count++;
 	}
-	debug(49, 5) ("snmpTreeNext: Recursed down to requested object\n");
+	debugs(49, 5, "snmpTreeNext: Recursed down to requested object");
     } else {
 	return NULL;
     }
@@ -629,11 +761,11 @@ snmpTreeNext(oid * Current, snint CurrentLen, oid ** Next, snint * NextLen)
 	count--;
 	nextoid = snmpTreeSiblingEntry(Current[count], count, mibTreeEntry->parent);
 	if (nextoid) {
-	    debug(49, 5) ("snmpTreeNext: Next OID found for sibling\n");
+	    debugs(49, 5, "snmpTreeNext: Next OID found for sibling");
 	    mibTreeEntry = nextoid;
 	    count++;
 	} else {
-	    debug(49, 5) ("snmpTreeNext: Attempting to recurse up for next object\n");
+	    debugs(49, 5, "snmpTreeNext: Attempting to recurse up for next object");
 	    while (!nextoid) {
 		count--;
 		if (mibTreeEntry->parent->parent) {
@@ -768,6 +900,7 @@ peer_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
     return (instance);
 }
 
+
 static oid *
 peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
 {
@@ -803,7 +936,7 @@ peer_InstIndex(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn **
     return (instance);
 }
 
-#if 0
+
 static oid *
 client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn)
 {
@@ -839,7 +972,6 @@ client_Inst(oid * name, snint * len, mib_tree_entry * current, oid_ParseFn ** Fn
     *Fn = current->parsefunction;
     return (instance);
 }
-#endif
 
 
 /*
@@ -894,7 +1026,7 @@ snmpTreeEntry(oid entry, snint len, mib_tree_entry * current)
 void
 snmpAddNodeChild(mib_tree_entry *entry, mib_tree_entry *child)
 {
-	debug (49, 5) ("snmpAddNodeChild: assigning %p to parent %p\n", child, entry);
+	debugs(49, 5, "snmpAddNodeChild: assigning %p to parent %p", child, entry);
         entry->leaves = xrealloc(entry->leaves, sizeof(mib_tree_entry *) * (entry->children + 1));
 	entry->leaves[entry->children] = child;
 	entry->leaves[entry->children]->parent = entry;
@@ -971,7 +1103,7 @@ snmpCreateOidFromStr(const char *str, oid **name, int *nl)
  * on failure.
  */
 static mib_tree_entry *
-snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instance_Fn * instancefunction)
+snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instance_Fn * instancefunction, AggrType aggrType)
 {
 	mib_tree_entry *m, *b;
 	oid *n;
@@ -982,7 +1114,7 @@ snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instanc
 	b = snmpLookupNodeStr(mib_tree_head, base_str);
 	if (! b)
 		return NULL;
-	debug(49, 5) ("snmpAddNodeStr: %s: -> %p\n", base_str, b);
+	debugs(49, 5, "snmpAddNodeStr: %s: -> %p", base_str, b);
 
 	/* Create OID string for new entry */
 	snprintf(s, 1024, "%s.%d", base_str, o);
@@ -990,7 +1122,7 @@ snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instanc
 		return NULL;
 
 	/* Create a node */
-	m = snmpAddNode(n, nl, parsefunction, instancefunction, 0);
+	m = snmpAddNode(n, nl, parsefunction, instancefunction, aggrType, 0);
 
 	/* Link it into the existing tree */
 	snmpAddNodeChild(b, m);
@@ -1004,7 +1136,7 @@ snmpAddNodeStr(const char *base_str, int o, oid_ParseFn * parsefunction, instanc
  */
 static mib_tree_entry *
 #if STDC_HEADERS
-snmpAddNode(oid * name, int len, oid_ParseFn * parsefunction, instance_Fn * instancefunction, int children,...)
+snmpAddNode(oid * name, int len, oid_ParseFn * parsefunction, instance_Fn * instancefunction, AggrType aggrType, int children,...)
 #else
 snmpAddNode(va_alist)
      va_dcl
@@ -1030,7 +1162,7 @@ snmpAddNode(va_alist)
     children = va_arg(args, int);
 #endif
 
-    debug(49, 6) ("snmpAddNode: Children : %d, Oid : \n", children);
+    debugs(49, 6, "snmpAddNode: Children : %d, Oid : ", children);
     snmpDebugOid(6, name, len);
 
     va_start(args, children);
@@ -1041,6 +1173,7 @@ snmpAddNode(va_alist)
     entry->instancefunction = instancefunction;
     entry->children = children;
     entry->leaves = NULL;
+	entry->aggrType = aggrType;
 
     if (children > 0) {
 	entry->leaves = xmalloc(sizeof(mib_tree_entry *) * children);
@@ -1100,6 +1233,58 @@ snmpOidDup(oid * A, snint ALen)
 }
 #endif
 
+void
+snmpDebugAnswer(variable_list* Answer)
+{
+	switch(Answer->type)
+	{
+		case SMI_INTEGER:
+			{
+				assert(Answer->val.integer != NULL && Answer->val_len == sizeof(int));
+				int val = *Answer->val.integer;
+				debugs(49, 6, "Answer is INTEGER %d", val);
+				break;
+			}
+		    case SMI_GAUGE32:
+			{
+				assert(Answer->val.integer != NULL && Answer->val_len == 4);
+				unsigned int val = *Answer->val.integer;
+				debugs(49, 6, "Answer is GAUGE32 %d", val);
+		        break;
+		    }
+		    case SMI_COUNTER32:
+			{
+				assert(Answer->val.integer != NULL && Answer->val_len == 4);
+				int val = *Answer->val.integer;
+				debugs(49, 6, "Answer is COUNTER32 %d", val);
+				break;
+			}
+		    case SMI_COUNTER64:
+			{
+				assert(Answer->val.integer != NULL && Answer->val_len == 8);
+				long long int val = *Answer->val.integer;
+				debugs(49, 6, "Answer is COUNTER64 %lld", val);
+				break;
+			}		
+		    case SMI_TIMETICKS:
+			{
+				assert(Answer->val.integer != NULL && Answer->val_len == sizeof(unsigned int));
+				unsigned int ticks = *Answer->val.integer;
+				debugs(49, 6, "Answer is TIMETICKS %d", ticks);
+				break;
+			}
+			case ASN_OCTET_STR:
+			{
+				assert(Answer->val.string != NULL);
+				debugs(49, 6, "Answer is ASN_OCTET_STR %s", Answer->val.string);
+				break;
+			}
+		    default:
+		        debugs(49, DBG_CRITICAL, "Answer is Unsupported print type:%d", Answer->type);		
+
+	}
+}
+
 /*
  * Debug calls, prints out the OID for debugging purposes.
  */
@@ -1115,14 +1300,14 @@ snmpDebugOid(int lvl, oid * Name, snint Len)
 	strCat(objid, mbuf);
     }
 
-    debug(49, lvl) ("   oid = %.*s\n", strLen2(objid), strBuf2(objid));
+    debugs(49, lvl, "   oid = %.*s", strLen2(objid), strBuf2(objid));
     stringClean(&objid);
 }
 
 static void
 snmpSnmplibDebug(int lvl, char *buf)
 {
-    debug(49, lvl) ("%s\n", buf);
+    debugs(49, lvl, "%s", buf);
 }
 
 void

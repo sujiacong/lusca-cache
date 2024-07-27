@@ -341,7 +341,7 @@ gopherToHTML(GopherStateData * gopherState, char *inbuf, int len)
 	    /* there is something left from last tx. */
 	    xstrncpy(line, gopherState->buf, gopherState->len + 1);
 	    if (gopherState->len + len > TEMP_BUF_SIZE) {
-		debug(10, 1) ("gopherToHTML: Buffer overflow. Lost some data on URL: %s\n",
+		debugs(10, 1, "gopherToHTML: Buffer overflow. Lost some data on URL: %s",
 		    storeUrl(entry));
 		len = TEMP_BUF_SIZE - gopherState->len;
 	    }
@@ -352,7 +352,7 @@ gopherToHTML(GopherStateData * gopherState, char *inbuf, int len)
 		/* there is no complete line in inbuf */
 		/* copy it to temp buffer */
 		if (gopherState->len + len > TEMP_BUF_SIZE) {
-		    debug(10, 1) ("gopherToHTML: Buffer overflow. Lost some data on URL: %s\n",
+		    debugs(10, 1, "gopherToHTML: Buffer overflow. Lost some data on URL: %s",
 			storeUrl(entry));
 		    len = TEMP_BUF_SIZE - gopherState->len;
 		}
@@ -378,7 +378,7 @@ gopherToHTML(GopherStateData * gopherState, char *inbuf, int len)
 		/* there is no complete line in inbuf */
 		/* copy it to temp buffer */
 		if ((len - (pos - inbuf)) > TEMP_BUF_SIZE) {
-		    debug(10, 1) ("gopherToHTML: Buffer overflow. Lost some data on URL: %s\n",
+		    debugs(10, 1, "gopherToHTML: Buffer overflow. Lost some data on URL: %s",
 			storeUrl(entry));
 		    len = TEMP_BUF_SIZE;
 		}
@@ -600,7 +600,7 @@ gopherTimeout(int fd, void *data)
 {
     GopherStateData *gopherState = data;
     StoreEntry *entry = gopherState->entry;
-    debug(10, 4) ("gopherTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
+    debugs(10, 4, "gopherTimeout: FD %d: '%s'", fd, storeUrl(entry));
     fwdFail(gopherState->fwdState,
 	errorCon(ERR_READ_TIMEOUT, HTTP_GATEWAY_TIMEOUT, gopherState->fwdState->request));
     comm_close(fd);
@@ -642,7 +642,7 @@ gopherReadReply(int fd, void *data)
 	kb_incr(&statCounter.server.all.kbytes_in, len);
 	kb_incr(&statCounter.server.other.kbytes_in, len);
     }
-    debug(10, 5) ("gopherReadReply: FD %d read len=%d\n", fd, len);
+    debugs(10, 5, "gopherReadReply: FD %d read len=%d", fd, len);
     if (len > 0) {
 	commSetTimeout(fd, Config.Timeout.read, NULL, NULL);
 	IOStats.Gopher.reads++;
@@ -651,7 +651,7 @@ gopherReadReply(int fd, void *data)
 	IOStats.Gopher.read_hist[bin]++;
     }
     if (len < 0) {
-	debug(50, 1) ("gopherReadReply: error reading: %s\n", xstrerror());
+	debugs(50, 1, "gopherReadReply: error reading: %s", xstrerror());
 	if (ignoreErrno(errno)) {
 	    commSetSelect(fd, COMM_SELECT_READ, gopherReadReply, data, 0);
 	} else {
@@ -695,7 +695,7 @@ gopherSendComplete(int fd, char *buf, size_t size, int errflag, void *data)
 {
     GopherStateData *gopherState = (GopherStateData *) data;
     StoreEntry *entry = gopherState->entry;
-    debug(10, 5) ("gopherSendComplete: FD %d size: %d errflag: %d\n",
+    debugs(10, 5, "gopherSendComplete: FD %d size: %d errflag: %d",
 	fd, (int) size, errflag);
     if (size > 0) {
 	fd_bytes(fd, size, FD_WRITE);
@@ -768,7 +768,7 @@ gopherSendRequest(int fd, void *data)
     } else {
 	snprintf(buf, 4096, "%s\r\n", gopherState->request);
     }
-    debug(10, 5) ("gopherSendRequest: FD %d\n", fd);
+    debugs(10, 5, "gopherSendRequest: FD %d", fd);
     comm_write(fd,
 	buf,
 	strlen(buf),
@@ -793,7 +793,7 @@ gopherStart(FwdState * fwdState)
     storeLockObject(entry);
     gopherState->entry = entry;
     gopherState->fwdState = fwdState;
-    debug(10, 3) ("gopherStart: %s\n", storeUrl(entry));
+    debugs(10, 3, "gopherStart: %s", storeUrl(entry));
     statCounter.server.all.requests++;
     statCounter.server.other.requests++;
     /* Parse url. */

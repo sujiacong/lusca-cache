@@ -59,22 +59,42 @@ static void startOneSwapDirCreation(SwapDir *);
  */
 STDIRSELECT *storeDirSelectSwapDir = storeDirSelectSwapDirLeastLoad;
 
+static int smpAware()
+{
+	//TODO
+    //return memStore || (swapDir.getRaw() && swapDir->smpAware());
+    return 0;
+}
+
 void
 storeDirInit(void)
 {
     int i;
     SwapDir *sd;
+
+	if (Config.memShared && IamWorkerProcess()) {
+		//TODO
+        //memStore = new MemStore;
+        //memStore->init();
+    }
+	
     for (i = 0; i < Config.cacheSwap.n_configured; i++) {
 	sd = &Config.cacheSwap.swapDirs[i];
 	sd->init(sd);
     }
     if (0 == strcasecmp(Config.store_dir_select_algorithm, "round-robin")) {
 	storeDirSelectSwapDir = storeDirSelectSwapDirRoundRobin;
-	debug(47, 1) ("Using Round Robin store dir selection\n");
+	debugs(47, 1, "Using Round Robin store dir selection");
     } else {
 	storeDirSelectSwapDir = storeDirSelectSwapDirLeastLoad;
-	debug(47, 1) ("Using Least Load store dir selection\n");
+	debugs(47, 1, "Using Least Load store dir selection");
     }
+
+    if (UsingSmp() && IamWorkerProcess() && Config.onoff.collapsed_forwarding && smpAware()) {
+		//TODO
+        //transients = new Transients;
+        //transients->init();
+    }	
 }
 
 void
@@ -286,7 +306,7 @@ storeDirSwapLog(const StoreEntry * e, int op)
     if (sd->log.write == NULL)
 	return;
     assert(op > SWAP_LOG_NOP && op < SWAP_LOG_MAX);
-    debug(20, 3) ("storeDirSwapLog: %s %s %d %08X\n",
+    debugs(20, 3, "storeDirSwapLog: %s %s %d %08X",
 	swap_log_op_str[op],
 	storeKeyText(e->hash.key),
 	e->swap_dirn,
@@ -308,7 +328,7 @@ storeDirUpdateSwapSize(SwapDir * SD, squid_off_t size, int sign)
 }
 
 void
-storeDirStats(StoreEntry * sentry)
+storeDirStats(StoreEntry * sentry, void* data)
 {
     int i;
     SwapDir *SD;
@@ -371,7 +391,7 @@ storeDirDiskFull(sdirno dirn)
     if (SD->cur_size >= SD->max_size)
 	return;
     SD->max_size = SD->cur_size;
-    debug(20, 1) ("WARNING: Shrinking cache_dir #%d to %d KB\n",
+    debugs(20, 1, "WARNING: Shrinking cache_dir #%d to %d KB",
 	dirn, SD->cur_size);
 }
 
@@ -419,11 +439,11 @@ storeDirWriteCleanLogs(int reopen)
     int dirn;
     int notdone = 1;
     if (store_dirs_rebuilding) {
-	debug(20, 1) ("Not currently OK to rewrite swap log.\n");
-	debug(20, 1) ("storeDirWriteCleanLogs: Operation aborted.\n");
+	debugs(20, 1, "Not currently OK to rewrite swap log.");
+	debugs(20, 1, "storeDirWriteCleanLogs: Operation aborted.");
 	return 0;
     }
-    debug(20, 1) ("storeDirWriteCleanLogs: Starting...\n");
+    debugs(20, 1, "storeDirWriteCleanLogs: Starting...");
     getCurrentTime();
     start = current_time;
     for (dirn = 0; dirn < Config.cacheSwap.n_configured; dirn++) {
@@ -431,7 +451,7 @@ storeDirWriteCleanLogs(int reopen)
 	if (sd->log.clean.start == NULL)
 		continue;
 	if (sd->log.clean.start(sd) < 0) {
-	    debug(20, 1) ("log.clean.start() failed for dir #%d\n", sd->index);
+	    debugs(20, 1, "log.clean.start() failed for dir #%d", sd->index);
 	    continue;
 	}
     }
@@ -460,7 +480,7 @@ storeDirWriteCleanLogs(int reopen)
 	    (sd->log.clean.write) (sd, e);
 	    if ((++n & 0xFFFF) == 0) {
 		getCurrentTime();
-		debug(20, 1) ("  %7d entries written so far.\n", n);
+		debugs(20, 1, "  %7d entries written so far.", n);
 	    }
 	}
     }
@@ -474,8 +494,8 @@ storeDirWriteCleanLogs(int reopen)
 	storeDirOpenSwapLogs();
     getCurrentTime();
     dt = tvSubDsec(start, current_time);
-    debug(20, 1) ("  Finished.  Wrote %d entries.\n", n);
-    debug(20, 1) ("  Took %3.1f seconds (%6.1f entries/sec).\n",
+    debugs(20, 1, "  Finished.  Wrote %d entries.", n);
+    debugs(20, 1, "  Took %3.1f seconds (%6.1f entries/sec).",
 	dt, (double) n / (dt > 0.0 ? dt : 1.0));
     return n;
 }
@@ -525,7 +545,7 @@ storeDirGetBlkSize(const char *path, int *blksize)
 #if HAVE_STATVFS
     struct statvfs sfs;
     if (statvfs(path, &sfs)) {
-	debug(50, 1) ("%s: %s\n", path, xstrerror());
+	debugs(50, 1, "%s: %s", path, xstrerror());
 	*blksize = 2048;
 	return 1;
     }
@@ -533,7 +553,7 @@ storeDirGetBlkSize(const char *path, int *blksize)
 #else
     struct statfs sfs;
     if (statfs(path, &sfs)) {
-	debug(50, 1) ("%s: %s\n", path, xstrerror());
+	debugs(50, 1, "%s: %s", path, xstrerror());
 	*blksize = 2048;
 	return 1;
     }
@@ -562,7 +582,7 @@ storeDirGetUFSStats(const char *path, int *totl_kb, int *free_kb, int *totl_in, 
 #if HAVE_STATVFS
     struct statvfs sfs;
     if (statvfs(path, &sfs)) {
-	debug(50, 1) ("%s: %s\n", path, xstrerror());
+	debugs(50, 1, "%s: %s", path, xstrerror());
 	return 1;
     }
     *totl_kb = fsbtoblk(sfs.f_blocks, sfs.f_frsize, 1024);
@@ -572,7 +592,7 @@ storeDirGetUFSStats(const char *path, int *totl_kb, int *free_kb, int *totl_in, 
 #else
     struct statfs sfs;
     if (statfs(path, &sfs)) {
-	debug(50, 1) ("%s: %s\n", path, xstrerror());
+	debugs(50, 1, "%s: %s", path, xstrerror());
 	return 1;
     }
     *totl_kb = (int) fsbtoblk(sfs.f_blocks, sfs.f_bsize, 1024);

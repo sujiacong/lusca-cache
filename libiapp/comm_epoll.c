@@ -118,7 +118,7 @@ do_select_init()
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using epoll for the IO loop\n");
+    debugs(5, 1, "Using epoll for the IO loop");
 }
 
 static void
@@ -154,7 +154,7 @@ commSetEvents(int fd, int need_read, int need_write)
     struct epoll_event ev;
 
     assert(fd >= 0);
-    debug(5, 8) ("commSetEvents(fd=%d)\n", fd);
+    debugs(5, 8, "commSetEvents(fd=%d)", fd);
 
     if (RUNNING_ON_VALGRIND) {
 	/* Keep valgrind happy.. complains about uninitialized bytes otherwise */
@@ -186,7 +186,7 @@ commSetEvents(int fd, int need_read, int need_write)
 	epoll_state[fd] = ev.events;
 
 	if (epoll_ctl(kdpfd, epoll_ctl_type, fd, &ev) < 0) {
-	    debug(5, 1) ("commSetEvents: epoll_ctl(%s): failed on fd=%d: %s\n",
+	    debugs(5, 1, "commSetEvents: epoll_ctl(%s): failed on fd=%d: %s",
 		epolltype_atoi(epoll_ctl_type), fd, xstrerror());
 	}
 	switch (epoll_ctl_type) {
@@ -216,12 +216,12 @@ do_comm_select(int msec)
     num = epoll_wait(kdpfd, events, MAX_EVENTS, msec);
     saved_errno = errno;
     getCurrentTime();
-    debug(5, 5) ("do_comm_select: %d fds ready\n", num);
+    debugs(5, 5, "do_comm_select: %d fds ready", num);
     if (num < 0) {
 	if (ignoreErrno(saved_errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: epoll failure: %s\n", xstrerror());
+	debugs(5, 1, "comm_select: epoll failure: %s", xstrerror());
 	return COMM_ERROR;
     }
     statHistCount(&select_fds_hist, num);

@@ -72,7 +72,7 @@ void
 commConnectStart(int fd, const char *host, u_short port, CNCB * callback, void *data, struct in_addr *addr)
 {
     ConnectStateData *cs;
-    debug(5, 3) ("commConnectStart: FD %d, %s:%d\n", fd, host, (int) port);
+    debugs(5, 3, "commConnectStart: FD %d, %s:%d", fd, host, (int) port);
     /*
      * XXX this wasn't ever here (it was in comm_init()) so its possible this may slow things
      * XXX down a little; eventually this should migrate to a squid-specific comm_init()
@@ -108,10 +108,10 @@ commConnectDnsHandle(const ipcache_addrs * ia, void *data)
 	    cs->connstart = squid_curtime;
 	    commConnectHandle(cs->fd, cs);
 	} else {
-	    debug(5, 3) ("commConnectDnsHandle: Unknown host: %s\n", cs->host);
+	    debugs(5, 3, "commConnectDnsHandle: Unknown host: %s", cs->host);
 	    if (!dns_error_message) {
 		dns_error_message = "Unknown DNS error";
-		debug(5, 1) ("commConnectDnsHandle: Bad dns_error_message\n");
+		debugs(5, 1, "commConnectDnsHandle: Bad dns_error_message");
 	    }
 	    assert(dns_error_message != NULL);
 	    commConnectCallback(cs, COMM_ERR_DNS);
@@ -147,7 +147,7 @@ static void
 commConnectFree(int fd, void *data)
 {
     ConnectStateData *cs = data;
-    debug(5, 3) ("commConnectFree: FD %d\n", fd);
+    debugs(5, 3, "commConnectFree: FD %d", fd);
     if (cs->data)
 	cbdataUnlock(cs->data);
     safe_free(cs->host);
@@ -165,7 +165,7 @@ commResetFD(ConnectStateData * cs)
     fd2 = socket(AF_INET, SOCK_STREAM, 0);
     CommStats.syscalls.sock.sockets++;
     if (fd2 < 0) {
-	debug(5, 0) ("commResetFD: socket: %s\n", xstrerror());
+	debugs(5, 0, "commResetFD: socket: %s", xstrerror());
 	if (ENFILE == errno || EMFILE == errno)
 	    fdAdjustReserved();
 	return 0;
@@ -178,7 +178,7 @@ commResetFD(ConnectStateData * cs)
     close(cs->fd);
 #endif
     if (dup2(fd2, cs->fd) < 0) {
-	debug(5, 0) ("commResetFD: dup2: %s\n", xstrerror());
+	debugs(5, 0, "commResetFD: dup2: %s", xstrerror());
 	if (ENFILE == errno || EMFILE == errno)
 	    fdAdjustReserved();
 	close(fd2);
@@ -204,20 +204,20 @@ commResetFD(ConnectStateData * cs)
      */
     assert(F->local_port == sqinet_get_port(&F->local_address));
     if (F->flags.tproxy_rem) {
-        debug(5, 3) ("commResetFD: FD %d: re-starting a tproxy'ed upstream connection\n", cs->fd);
+        debugs(5, 3, "commResetFD: FD %d: re-starting a tproxy'ed upstream connection", cs->fd);
         if (comm_ips_bind_rem(cs->fd, &F->local_address) != COMM_OK) {
-            debug(5, 1) ("commResetFD: FD %d: TPROXY comm_ips_bind_rem() failed? Why?\n", cs->fd);
+            debugs(5, 1, "commResetFD: FD %d: TPROXY comm_ips_bind_rem() failed? Why?", cs->fd);
             return 0;
         }
     } else if (commBind(cs->fd, &F->local_address) != COMM_OK) {
-	debug(5, 0) ("commResetFD: bind: %s\n", xstrerror());
+	debugs(5, 0, "commResetFD: bind: %s", xstrerror());
 	return 0;
     }
 #ifdef IP_TOS
     if (F->tos) {
 	int tos = F->tos;
 	if (setsockopt(cs->fd, IPPROTO_IP, IP_TOS, (char *) &tos, sizeof(int)) < 0)
-	        debug(5, 1) ("commResetFD: setsockopt(IP_TOS) on FD %d: %s\n", cs->fd, xstrerror());
+	        debugs(5, 1, "commResetFD: setsockopt(IP_TOS) on FD %d: %s", cs->fd, xstrerror());
     }
 #endif
     if (F->flags.close_on_exec)
@@ -282,7 +282,7 @@ commConnectHandle(int fd, void *data)
     sqinet_done(&a);
     switch(r) {
     case COMM_INPROGRESS:
-	debug(5, 5) ("commConnectHandle: FD %d: COMM_INPROGRESS\n", fd);
+	debugs(5, 5, "commConnectHandle: FD %d: COMM_INPROGRESS", fd);
 	commSetSelect(fd, COMM_SELECT_WRITE, commConnectHandle, cs, 0);
 	break;
     case COMM_OK:
@@ -301,5 +301,78 @@ commConnectHandle(int fd, void *data)
 	}
 	break;
     }
+}
+
+/// Create a unix-domain socket (UDS) that only supports FD_MSGHDR I/O.
+int
+comm_open_uds(int sock_type,int proto,struct sockaddr_un* addr,int flags)
+{
+#ifndef SUN_LEN
+# define SUN_LEN(ptr) ((size_t) (((struct sockaddr_un *) 0)->sun_path) + strlen ((ptr)->sun_path))
+#endif
+
+    int new_socket;
+	sqaddr_t a;
+
+	sqinet_init(&a);
+	
+	sqinet_set_unix_addr(&a, addr);
+
+    debugs(50, 3, "Attempt open socket for: %s", addr->sun_path);
+
+    if ((new_socket = socket(sqinet_get_family(&a), sock_type, proto)) < 0) {
+        /* Increase the number of reserved fd's if calls to socket()
+         * are failing because the open file table is full.  This
+         * limits the number of simultaneous clients */
+
+        if (errno == ENFILE || errno == EMFILE) {
+            debugs(50, 1, "socket failure: %s", xstrerror());
+            fdAdjustReserved();
+        } else {
+            debugs(50, 0, "socket failure: %s", xstrerror());
+        }
+
+        return -1;
+    }
+
+    debugs(50, 3, "Opened UDS FD %d:family=%d, type=%d, protocol=%d",new_socket,sqinet_get_family(&a),sock_type,proto);
+
+    debugs(50, 5, "FD %d is a new socket", new_socket);
+
+    fd_open(new_socket, FD_MSGHDR, addr->sun_path);
+
+    //fd_table[new_socket].sock_family = sqinet_get_family(&a);
+
+    if (!(flags & COMM_NOCLOEXEC))
+        commSetCloseOnExec(new_socket);
+
+    if (flags & COMM_REUSEADDR)
+        commSetReuseAddr(new_socket);
+
+    if (flags & COMM_NONBLOCKING) {
+        if (commSetNonBlocking(new_socket) != 0) {
+            comm_close(new_socket);
+            return -1;
+        }
+    }
+
+    if (flags & COMM_DOBIND) {
+		unlink(addr->sun_path);
+        if (commBind(new_socket, &a) != 0) {
+            comm_close(new_socket);
+            return -1;
+        }
+    }
+
+#ifdef TCP_NODELAY
+    if (sock_type == SOCK_STREAM)
+        commSetTcpNoDelay(new_socket);
+
+#endif
+
+    if (Config.tcpRcvBufsz > 0 && sock_type == SOCK_STREAM)
+        commSetTcpRcvbuf(new_socket, Config.tcpRcvBufsz);
+
+    return new_socket;
 }
 

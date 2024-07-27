@@ -103,7 +103,7 @@ static void wccpAssignBuckets(void);
 void
 wccpInit(void)
 {
-    debug(80, 5) ("wccpInit: Called\n");
+    debugs(80, 5, "wccpInit: Called");
     memset(&wccp_here_i_am, '\0', sizeof(wccp_here_i_am));
     wccp_here_i_am.type = htonl(WCCP_HERE_I_AM);
     wccp_here_i_am.version = htonl(Config.Wccp.version);
@@ -123,9 +123,9 @@ wccpConnectionOpen(void)
     u_short port = WCCP_PORT;
     struct sockaddr_in router, local;
     socklen_t local_len, router_len;
-    debug(80, 5) ("wccpConnectionOpen: Called\n");
+    debugs(80, 5, "wccpConnectionOpen: Called");
     if (IsAnyAddr(&Config.Wccp.router)) {
-	debug(1, 1) ("WCCP Disabled.\n");
+	debugs(1, 1, "WCCP Disabled.");
 	return;
     }
     theWccpConnection = comm_open(SOCK_DGRAM,
@@ -142,7 +142,7 @@ wccpConnectionOpen(void)
 	wccpHandleUdp,
 	NULL,
 	0);
-    debug(1, 1) ("Accepting WCCP messages on port %d, FD %d.\n",
+    debugs(1, 1, "Accepting WCCP messages on port %d, FD %d.",
 	(int) port, theWccpConnection);
     router_len = sizeof(router);
     memset(&router, '\0', router_len);
@@ -162,7 +162,7 @@ void
 wccpConnectionClose(void)
 {
     if (theWccpConnection > -1) {
-	debug(80, 1) ("FD %d Closing WCCP socket\n", theWccpConnection);
+	debugs(80, 1, "FD %d Closing WCCP socket", theWccpConnection);
 	comm_close(theWccpConnection);
 	theWccpConnection = -1;
     }
@@ -182,7 +182,7 @@ wccpHandleUdp(int sock, void *not_used)
     socklen_t from_len;
     int len;
 
-    debug(80, 6) ("wccpHandleUdp: Called.\n");
+    debugs(80, 6, "wccpHandleUdp: Called.");
 
     commSetSelect(sock, COMM_SELECT_READ, wccpHandleUdp, NULL, 0);
     from_len = sizeof(struct sockaddr_in);
@@ -197,7 +197,7 @@ wccpHandleUdp(int sock, void *not_used)
 	0,
 	(struct sockaddr *) &from,
 	&from_len);
-    debug(80, 3) ("wccpHandleUdp: %d bytes WCCP pkt from %s: type=%u, version=%u, change=%u, id=%u, number=%u\n",
+    debugs(80, 3, "wccpHandleUdp: %d bytes WCCP pkt from %s: type=%u, version=%u, change=%u, id=%u, number=%u",
 	len,
 	inet_ntoa(from.sin_addr),
 	(unsigned) ntohl(wccp_i_see_you.type),
@@ -214,7 +214,7 @@ wccpHandleUdp(int sock, void *not_used)
     if (ntohl(wccp_i_see_you.type) != WCCP_I_SEE_YOU)
 	return;
     if (ntohl(wccp_i_see_you.number) > WCCP_ACTIVE_CACHES) {
-	debug(80, 1) ("Ignoring WCCP_I_SEE_YOU from %s with number of caches set to %d\n",
+	debugs(80, 1, "Ignoring WCCP_I_SEE_YOU from %s with number of caches set to %d",
 	    inet_ntoa(from.sin_addr), (int) ntohl(wccp_i_see_you.number));
 	return;
     }
@@ -265,7 +265,7 @@ wccpLowestIP(void)
 static void
 wccpHereIam(void *voidnotused)
 {
-    debug(80, 6) ("wccpHereIam: Called\n");
+    debugs(80, 6, "wccpHereIam: Called");
 
     wccp_here_i_am.id = last_id;
     send(theWccpConnection,
@@ -290,7 +290,7 @@ wccpAssignBuckets(void)
     int cache_len;
     char *buf;
 
-    debug(80, 6) ("wccpAssignBuckets: Called\n");
+    debugs(80, 6, "wccpAssignBuckets: Called");
     number_caches = ntohl(wccp_i_see_you.number);
     assert(number_caches > 0);
     assert(number_caches <= WCCP_ACTIVE_CACHES);

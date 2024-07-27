@@ -91,7 +91,7 @@ commResumeFD(int fd)
     assert(fd >= 0);
 
     if (!F->flags.open) {
-	debug(5, 1) ("commResumeFD: fd %d is closed. Ignoring\n", fd);
+	debugs(5, 1, "commResumeFD: fd %d is closed. Ignoring", fd);
 	F->flags.backoff = 0;
 	return;
     }
@@ -189,7 +189,7 @@ comm_call_slowfds(void)
 	if (F->read_handler) {
 	    PF *hdl = F->read_handler;
 	    void *hdl_data = F->read_data;
-	    debug(5, 8) ("comm_call_handlers(): Calling read handler on fd=%d\n", fd);
+	    debugs(5, 8, "comm_call_handlers(): Calling read handler on fd=%d", fd);
 #if SIMPLE_COMM_HANDLER
 	    commUpdateReadHandler(fd, NULL, NULL);
 	    commResumeFD(fd);
@@ -219,7 +219,7 @@ comm_call_handlers(int fd, int read_event, int write_event)
 {
     fde *F = &fd_table[fd];
     const int do_incoming = read_event == 1 || write_event == 1;
-    debug(5, 8) ("comm_call_handlers(): got fd=%d read_event=%x write_event=%x F->read_handler=%p F->write_handler=%p\n"
+    debugs(5, 8, "comm_call_handlers(): got fd=%d read_event=%x write_event=%x F->read_handler=%p F->write_handler=%p"
 	,fd, read_event, write_event, F->read_handler, F->write_handler);
     if (F->read_handler) {
 	int do_read = 0;
@@ -247,12 +247,12 @@ comm_call_handlers(int fd, int read_event, int write_event)
 #endif
 	    default:
 		if (!(F->flags.backoff)) {
-		    debug(5, 1) ("comm_call_handlers(): WARNING defer handler for fd=%d (desc=%s) does not call commDeferFD() - backing off manually\n", fd, F->desc);
+		    debugs(5, 1, "comm_call_handlers(): WARNING defer handler for fd=%d (desc=%s) does not call commDeferFD() - backing off manually", fd, F->desc);
 		    commDeferFD(fd);
 		}
 		break;
 	    case 0:
-		debug(5, 8) ("comm_call_handlers(): Calling read handler on fd=%d\n", fd);
+		debugs(5, 8, "comm_call_handlers(): Calling read handler on fd=%d", fd);
 #if SIMPLE_COMM_HANDLER
 		commUpdateReadHandler(fd, NULL, NULL);
 		hdl(fd, hdl_data);
@@ -334,16 +334,16 @@ checkTimeouts(void)
 	    continue;
 	if (F->timeout > squid_curtime)
 	    continue;
-	debug(5, 5) ("checkTimeouts: FD %d Expired\n", fd);
+	debugs(5, 5, "checkTimeouts: FD %d Expired", fd);
 	if (F->flags.backoff)
 	    commResumeFD(fd);
 	if (F->timeout_handler) {
-	    debug(5, 5) ("checkTimeouts: FD %d: Call timeout handler\n", fd);
+	    debugs(5, 5, "checkTimeouts: FD %d: Call timeout handler", fd);
 	    callback = F->timeout_handler;
 	    F->timeout_handler = NULL;
 	    callback(fd, F->timeout_data);
 	} else {
-	    debug(5, 5) ("checkTimeouts: FD %d: Forcing comm_close()\n", fd);
+	    debugs(5, 5, "checkTimeouts: FD %d: Forcing comm_close()", fd);
 	    comm_close(fd);
 	}
     }
@@ -360,7 +360,7 @@ comm_select(int msec)
     if (msec > MAX_POLL_TIME)
 	msec = MAX_POLL_TIME;
 
-    debug(5, 3) ("comm_select: timeout %d, max %d\n", msec, MAX_POLL_TIME);
+    debugs(5, 3, "comm_select: timeout %d, max %d", msec, MAX_POLL_TIME);
 
 #if DELAY_POOLS
     /* We have delayed fds in queue? */
@@ -390,7 +390,7 @@ comm_select(int msec)
     CommStats.select_time += (current_dtime - start);
 
     if (rc == COMM_TIMEOUT)
-	debug(5, 8) ("comm_select: time out\n");
+	debugs(5, 8, "comm_select: time out");
 
     return rc;
 }

@@ -54,7 +54,7 @@ clientStoreURLRewriteAccessCheckDone(int answer, void *data)
 void
 clientStoreURLRewriteStart(clientHttpRequest * http)
 {
-    debug(85, 5) ("clientStoreURLRewriteStart: '%s'\n", http->uri);
+    debugs(85, 5, "clientStoreURLRewriteStart: '%s'", http->uri);
     if (Config.Program.store_rewrite.command == NULL) {
 	clientStoreURLRewriteDone(http, NULL);
 	return;
@@ -72,7 +72,7 @@ clientStoreURLRewriteDone(void *data, char *result)
 {
     clientHttpRequest *http = data;
 
-    debug(85, 3) ("clientStoreURLRewriteDone: '%s' result=%s\n", http->uri,
+    debugs(85, 3, "clientStoreURLRewriteDone: '%s' result=%s", http->uri,
 	result ? result : "NULL");
 #if 0
     assert(http->redirect_state == REDIRECT_PENDING);
@@ -81,7 +81,7 @@ clientStoreURLRewriteDone(void *data, char *result)
 
     if (result) {
 	http->request->store_url = xstrdup(result);
-	debug(85, 3) ("Rewrote to %s\n", http->request->store_url);
+	debugs(85, 3, "Rewrote to %s", http->request->store_url);
 	/* XXX is this actually the right spot to do this? How about revalidation? */
 	//storeEntrySetStoreUrl(http->entry, result);
     }

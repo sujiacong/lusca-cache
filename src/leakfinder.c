@@ -61,11 +61,11 @@ static OBJH ptrDump;
 void
 leakInit(void)
 {
-    debug(45, 3) ("ptrInit\n");
+    debugs(45, 3, "ptrInit");
     htable = hash_create(ptr_cmp, 1 << 8, ptr_hash);
     cachemgrRegister("leaks",
-	"Memory Leak Tracking",
-	ptrDump, 0, 1);
+	"Memory Leak Tracking", 
+	ptrDump,  NULL, NULL, 0, 1, 0);
 }
 
 void *
@@ -126,7 +126,7 @@ ptr_hash(const void *p, unsigned int mod)
 
 
 static void
-ptrDump(StoreEntry * sentry)
+ptrDump(StoreEntry * sentry, void* data)
 {
     hash_link *hptr;
     ptr *c;

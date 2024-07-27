@@ -83,6 +83,8 @@ parse_stripe(int stripeid, char *buf, int len, int blocksize)
     }
 }
 
+int KidIdentifier = 0;
+
 int
 main(int argc, char *argv[])
 {

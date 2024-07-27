@@ -68,7 +68,7 @@ idnsParseNameservers(void)
 {
     wordlist *w;
     for (w = Config.dns_nameservers; w; w = w->next) {
-	debug(78, 1) ("Adding nameserver %s from squid.conf\n", w->key);
+	debugs(78, 1, "Adding nameserver %s from squid.conf", w->key);
 	idnsAddNameserver(w->key);
     }
 }
@@ -82,7 +82,7 @@ idnsParseResolvConf(void)
     const char *t;
     fp = fopen(_PATH_RESCONF, "r");
     if (fp == NULL) {
-	debug(78, 1) ("%s: %s\n", _PATH_RESCONF, xstrerror());
+	debugs(78, 1, "%s: %s", _PATH_RESCONF, xstrerror());
 	return;
     }
 #if defined(_SQUID_WIN32_)
@@ -96,14 +96,14 @@ idnsParseResolvConf(void)
 	    t = strtok(NULL, w_space);
 	    if (NULL == t)
 		continue;
-	    debug(78, 1) ("Adding nameserver %s from %s\n", t, _PATH_RESCONF);
+	    debugs(78, 1, "Adding nameserver %s from %s", t, _PATH_RESCONF);
 	    idnsAddNameserver(t);
 	} else if (strcasecmp(t, "domain") == 0) {
 	    idnsFreeSearchpath();
 	    t = strtok(NULL, w_space);
 	    if (NULL == t)
 		continue;
-	    debug(78, 1) ("Adding domain %s from %s\n", t, _PATH_RESCONF);
+	    debugs(78, 1, "Adding domain %s from %s", t, _PATH_RESCONF);
 	    idnsAddPathComponent(t);
 	} else if (strcasecmp(t, "search") == 0) {
 	    idnsFreeSearchpath();
@@ -111,7 +111,7 @@ idnsParseResolvConf(void)
 		t = strtok(NULL, w_space);
 		if (NULL == t)
 		    continue;
-		debug(78, 1) ("Adding domain %s from %s\n", t, _PATH_RESCONF);
+		debugs(78, 1, "Adding domain %s from %s", t, _PATH_RESCONF);
 		idnsAddPathComponent(t);
 	    }
 	} else if (strcasecmp(t, "options") == 0) {
@@ -125,7 +125,7 @@ idnsParseResolvConf(void)
 			DnsConfig.ndots = 1;
 		    if (DnsConfig.ndots > RES_MAXNDOTS)
 			DnsConfig.ndots = RES_MAXNDOTS;
-		    debug(78, 1) ("Adding ndots %d from %s\n", DnsConfig.ndots, _PATH_RESCONF);
+		    debugs(78, 1, "Adding ndots %d from %s", DnsConfig.ndots, _PATH_RESCONF);
 		}
 	    }
 	}
@@ -164,7 +164,7 @@ idnsParseWIN32SearchList(const char *Separator)
 	    t = (char *) xmalloc(Size);
 	    RegQueryValueEx(hndKey, "Domain", NULL, &Type, (LPBYTE) t,
 		&Size);
-	    debug(78, 1) ("Adding domain %s from Registry\n", t);
+	    debugs(78, 1, "Adding domain %s from Registry", t);
 	    idnsAddPathComponent(t);
 	    xfree(t);
 	}
@@ -181,7 +181,7 @@ idnsParseWIN32SearchList(const char *Separator)
 
 	    while (token) {
 		idnsAddPathComponent(token);
-		debug(78, 1) ("Adding domain %s from Registry\n", token);
+		debugs(78, 1, "Adding domain %s from Registry", token);
 		token = strtok(NULL, Separator);
 	    }
 	    xfree(t);
@@ -221,7 +221,7 @@ idnsParseWIN32Registry(void)
 		token = strtok(t, ", ");
 		while (token) {
 		    idnsAddNameserver(token);
-		    debug(78, 1) ("Adding DHCP nameserver %s from Registry\n",
+		    debugs(78, 1, "Adding DHCP nameserver %s from Registry",
 			token);
 		    token = strtok(NULL, ", ");
 		}
@@ -234,7 +234,7 @@ idnsParseWIN32Registry(void)
 		RegQueryValueEx(hndKey, "NameServer", NULL, &Type, t, &Size);
 		token = strtok(t, ", ");
 		while (token) {
-		    debug(78, 1) ("Adding nameserver %s from Registry\n",
+		    debugs(78, 1, "Adding nameserver %s from Registry",
 			token);
 		    idnsAddNameserver(token);
 		    token = strtok(NULL, ", ");
@@ -296,7 +296,7 @@ idnsParseWIN32Registry(void)
 				t, &Size);
 			    token = strtok(t, ", ");
 			    while (token) {
-				debug(78, 1) ("Adding nameserver %s from Registry\n",
+				debugs(78, 1, "Adding nameserver %s from Registry",
 				    token);
 				idnsAddNameserver(token);
 				token = strtok(NULL, ", ");
@@ -328,7 +328,7 @@ idnsParseWIN32Registry(void)
 		RegQueryValueEx(hndKey, "NameServer", NULL, &Type, t, &Size);
 		token = strtok(t, ", ");
 		while (token) {
-		    debug(78, 1) ("Adding nameserver %s from Registry\n",
+		    debugs(78, 1, "Adding nameserver %s from Registry",
 			token);
 		    idnsAddNameserver(token);
 		    token = strtok(NULL, ", ");
@@ -347,7 +347,7 @@ idnsParseWIN32Registry(void)
 #endif
 
 static void
-idnsStats(StoreEntry * sentry)
+idnsStats(StoreEntry * sentry, void* data)
 {
     dlink_node *n;
     idns_query *q;
@@ -415,19 +415,19 @@ idnsInternalInit(void)
 	idnsParseWIN32Registry();
 #endif
     if (0 == nns) {
-	debug(78, 1) ("Warning: Could not find any nameservers. Trying to use localhost\n");
+	debugs(78, 1, "Warning: Could not find any nameservers. Trying to use localhost");
 #ifdef _SQUID_WIN32_
-	debug(78, 1) ("Please check your TCP-IP settings or /etc/resolv.conf file\n");
+	debugs(78, 1, "Please check your TCP-IP settings or /etc/resolv.conf file");
 #else
-	debug(78, 1) ("Please check your /etc/resolv.conf file\n");
+	debugs(78, 1, "Please check your /etc/resolv.conf file");
 #endif
-	debug(78, 1) ("or use the 'dns_nameservers' option in squid.conf.\n");
+	debugs(78, 1, "or use the 'dns_nameservers' option in squid.conf.");
 	idnsAddNameserver("127.0.0.1");
     }
     if (!init) {
 	cachemgrRegister("idns",
 	    "Internal DNS Statistics",
-	    idnsStats, 0, 1);
+	    idnsStats, NULL, NULL, 0, 1, 0);
 	init++;
     }
 }
@@ -441,7 +441,7 @@ snmp_netIdnsFn(variable_list * Var, snint * ErrP)
 {
     int i, n = 0;
     variable_list *Answer = NULL;
-    debug(49, 5) ("snmp_netIdnsFn: Processing request: \n");
+    debugs(49, 5, "snmp_netIdnsFn: Processing request: ");
     snmpDebugOid(5, Var->name, Var->name_length);
     *ErrP = SNMP_ERR_NOERROR;
     switch (Var->name[LEN_SQ_NET + 1]) {

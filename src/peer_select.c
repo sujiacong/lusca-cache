@@ -97,7 +97,7 @@ static void
 peerSelectStateFree(ps_state * psstate)
 {
     if (psstate->acl_checklist) {
-	debug(44, 1) ("calling aclChecklistFree() from peerSelectStateFree\n");
+	debugs(44, 1, "calling aclChecklistFree() from peerSelectStateFree");
 	aclChecklistFree(psstate->acl_checklist);
     }
     requestUnlink(psstate->request);
@@ -117,14 +117,14 @@ peerSelectIcpPing(request_t * request, int direct, StoreEntry * entry)
     assert(entry);
     assert(entry->ping_status == PING_NONE);
     assert(direct != DIRECT_YES);
-    debug(44, 3) ("peerSelectIcpPing: %s\n", storeUrl(entry));
+    debugs(44, 3, "peerSelectIcpPing: %s", storeUrl(entry));
     if (!request->flags.hierarchical && direct != DIRECT_NO)
 	return 0;
     if (EBIT_TEST(entry->flags, KEY_PRIVATE) && !neighbors_do_private_keys)
 	if (direct != DIRECT_NO)
 	    return 0;
     n = neighborsCount(request);
-    debug(44, 3) ("peerSelectIcpPing: counted %d neighbors\n", n);
+    debugs(44, 3, "peerSelectIcpPing: counted %d neighbors", n);
     return n;
 }
 
@@ -137,9 +137,9 @@ peerSelect(request_t * request,
 {
     ps_state *psstate;
     if (entry)
-	debug(44, 3) ("peerSelect: %s\n", storeUrl(entry));
+	debugs(44, 3, "peerSelect: %s", storeUrl(entry));
     else
-	debug(44, 3) ("peerSelect: %s\n", urlMethodGetConstStr(request->method));
+	debugs(44, 3, "peerSelect: %s", urlMethodGetConstStr(request->method));
     CBDATA_INIT_TYPE(ps_state);
     psstate = cbdataAlloc(ps_state);
     psstate->request = requestLink(request);
@@ -161,7 +161,7 @@ peerCheckNeverDirectDone(int answer, void *data)
 {
     ps_state *psstate = data;
     psstate->acl_checklist = NULL;
-    debug(44, 3) ("peerCheckNeverDirectDone: %d\n", answer);
+    debugs(44, 3, "peerCheckNeverDirectDone: %d", answer);
     psstate->never_direct = answer ? 1 : -1;
     peerSelectFoo(psstate);
 }
@@ -171,7 +171,7 @@ peerCheckAlwaysDirectDone(int answer, void *data)
 {
     ps_state *psstate = data;
     psstate->acl_checklist = NULL;
-    debug(44, 3) ("peerCheckAlwaysDirectDone: %d\n", answer);
+    debugs(44, 3, "peerCheckAlwaysDirectDone: %d", answer);
     psstate->always_direct = answer ? 1 : -1;
     peerSelectFoo(psstate);
 }
@@ -183,16 +183,16 @@ peerSelectCallback(ps_state * psstate)
     FwdServer *fs = psstate->servers;
     void *data = psstate->callback_data;
     if (entry) {
-	debug(44, 3) ("peerSelectCallback: %s\n", storeUrl(entry));
+	debugs(44, 3, "peerSelectCallback: %s", storeUrl(entry));
 	if (entry->ping_status == PING_WAITING)
 	    eventDelete(peerPingTimeout, psstate);
 	entry->ping_status = PING_DONE;
     }
     if (fs == NULL) {
-	debug(44, 1) ("Failed to select source for '%s'\n", storeUrl(entry));
-	debug(44, 1) ("  always_direct = %d\n", psstate->always_direct);
-	debug(44, 1) ("   never_direct = %d\n", psstate->never_direct);
-	debug(44, 1) ("       timedout = %d\n", psstate->ping.timedout);
+	debugs(44, 1, "Failed to select source for '%s'", storeUrl(entry));
+	debugs(44, 1, "  always_direct = %d", psstate->always_direct);
+	debugs(44, 1, "   never_direct = %d", psstate->never_direct);
+	debugs(44, 1, "       timedout = %d", psstate->ping.timedout);
     }
     psstate->ping.stop = current_time;
     psstate->request->hier.ping = psstate->ping;
@@ -213,21 +213,21 @@ peerCheckNetdbDirect(ps_state * psstate)
     if (psstate->direct == DIRECT_NO)
 	return 0;
     myrtt = netdbHostRtt(psstate->request->host);
-    debug(44, 3) ("peerCheckNetdbDirect: MY RTT = %d msec\n", myrtt);
-    debug(44, 3) ("peerCheckNetdbDirect: minimum_direct_rtt = %d msec\n",
+    debugs(44, 3, "peerCheckNetdbDirect: MY RTT = %d msec", myrtt);
+    debugs(44, 3, "peerCheckNetdbDirect: minimum_direct_rtt = %d msec",
 	Config.minDirectRtt);
     if (myrtt && myrtt <= Config.minDirectRtt)
 	return 1;
     myhops = netdbHostHops(psstate->request->host);
-    debug(44, 3) ("peerCheckNetdbDirect: MY hops = %d\n", myhops);
-    debug(44, 3) ("peerCheckNetdbDirect: minimum_direct_hops = %d\n",
+    debugs(44, 3, "peerCheckNetdbDirect: MY hops = %d", myhops);
+    debugs(44, 3, "peerCheckNetdbDirect: minimum_direct_hops = %d",
 	Config.minDirectHops);
     if (myhops && myhops <= Config.minDirectHops)
 	return 1;
     p = whichPeer(&psstate->closest_parent_miss);
     if (p == NULL)
 	return 0;
-    debug(44, 3) ("peerCheckNetdbDirect: closest_parent_miss RTT = %d msec\n",
+    debugs(44, 3, "peerCheckNetdbDirect: closest_parent_miss RTT = %d msec",
 	psstate->ping.p_rtt);
     if (myrtt && myrtt <= psstate->ping.p_rtt)
 	return 1;
@@ -239,7 +239,7 @@ peerSelectFoo(ps_state * ps)
 {
     StoreEntry *entry = ps->entry;
     request_t *request = ps->request;
-    debug(44, 3) ("peerSelectFoo: '%s %s'\n", urlMethodGetConstStr(request->method),
+    debugs(44, 3, "peerSelectFoo: '%s %s'", urlMethodGetConstStr(request->method),
 	request->host);
     if (ps->direct == DIRECT_UNKNOWN) {
 	if (ps->always_direct == 0 && Config.accessList.AlwaysDirect) {
@@ -273,7 +273,7 @@ peerSelectFoo(ps_state * ps)
 	} else {
 	    ps->direct = DIRECT_MAYBE;
 	}
-	debug(44, 3) ("peerSelectFoo: direct = %s\n",
+	debugs(44, 3, "peerSelectFoo: direct = %s",
 	    DirectStr[ps->direct]);
     }
     if (!entry || entry->ping_status == PING_NONE)
@@ -366,7 +366,7 @@ peerGetSomeNeighbor(ps_state * ps)
     if ((p = netdbClosestParent(request))) {
 	code = CLOSEST_PARENT;
     } else if (peerSelectIcpPing(request, ps->direct, entry)) {
-	debug(44, 3) ("peerGetSomeNeighbor: Doing ICP pings\n");
+	debugs(44, 3, "peerGetSomeNeighbor: Doing ICP pings");
 	ps->ping.start = current_time;
 	ps->ping.n_sent = neighborsUdpPing(request,
 	    entry,
@@ -375,8 +375,8 @@ peerGetSomeNeighbor(ps_state * ps)
 	    &ps->ping.n_replies_expected,
 	    &ps->ping.timeout);
 	if (ps->ping.n_sent == 0)
-	    debug(44, 0) ("WARNING: neighborsUdpPing returned 0\n");
-	debug(44, 3) ("peerGetSomeNeighbor: %d ICP replies expected, RTT %d msec\n",
+	    debugs(44, 0, "WARNING: neighborsUdpPing returned 0");
+	debugs(44, 3, "peerGetSomeNeighbor: %d ICP replies expected, RTT %d msec",
 	    ps->ping.n_replies_expected, ps->ping.timeout);
 	if (ps->ping.n_replies_expected > 0) {
 	    entry->ping_status = PING_WAITING;
@@ -390,7 +390,7 @@ peerGetSomeNeighbor(ps_state * ps)
     }
     if (code != HIER_NONE) {
 	assert(p);
-	debug(44, 3) ("peerGetSomeNeighbor: %s/%s\n", hier_strings[code], p->name);
+	debugs(44, 3, "peerGetSomeNeighbor: %s/%s", hier_strings[code], p->name);
 	peerAddFwdServer(&ps->servers, p, code);
     }
     entry->ping_status = PING_DONE;
@@ -411,7 +411,7 @@ peerGetSomeNeighborReplies(ps_state * ps)
     assert(ps->direct != DIRECT_YES);
     if (peerCheckNetdbDirect(ps)) {
 	code = CLOSEST_DIRECT;
-	debug(44, 3) ("peerGetSomeNeighborReplies: %s/%s\n", hier_strings[code], request->host);
+	debugs(44, 3, "peerGetSomeNeighborReplies: %s/%s", hier_strings[code], request->host);
 	peerAddFwdServer(&ps->servers, NULL, code);
 	return;
     }
@@ -431,7 +431,7 @@ peerGetSomeNeighborReplies(ps_state * ps)
 	code = FIRST_PARENT_MISS;
     }
     if (p && code != HIER_NONE) {
-	debug(44, 3) ("peerGetSomeNeighborReplies: %s/%s\n", hier_strings[code], p->name);
+	debugs(44, 3, "peerGetSomeNeighborReplies: %s/%s", hier_strings[code], p->name);
 	peerAddFwdServer(&ps->servers, p, code);
     }
 }
@@ -459,7 +459,7 @@ peerGetSomeParent(ps_state * ps)
     peer *p;
     request_t *request = ps->request;
     hier_code code = HIER_NONE;
-    debug(44, 3) ("peerGetSomeParent: %s %s\n", urlMethodGetConstStr(request->method),
+    debugs(44, 3, "peerGetSomeParent: %s %s", urlMethodGetConstStr(request->method),
 	request->host);
     if (ps->direct == DIRECT_YES)
 	return;
@@ -479,7 +479,7 @@ peerGetSomeParent(ps_state * ps)
 	code = ANY_OLD_PARENT;
     }
     if (code != HIER_NONE) {
-	debug(44, 3) ("peerGetSomeParent: %s/%s\n", hier_strings[code], p->name);
+	debugs(44, 3, "peerGetSomeParent: %s/%s", hier_strings[code], p->name);
 	peerAddFwdServer(&ps->servers, p, code);
     }
 }
@@ -500,7 +500,7 @@ peerGetAllParents(ps_state * ps)
 	    continue;
 	if (!peerHTTPOkay(p, request))
 	    continue;
-	debug(15, 3) ("peerGetAllParents: adding alive parent %s\n", p->name);
+	debugs(15, 3, "peerGetAllParents: adding alive parent %s", p->name);
 	peerAddFwdServer(&ps->servers, p, ANY_OLD_PARENT);
     }
     /* XXX: should add dead parents here, but it is currently
@@ -519,7 +519,7 @@ peerPingTimeout(void *data)
     ps_state *psstate = data;
     StoreEntry *entry = psstate->entry;
     if (entry)
-	debug(44, 3) ("peerPingTimeout: '%s'\n", storeUrl(entry));
+	debugs(44, 3, "peerPingTimeout: '%s'", storeUrl(entry));
     if (!cbdataValid(psstate->callback_data)) {
 	/* request aborted */
 	entry->ping_status = PING_DONE;
@@ -575,7 +575,7 @@ peerHandleIcpReply(peer * p, peer_t type, icp_common_t * header, void *data)
 {
     ps_state *psstate = data;
     icp_opcode op = header->opcode;
-    debug(44, 3) ("peerHandleIcpReply: %s %s\n",
+    debugs(44, 3, "peerHandleIcpReply: %s %s",
 	icp_opcode_str[op],
 	storeUrl(psstate->entry));
 #if USE_CACHE_DIGESTS && 0
@@ -611,7 +611,7 @@ static void
 peerHandleHtcpReply(peer * p, peer_t type, htcpReplyData * htcp, void *data)
 {
     ps_state *psstate = data;
-    debug(44, 3) ("peerHandleHtcpReply: %s %s\n",
+    debugs(44, 3, "peerHandleHtcpReply: %s %s",
 	htcp->hit ? "HIT" : "MISS",
 	storeUrl(psstate->entry));
     psstate->ping.n_recv++;
@@ -669,19 +669,19 @@ peerHandlePingReply(peer * p, peer_t type, protocol_t proto, void *pingdata, voi
 	peerHandleHtcpReply(p, type, pingdata, data);
 #endif
     else
-	debug(44, 1) ("peerHandlePingReply: unknown protocol_t %d\n", (int) proto);
+	debugs(44, 1, "peerHandlePingReply: unknown protocol_t %d", (int) proto);
 }
 
 void
 peerAddFwdServer(FwdServer ** FS, peer * p, hier_code code)
 {
     FwdServer *fs;
-    debug(44, 5) ("peerAddFwdServer: adding %s %s\n",
+    debugs(44, 5, "peerAddFwdServer: adding %s %s",
 	p ? p->name : "DIRECT",
 	hier_strings[code]);
     while (*FS) {
 	if ((*FS)->peer == p && (*FS)->code != PINNED) {
-	    debug(44, 5) ("peerAddFwdServer: Skipping duplicate registration of %s\n", p ? p->name : "DIRECT");
+	    debugs(44, 5, "peerAddFwdServer: Skipping duplicate registration of %s", p ? p->name : "DIRECT");
 	    return;
 	}
 	FS = &(*FS)->next;

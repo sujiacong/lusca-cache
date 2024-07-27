@@ -101,7 +101,7 @@ storeKeyPrivate(const char *url, method_t * method, int id)
     int zero = 0;
     SQUID_MD5_CTX M;
     assert(id > 0);
-    debug(20, 3) ("storeKeyPrivate: %s %s\n", urlMethodGetConstStr(method), url);
+    debugs(20, 3, "storeKeyPrivate: %s %s", urlMethodGetConstStr(method), url);
     SQUID_MD5Init(&M);
     SQUID_MD5Update(&M, (unsigned char *) &id, sizeof(id));
     if (method == NULL) {

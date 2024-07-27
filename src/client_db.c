@@ -111,7 +111,7 @@ clientdbInit(void)
     if (client_v4_tree)
         return;
     client_v4_tree = New_Radix();
-    cachemgrRegister("client_list", "Cache Client List", clientdbDump, 0, 1);
+    cachemgrRegister("client_list", "Cache Client List", clientdbDump, NULL, NULL, 0, 1, 0);
 }
 
 void
@@ -214,9 +214,9 @@ clientdbCutoffDenied(struct in_addr addr)
     p = 100.0 * ND / NR;
     if (p < 95.0)
 	return 0;
-    debug(1, 0) ("WARNING: Probable misconfigured neighbor at %s\n", inet_ntoa(addr));
-    debug(1, 0) ("WARNING: %d of the last %d ICP replies are DENIED\n", ND, NR);
-    debug(1, 0) ("WARNING: No replies will be sent for the next %d seconds\n",
+    debugs(1, 0, "WARNING: Probable misconfigured neighbor at %s", inet_ntoa(addr));
+    debugs(1, 0, "WARNING: %d of the last %d ICP replies are DENIED", ND, NR);
+    debugs(1, 0, "WARNING: No replies will be sent for the next %d seconds",
 	CUTOFF_SECONDS);
     c->cutoff.time = squid_curtime;
     c->cutoff.n_req = c->Icp.n_requests;
@@ -273,7 +273,7 @@ clientdbDumpEntry(StoreEntry *sentry, ClientInfo *c, struct clientdb_iterate_sta
 }
 
 void
-clientdbDump(StoreEntry * sentry)
+clientdbDump(StoreEntry * sentry, void* data)
 {
     ClientInfo *c;
     radix_node_t *rn;
@@ -361,7 +361,7 @@ clientdbGC(void *unused)
         eventAdd("client_db garbage collector", clientdbScheduledGC, NULL, CLIENT_DB_SCHEDULE_IMMEDIATE_TIME, 0);
     }
 
-    debug(49, 2) ("clientdbGC: Removed %d entries\n", cleanup_removed);
+    debugs(49, 2, "clientdbGC: Removed %d entries", cleanup_removed);
 }
 
 static void
@@ -381,10 +381,11 @@ clientdbStartGC(void)
  * XXX in whatever way Squid-3's client database is.
  */
 #if SQUID_SNMP
+
+#if 0
 struct in_addr *
 client_entry(struct in_addr *current)
 {
-#if 0
     ClientInfo *c = NULL;
     const char *key;
     if (current) {
@@ -403,31 +404,71 @@ client_entry(struct in_addr *current)
     if (c)
 	return (&c->addr);
     else
-#endif
 	return (NULL);
 
+}
+#endif
+
+struct in_addr *
+client_entry(struct in_addr *current)
+{
+    ClientInfo *c = NULL;
+	if(current)
+	{
+		radix_node_t *rn;
+		prefix_t pr;
+		Init_Prefix(&pr, AF_INET, current, 32);
+		rn = radix_search_exact(client_v4_tree, &pr);
+		if (rn) 
+		{
+			c = rn->data;
+			return (&c->addr);
+		}
+		return (NULL);
+	}
+	else
+	{
+		return (NULL);
+	}
 }
 
 variable_list *
 snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 {
     variable_list *Answer = NULL;
-#if 0
+	radix_node_t *rn;
+	prefix_t pr;
+	struct in_addr* keyIp;
+
     static char key[16];
     ClientInfo *c = NULL;
     int aggr = 0;
     log_type l;
-#endif
+
     *ErrP = SNMP_ERR_NOERROR;
-#if 0
-    debug(49, 6) ("snmp_meshCtblFn: Current : \n");
+
+    debugs(49, 6, "snmp_meshCtblFn: Current : ");
     snmpDebugOid(6, Var->name, Var->name_length);
+
+    if (Var->name_length == 16) {
+        keyIp = oid2addr(&(Var->name[12]));
+    } else {
+        *ErrP = SNMP_ERR_NOSUCHNAME;
+        return NULL;
+    }
+	
+	Init_Prefix(&pr, AF_INET, keyIp, 32);
+    rn = radix_search_exact(client_v4_tree, &pr);
+    if (rn)
+        c = rn->data;	
+	
     snprintf(key, sizeof(key), "%d.%d.%d.%d", Var->name[LEN_SQ_NET + 3], Var->name[LEN_SQ_NET + 4],
 	Var->name[LEN_SQ_NET + 5], Var->name[LEN_SQ_NET + 6]);
-    debug(49, 5) ("snmp_meshCtblFn: [%s] requested!\n", key);
-    c = (ClientInfo *) hash_lookup(client_table, key);
+	
+    debugs(49, 5, "snmp_meshCtblFn: [%s] requested!", key);
+	
     if (c == NULL) {
-	debug(49, 5) ("snmp_meshCtblFn: not found.\n");
+	debugs(49, 5, "snmp_meshCtblFn: not found.");
 	*ErrP = SNMP_ERR_NOSUCHNAME;
 	return NULL;
     }
@@ -485,10 +526,10 @@ snmp_meshCtblFn(variable_list * Var, snint * ErrP)
 	break;
     default:
 	*ErrP = SNMP_ERR_NOSUCHNAME;
-	debug(49, 5) ("snmp_meshCtblFn: illegal column.\n");
+	debugs(49, 5, "snmp_meshCtblFn: illegal column.");
 	break;
     }
-#endif
+
     return Answer;
 }
 

@@ -94,7 +94,7 @@ fwdStateFree(FwdState * fwdState)
     StoreEntry *e = fwdState->entry;
     int sfd;
     peer *p;
-    debug(17, 3) ("fwdStateFree: %p\n", fwdState);
+    debugs(17, 3, "fwdStateFree: %p", fwdState);
     assert(e->mem_obj);
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
@@ -123,7 +123,7 @@ fwdStateFree(FwdState * fwdState)
     if (sfd > -1) {
 	comm_remove_close_handler(sfd, fwdServerClosed, fwdState);
 	fwdState->server_fd = -1;
-	debug(17, 3) ("fwdStateFree: closing FD %d\n", sfd);
+	debugs(17, 3, "fwdStateFree: closing FD %d", sfd);
 	comm_close(sfd);
     }
     cbdataFree(fwdState);
@@ -182,14 +182,14 @@ static void
 fwdServerClosed(int fd, void *data)
 {
     FwdState *fwdState = data;
-    debug(17, 2) ("fwdServerClosed: FD %d %s\n", fd, storeUrl(fwdState->entry));
+    debugs(17, 2, "fwdServerClosed: FD %d %s", fd, storeUrl(fwdState->entry));
     assert(fwdState->server_fd == fd);
     fwdState->server_fd = -1;
     if (EBIT_TEST(fwdState->entry->flags, ENTRY_DEFER_READ))
 	storeResetDefer(fwdState->entry);
     if (fwdCheckRetry(fwdState)) {
 	int originserver = (fwdState->servers->peer == NULL);
-	debug(17, 3) ("fwdServerClosed: re-forwarding (%d tries, %d secs)\n",
+	debugs(17, 3, "fwdServerClosed: re-forwarding (%d tries, %d secs)",
 	    fwdState->n_tries,
 	    (int) (squid_curtime - fwdState->start));
 	if (fwdState->servers->next) {
@@ -241,7 +241,7 @@ fwdNegotiateSSL(int fd, void *data)
 	    commSetSelect(fd, COMM_SELECT_WRITE, fwdNegotiateSSL, fwdState, 0);
 	    return;
 	default:
-	    debug(81, 1) ("fwdNegotiateSSL: Error negotiating SSL connection on FD %d: %s (%d/%d/%d)\n", fd, ERR_error_string(ERR_get_error(), NULL), ssl_error, ret, errno);
+	    debugs(81, 1, "fwdNegotiateSSL: Error negotiating SSL connection on FD %d: %s (%d/%d/%d)", fd, ERR_error_string(ERR_get_error(), NULL), ssl_error, ret, errno);
 	    err = errorCon(ERR_CONNECT_FAIL, HTTP_BAD_GATEWAY, request);
 #ifdef EPROTO
 	    err->xerrno = EPROTO;
@@ -275,7 +275,7 @@ fwdNegotiateSSL(int fd, void *data)
 	    host = fs->request->host;
 	}
 	if (!ssl_verify_domain(host, ssl)) {
-	    debug(17, 1) ("Warning: SSL certificate does not match host name '%s'\n", host);
+	    debugs(17, 1, "Warning: SSL certificate does not match host name '%s'", host);
 	}
     }
 #endif
@@ -299,7 +299,7 @@ fwdInitiateSSL(FwdState * fwdState)
     assert(sslContext);
     if ((ssl = SSL_new(sslContext)) == NULL) {
 	ErrorState *err;
-	debug(83, 1) ("fwdInitiateSSL: Error allocating handle: %s\n",
+	debugs(83, 1, "fwdInitiateSSL: Error allocating handle: %s",
 	    ERR_error_string(ERR_get_error(), NULL));
 	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR, fwdState->request);
 	err->xerrno = errno;
@@ -341,7 +341,7 @@ fwdConnectDone(int server_fd, int status, void *data)
 	 */
 	if ((NULL == fs->peer) && !fwdState->request->flags.transparent)
 	    fwdState->flags.dont_retry = 1;
-	debug(17, 4) ("fwdConnectDone: Unknown host: %s\n",
+	debugs(17, 4, "fwdConnectDone: Unknown host: %s",
 	    request->host);
 	err = errorCon(ERR_DNS_FAIL, HTTP_GATEWAY_TIMEOUT, fwdState->request);
 	err->dnsserver_msg = xstrdup(dns_error_message);
@@ -356,7 +356,7 @@ fwdConnectDone(int server_fd, int status, void *data)
 	    peerConnectFailed(fs->peer);
 	comm_close(server_fd);
     } else {
-	debug(17, 3) ("fwdConnectDone: FD %d: '%s'\n", server_fd, storeUrl(fwdState->entry));
+	debugs(17, 3, "fwdConnectDone: FD %d: '%s'", server_fd, storeUrl(fwdState->entry));
 #if USE_SSL
 	if ((fs->peer && fs->peer->use_ssl) ||
 	    (!fs->peer && request->protocol == PROTO_HTTPS)) {
@@ -375,7 +375,7 @@ fwdConnectTimeout(int fd, void *data)
     StoreEntry *entry = fwdState->entry;
     FwdServer *fs = fwdState->servers;
     ErrorState *err;
-    debug(17, 2) ("fwdConnectTimeout: FD %d: '%s'\n", fd, storeUrl(entry));
+    debugs(17, 2, "fwdConnectTimeout: FD %d: '%s'", fd, storeUrl(entry));
     assert(fd == fwdState->server_fd);
     if (Config.onoff.log_ip_on_direct && fs->code == HIER_DIRECT && fd_table[fd].ipaddrstr[0])
 	hierarchyNote(&fwdState->request->hier, fs->code, fd_table[fd].ipaddrstr);
@@ -421,7 +421,7 @@ static void
 fwdConnectIdleTimeout(int fd, void *data)
 {
     idleconn *idle = data;
-    debug(17, 2) ("fwdConnectIdleTimeout: FD %d: '%s'\n", fd, idle->peer->name);
+    debugs(17, 2, "fwdConnectIdleTimeout: FD %d: '%s'", fd, idle->peer->name);
     idle->peer->stats.idle_opening--;
     comm_close(fd);
     cbdataFree(idle);
@@ -439,7 +439,7 @@ openIdleConn(peer * peer, const char *domain, struct in_addr outgoing, unsigned 
 	peer->name);
     idleconn *idle;
     if (fd < 0) {
-	debug(50, 4) ("openIdleConn: %s\n", xstrerror());
+	debugs(50, 4, "openIdleConn: %s", xstrerror());
 	return;;
     }
     CBDATA_INIT_TYPE_FREECB(idleconn, free_idleconn);
@@ -535,7 +535,7 @@ fwdConnectCreateSocket(FwdState *fwdState, FwdServer *fs)
     if (fwdState->servers && fwdState->servers->peer && fwdState->servers->peer->options.no_tproxy)
         do_tproxy = 0;
 
-    debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n", inet_ntoa(outgoing), tos);
+    debugs(17, 3, "fwdConnectStart: got addr %s, tos %d", inet_ntoa(outgoing), tos);
 
     /* If tproxy then try with the tproxy details. If this fails then retry w/ non-tproxy */
     if (fwdState->request->flags.tproxy && do_tproxy) {
@@ -570,7 +570,7 @@ fwdConnectStart(void *data)
 
     assert(fs);
     assert(fwdState->server_fd == -1);
-    debug(17, 3) ("fwdConnectStart: %s\n", url);
+    debugs(17, 3, "fwdConnectStart: %s", url);
     if (fs->peer) {
 	host = fs->peer->host;
 	name = fs->peer->name;
@@ -634,7 +634,7 @@ fwdConnectStart(void *data)
 	if (fd_table[fd].flags.dnsfailed)
 	    storeRelease(fwdState->entry);
 	if (fwdCheckRetriable(fwdState)) {
-	    debug(17, 3) ("fwdConnectStart: reusing pconn FD %d\n", fd);
+	    debugs(17, 3, "fwdConnectStart: reusing pconn FD %d", fd);
 	    fwdState->server_fd = fd;
 	    fwdState->n_tries++;
 	    if (!fs->peer)
@@ -647,11 +647,11 @@ fwdConnectStart(void *data)
 	    else
 		hierarchyNote(&fwdState->request->hier, fs->code, name);
 	    if (fs->peer && idle >= 0 && idle < fs->peer->idle) {
-		debug(17, 3) ("fwdConnectStart: Opening idle connetions for '%s'\n",
+		debugs(17, 3, "fwdConnectStart: Opening idle connetions for '%s'",
 		    fs->peer->name);
 		outgoing = getOutgoingAddr(fwdState->request);
 		tos = getOutgoingTOS(fwdState->request);
-		debug(17, 3) ("fwdConnectStart: got addr %s, tos %d\n",
+		debugs(17, 3, "fwdConnectStart: got addr %s, tos %d",
 		    inet_ntoa(outgoing), tos);
 		idle += fs->peer->stats.idle_opening;
 		while (idle < fs->peer->idle) {
@@ -677,7 +677,7 @@ fwdConnectStart(void *data)
 
     fd = fwdConnectCreateSocket(fwdState, fs);
     if (fd < 0) {
-	debug(50, 4) ("fwdConnectStart: %s\n", xstrerror());
+	debugs(50, 4, "fwdConnectStart: %s", xstrerror());
 	err = errorCon(ERR_SOCKET_FAILURE, HTTP_INTERNAL_SERVER_ERROR, fwdState->request);
 	err->xerrno = errno;
 	fwdFail(fwdState, err);
@@ -736,7 +736,7 @@ static void
 fwdStartComplete(FwdServer * servers, void *data)
 {
     FwdState *fwdState = data;
-    debug(17, 3) ("fwdStartComplete: %s\n", storeUrl(fwdState->entry));
+    debugs(17, 3, "fwdStartComplete: %s", storeUrl(fwdState->entry));
     if (servers != NULL) {
 	fwdState->servers = servers;
 	fwdConnectStart(fwdState);
@@ -749,7 +749,7 @@ static void
 fwdStartFail(FwdState * fwdState)
 {
     ErrorState *err;
-    debug(17, 3) ("fwdStartFail: %s\n", storeUrl(fwdState->entry));
+    debugs(17, 3, "fwdStartFail: %s", storeUrl(fwdState->entry));
     err = errorCon(ERR_CANNOT_FORWARD, HTTP_GATEWAY_TIMEOUT, fwdState->request);
     err->xerrno = errno;
     fwdFail(fwdState, err);
@@ -765,7 +765,7 @@ fwdDispatch(FwdState * fwdState)
     ErrorState *err;
     int server_fd = fwdState->server_fd;
     FwdServer *fs = fwdState->servers;
-    debug(17, 3) ("fwdDispatch: FD %d: Fetching '%s %s'\n",
+    debugs(17, 3, "fwdDispatch: FD %d: Fetching '%s %s'",
 	fwdState->client_fd, urlMethodGetConstStr(request->method), storeUrl(entry));
     /*
      * Assert that server_fd is set.  This is to guarantee that fwdState
@@ -817,7 +817,7 @@ fwdDispatch(FwdState * fwdState)
 	    break;
 	case PROTO_WAIS:	/* not implemented */
 	default:
-	    debug(17, 1) ("fwdDispatch: Cannot retrieve '%s'\n",
+	    debugs(17, 1, "fwdDispatch: Cannot retrieve '%s'",
 		storeUrl(entry));
 	    err = errorCon(ERR_UNSUP_REQ, HTTP_BAD_REQUEST, fwdState->request);
 	    fwdFail(fwdState, err);
@@ -849,13 +849,13 @@ fwdReforward(FwdState * fwdState)
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
 #endif
-    debug(17, 3) ("fwdReforward: %s?\n", storeUrl(e));
+    debugs(17, 3, "fwdReforward: %s?", storeUrl(e));
     if (!EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)) {
-	debug(17, 3) ("fwdReforward: No, ENTRY_FWD_HDR_WAIT isn't set\n");
+	debugs(17, 3, "fwdReforward: No, ENTRY_FWD_HDR_WAIT isn't set");
 	return 0;
     }
     if (fwdState->request->flags.pinned) {
-	debug(17, 3) ("fwdReforward: No, Connection oriented authentication is used\n");
+	debugs(17, 3, "fwdReforward: No, Connection oriented authentication is used");
 	return 0;
     }
     if (fwdState->n_tries > 9)
@@ -868,11 +868,11 @@ fwdReforward(FwdState * fwdState)
     fwdState->servers = fs->next;
     fwdServerFree(fs);
     if (fwdState->servers == NULL) {
-	debug(17, 3) ("fwdReforward: No forward-servers left\n");
+	debugs(17, 3, "fwdReforward: No forward-servers left");
 	return 0;
     }
     s = e->mem_obj->reply->sline.status;
-    debug(17, 3) ("fwdReforward: status %d\n", (int) s);
+    debugs(17, 3, "fwdReforward: status %d", (int) s);
     return fwdReforwardableStatus(s);
 }
 
@@ -894,7 +894,7 @@ fwdStartPeer(peer * p, StoreEntry * e, request_t * r)
 {
     FwdState *fwdState;
     FwdServer *peer = NULL;
-    debug(17, 3) ("fwdStartPeer: '%s'\n", storeUrl(e));
+    debugs(17, 3, "fwdStartPeer: '%s'", storeUrl(e));
     e->mem_obj->request = requestLink(r);
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
@@ -941,7 +941,7 @@ fwdStart(int fd, StoreEntry * e, request_t * r)
 	    return;
 	}
     }
-    debug(17, 3) ("fwdStart: '%s'\n", storeUrl(e));
+    debugs(17, 3, "fwdStart: '%s'", storeUrl(e));
     if (!e->mem_obj->request)
 	e->mem_obj->request = requestLink(r);
 #if URL_CHECKSUM_DEBUG
@@ -1052,7 +1052,7 @@ fwdCheckDeferRead(int fd, void *data)
 void
 fwdFail(FwdState * fwdState, ErrorState * errorState)
 {
-    debug(17, 3) ("fwdFail: %s \"%s\"\n\t%s\n",
+    debugs(17, 3, "fwdFail: %s \"%s\"\n\t%s",
 	err_type_str[errorState->type],
 	httpStatusString(errorState->http_status),
 	storeUrl(fwdState->entry));
@@ -1070,7 +1070,7 @@ static void
 fwdAbort(void *data)
 {
     FwdState *fwdState = data;
-    debug(17, 2) ("fwdAbort: %s\n", storeUrl(fwdState->entry));
+    debugs(17, 2, "fwdAbort: %s", storeUrl(fwdState->entry));
     fwdStateFree(fwdState);
 }
 
@@ -1090,7 +1090,7 @@ fwdPeerClosed(int fd, void *data)
 void
 fwdUnregister(int fd, FwdState * fwdState)
 {
-    debug(17, 3) ("fwdUnregister: %s\n", storeUrl(fwdState->entry));
+    debugs(17, 3, "fwdUnregister: %s", storeUrl(fwdState->entry));
     assert(fd == fwdState->server_fd);
     assert(fd > -1);
     commSetDefer(fd, NULL, NULL);
@@ -1111,14 +1111,14 @@ fwdComplete(FwdState * fwdState)
 {
     StoreEntry *e = fwdState->entry;
     assert(e->store_status == STORE_PENDING);
-    debug(17, 3) ("fwdComplete: %s\n\tstatus %d\n", storeUrl(e),
+    debugs(17, 3, "fwdComplete: %s\n\tstatus %d", storeUrl(e),
 	e->mem_obj->reply->sline.status);
 #if URL_CHECKSUM_DEBUG
     assert(e->mem_obj->chksum == url_checksum(e->mem_obj->url));
 #endif
     fwdLogReplyStatus(fwdState->n_tries, e->mem_obj->reply->sline.status);
     if (fwdReforward(fwdState)) {
-	debug(17, 3) ("fwdComplete: re-forwarding %d %s\n",
+	debugs(17, 3, "fwdComplete: re-forwarding %d %s",
 	    e->mem_obj->reply->sline.status,
 	    storeUrl(e));
 	if (fwdState->server_fd > -1)
@@ -1144,7 +1144,7 @@ fwdComplete(FwdState * fwdState)
 	    EBIT_SET(e->flags, ENTRY_CACHABLE);
 	fwdStartComplete(fwdState->servers, fwdState);
     } else {
-	debug(17, 3) ("fwdComplete: not re-forwarding status %d\n",
+	debugs(17, 3, "fwdComplete: not re-forwarding status %d",
 	    e->mem_obj->reply->sline.status);
 	EBIT_CLR(e->flags, ENTRY_FWD_HDR_WAIT);
 	storeComplete(e);
@@ -1172,7 +1172,7 @@ fwdInit(void)
 {
     cachemgrRegister("forward",
 	"Request Forwarding Statistics",
-	fwdStats, 0, 1);
+	fwdStats,  NULL, NULL, 0, 1, 0);
 #if WIP_FWD_LOG
     if (logfile)
 	(void) 0;
@@ -1196,7 +1196,7 @@ fwdLogReplyStatus(int tries, http_status status)
 }
 
 static void
-fwdStats(StoreEntry * s)
+fwdStats(StoreEntry * s, void* data)
 {
     int i;
     int j;

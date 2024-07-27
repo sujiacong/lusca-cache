@@ -35,6 +35,10 @@
 
 #include "squid.h"
 
+#include "../libmutiprocess/ipcsupport.h"
+
+extern void StartMgrForwarder(int fd, ActionParams *params, StoreEntry* entry);
+
 #define MGR_PASSWD_SZ 128
 
 typedef struct {
@@ -44,19 +48,8 @@ typedef struct {
     char *passwd;
 } cachemgrStateData;
 
-typedef struct _action_table {
-    char *action;
-    char *desc;
-    OBJH *handler;
-    struct {
-	unsigned int pw_req:1;
-	unsigned int atomic:1;
-    } flags;
-    struct _action_table *next;
-} action_table;
-
 static action_table *cachemgrFindAction(const char *action);
-static cachemgrStateData *cachemgrParseUrl(const char *url);
+static cachemgrStateData *cachemgrParseUrl(const char *url, ActionParams* actionparams);
 static void cachemgrParseHeaders(cachemgrStateData * mgr, const request_t * request);
 static int cachemgrCheckPassword(cachemgrStateData *);
 static void cachemgrStateFree(cachemgrStateData * mgr);
@@ -70,23 +63,26 @@ static OBJH cachemgrOfflineToggle;
 action_table *ActionTable = NULL;
 
 void
-cachemgrRegister(const char *action, const char *desc, OBJH * handler, int pw_req_flag, int atomic)
+cachemgrRegister(const char *action, const char *desc, OBJH * handler, ADD* addfun, COL* collectfun, int pw_req_flag, int atomic, int aggregatable)
 {
     action_table *a;
     action_table **A;
     if (cachemgrFindAction(action) != NULL) {
-	debug(16, 3) ("cachemgrRegister: Duplicate '%s'\n", action);
+	debugs(16, 3, "cachemgrRegister: Duplicate '%s'", action);
 	return;
     }
     a = xcalloc(1, sizeof(action_table));
     a->action = xstrdup(action);
     a->desc = xstrdup(desc);
     a->handler = handler;
+	a->add = addfun;
+	a->collect = collectfun;
     a->flags.pw_req = pw_req_flag;
     a->flags.atomic = atomic;
+	a->flags.aggregatable = aggregatable;
     for (A = &ActionTable; *A; A = &(*A)->next);
     *A = a;
-    debug(16, 3) ("cachemgrRegister: registered %s\n", action);
+    debugs(16, 3, "cachemgrRegister: registered %s", action);
 }
 
 static action_table *
@@ -100,44 +96,275 @@ cachemgrFindAction(const char *action)
     return NULL;
 }
 
+static char* strdup_substr(const char* s, int start, int end)
+{
+	char *d;
+
+	int len = strlen(s);
+	
+	if (s == NULL || end < start || start >= len)
+		return NULL;
+
+	assert(end < len);
+	
+	d = xmalloc(end + 1 - start);
+	
+	memcpy(d, s + start, end - start + 1);
+	
+	d[end - start + 1] = '\0';
+	
+	return d;	
+}
+
+static QueryParam*
+cachemgrParseParam(const char* paramStr)
+{
+#define MAX_INT_PARAM_SIZE 20
+    regmatch_t pmatch[3];
+    regex_t intExpr;
+    regcomp(&intExpr, "^([a-z][a-z0-9_]*)=([0-9]+((,[0-9]+))*)$", REG_EXTENDED | REG_ICASE);
+    regex_t stringExpr;
+    regcomp(&stringExpr, "^([a-z][a-z0-9_]*)=([^&= ]+)$", REG_EXTENDED | REG_ICASE);
+    if (regexec(&intExpr, paramStr, 3, pmatch, 0) == 0) {
+
+		QueryParam* result = xcalloc(1, sizeof(QueryParam));
+
+		result->type = ptInt;
+
+		result->key = strdup_substr(paramStr, pmatch[1].rm_so, pmatch[1].rm_eo);
+		
+		char* pos = (char*)paramStr;
+		
+        result->value.intvalue = xcalloc(MAX_INT_PARAM_SIZE, sizeof(int));
+
+		result->size = MAX_INT_PARAM_SIZE;
+		
+        int n = pmatch[2].rm_so;
+		int j = 0;
+		int i;
+        for (i = n; i < pmatch[2].rm_eo; ++i) {
+            if (pos[i] == ',') {
+
+				char* intvalue = strdup_substr(paramStr,n,i);
+				
+                result->value.intvalue[j] = atoi(intvalue);
+
+				xfree(intvalue);
+				
+                n = i + 1;
+
+				++j;
+
+				if(j >= result->size)
+				{
+					result->value.intvalue = xrealloc(result->value.intvalue, result->size + MAX_INT_PARAM_SIZE);
+				}
+
+				result->len = j;
+            }
+        }
+		
+        if (n < pmatch[2].rm_eo)
+        {
+        	++j;
+		
+			char* intvalue = strdup_substr(paramStr,n,pmatch[2].rm_eo);
+
+			result->value.intvalue[j] = atoi(intvalue);
+
+			xfree(intvalue);
+
+			result->len = j;
+        }
+		
+    	regfree(&stringExpr);
+	
+    	regfree(&intExpr);
+			
+        return result;
+    } 
+	else if (regexec(&stringExpr, paramStr, 3, pmatch, 0) == 0) {
+    
+		QueryParam* result = xcalloc(1, sizeof(QueryParam));
+
+		result->type = ptString;    
+		
+        result->key = strdup_substr(paramStr, pmatch[1].rm_so, pmatch[1].rm_eo);
+
+		result->value.strvalue	= strdup_substr(paramStr, pmatch[2].rm_so, pmatch[2].rm_eo);
+
+		result->len = strlen(result->key);
+
+		result->size =  result->len + 1;
+		
+    	regfree(&stringExpr);
+	
+    	regfree(&intExpr);
+			
+        return result;
+    }
+	
+    regfree(&stringExpr);
+	
+    regfree(&intExpr);
+	
+    return NULL;
+}
+
+int
+cachemgrParseQueryParams(char* queryparams, QueryParams* presult)
+{	
+	 size_t len = strlen(queryparams);
+
+    if (len != 0) {
+
+		char* aParamsStr = queryparams;
+
+        QueryParam* param = NULL;
+
+		QueryParam** params = (QueryParam**) xcalloc(PARAMS_SIZE_MAX, sizeof(QueryParam*));
+		
+        size_t n = 0;
+
+		int maxsize = PARAMS_SIZE_MAX;
+		
+		int j = 0;
+		
+		size_t i;
+		
+        for (i = n; i < len; ++i) {
+			
+            if (aParamsStr[i] == '&') {
+	
+				char* paramstr = strdup_substr(aParamsStr, n, i);
+
+				param = cachemgrParseParam(paramstr);
+					
+                if (!param)
+                {
+                	xfree(paramstr);
+                    return 0;
+                }
+
+				xfree(paramstr);
+				
+                params[j] = param;
+				
+                n = i + 1;
+
+				++j;
+
+				if(j > PARAMS_SIZE_MAX)
+				{
+					params = xrealloc(params,maxsize + PARAMS_SIZE_MAX);
+
+					maxsize += PARAMS_SIZE_MAX;
+				}
+            }
+			
+        }
+		
+        if (n < len) {
+
+			char* paramstr = strdup_substr(aParamsStr, n, len);
+			
+			param = cachemgrParseParam(paramstr);
+			
+            if (!param)
+            {
+            	xfree(paramstr);
+                return 0;
+            }
+
+			xfree(paramstr);
+			
+			params[j] = param;
+
+			++j;
+        }
+
+		presult->paramsize = j;
+
+		presult->param = params;
+
+		presult->maxsize = maxsize;
+
+		return 1;
+    }
+	
+    return 0;
+}
+
 static cachemgrStateData *
-cachemgrParseUrl(const char *url)
+cachemgrParseUrl(const char *url, ActionParams* actionparams)
 {
     int t;
     LOCAL_ARRAY(char, host, MAX_URL);
     LOCAL_ARRAY(char, request, MAX_URL);
     LOCAL_ARRAY(char, password, MAX_URL);
+	LOCAL_ARRAY(char, params, MAX_URL);
+    host[0] = 0;
+    request[0] = 0;
+    password[0] = 0;
+    params[0] = 0;	
     action_table *a;
     cachemgrStateData *mgr = NULL;
     const char *prot;
-    t = sscanf(url, "cache_object://%[^/]/%[^@]@%s", host, request, password);
+    int pos = -1;
+    int len = strlen(url);
+	
+    assert(len > 0);	
+	
+    t = sscanf(url, "cache_object://%[^/]/%[^@?]%n@%[^?]?%s", host, request, &pos, password, params);
+    if (t < 3) {
+        t = sscanf(url, "cache_object://%[^/]/%[^?]%n?%s", host, request, &pos, params);
+    }
+    if (t < 1) {
+        t = sscanf(url, "http://%[^/]/squid-internal-mgr/%[^?]%n?%s", host, request, &pos, params);
+    }
+    if (t < 1) {
+        t = sscanf(url, "https://%[^/]/squid-internal-mgr/%[^?]%n?%s", host, request, &pos, params);
+    }	
     if (t < 2) {
-	xstrncpy(request, "menu", MAX_URL);
+        if (strncmp("cache_object://",url,15)==0)
+            xstrncpy(request, "menu", MAX_URL);
+        else
+            xstrncpy(request, "index", MAX_URL);
 #ifdef _SQUID_OS2_
 	/*
 	 * emx's sscanf insists of returning 2 because it sets request
 	 * to null
 	 */
-    } else if (request[0] == '\0') {
-	xstrncpy(request, "menu", MAX_URL);
+    } else if (t == 2 && request[0] == '\0') {
+    
+        if (strncmp("cache_object://",url,15)==0)
+            xstrncpy(request, "menu", MAX_URL);
+        else
+            xstrncpy(request, "index", MAX_URL);	
 #endif
     }
     request[strcspn(request, "/")] = '\0';
     if ((a = cachemgrFindAction(request)) == NULL) {
-	debug(16, 1) ("cachemgrParseUrl: action '%s' not found\n", request);
+	debugs(16, 1, "cachemgrParseUrl: action '%s' not found", request);
 	return NULL;
     } else {
 	prot = cachemgrActionProtection(a);
 	if (!strcmp(prot, "disabled") || !strcmp(prot, "hidden")) {
-	    debug(16, 1) ("cachemgrParseUrl: action '%s' is %s\n", request, prot);
+	    debugs(16, 1, "cachemgrParseUrl: action '%s' is %s", request, prot);
 	    return NULL;
 	}
     }
     /* set absent entries to NULL so we can test if they are present later */
     mgr = xcalloc(1, sizeof(cachemgrStateData));
+	
+	cachemgrParseQueryParams(params, &actionparams->params);
+	
     mgr->user_name = NULL;
     mgr->passwd = t == 3 ? xstrdup(password) : NULL;
     mgr->action = xstrdup(request);
+	
+	actionparams->url = (char*)url;
+	
     return mgr;
 }
 
@@ -147,11 +374,12 @@ cachemgrParseHeaders(cachemgrStateData * mgr, const request_t * request)
     const char *basic_cookie;	/* base 64 _decoded_ user:passwd pair */
     const char *passwd_del;
     assert(mgr && request);
+	
     basic_cookie = httpHeaderGetAuth(&request->header, HDR_AUTHORIZATION, "Basic");
     if (!basic_cookie)
 	return;
     if (!(passwd_del = strchr(basic_cookie, ':'))) {
-	debug(16, 1) ("cachemgrParseHeaders: unknown basic_cookie format '%s'\n", basic_cookie);
+	debugs(16, 1, "cachemgrParseHeaders: unknown basic_cookie format '%s'", basic_cookie);
 	return;
     }
     /* found user:password pair, reset old values */
@@ -161,7 +389,7 @@ cachemgrParseHeaders(cachemgrStateData * mgr, const request_t * request)
     mgr->user_name[passwd_del - basic_cookie] = '\0';
     mgr->passwd = xstrdup(passwd_del + 1);
     /* warning: this prints decoded password which maybe not what you want to do @?@ @?@ */
-    debug(16, 9) ("cachemgrParseHeaders: got user: '%s' passwd: '%s'\n", mgr->user_name, mgr->passwd);
+    debugs(16, 9, "cachemgrParseHeaders: got user: '%s' passwd: '%s'", mgr->user_name, mgr->passwd);
 }
 
 /*
@@ -200,8 +428,12 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
     cachemgrStateData *mgr = NULL;
     ErrorState *err = NULL;
     action_table *a;
-    debug(16, 3) ("cachemgrStart: '%s'\n", storeUrl(entry));
-    if ((mgr = cachemgrParseUrl(storeUrl(entry))) == NULL) {
+	
+	ActionParams action_params;
+	memset(&action_params, 0, sizeof(ActionParams));
+	
+    debugs(16, 3, "cachemgrStart: '%s'", storeUrl(entry));
+    if ((mgr = cachemgrParseUrl(storeUrl(entry), &action_params)) == NULL) {
 	err = errorCon(ERR_INVALID_URL, HTTP_NOT_FOUND, request);
 	err->url = xstrdup(storeUrl(entry));
 	errorAppendEntry(entry, err);
@@ -211,7 +443,7 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
     mgr->entry = entry;
     storeLockObject(entry);
     entry->expires = squid_curtime;
-    debug(16, 5) ("CACHEMGR: %s requesting '%s'\n",
+    debugs(16, 5, "CACHEMGR: %s requesting '%s'",
 	fd_table[fd].ipaddrstr, mgr->action);
     /* get additional info from request headers */
     cachemgrParseHeaders(mgr, request);
@@ -223,11 +455,11 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
 	err = errorCon(ERR_CACHE_MGR_ACCESS_DENIED, HTTP_UNAUTHORIZED, request);
 	/* warn if user specified incorrect password */
 	if (mgr->passwd)
-	    debug(16, 1) ("CACHEMGR: %s@%s: incorrect password for '%s'\n",
+	    debugs(16, 1, "CACHEMGR: %s@%s: incorrect password for '%s'",
 		mgr->user_name ? mgr->user_name : "<unknown>",
 		fd_table[fd].ipaddrstr, mgr->action);
 	else
-	    debug(16, 1) ("CACHEMGR: %s@%s: password needed for '%s'\n",
+	    debugs(16, 1, "CACHEMGR: %s@%s: password needed for '%s'",
 		mgr->user_name ? mgr->user_name : "<unknown>",
 		fd_table[fd].ipaddrstr, mgr->action);
 	rep = errorBuildReply(err);
@@ -244,11 +476,32 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
 	cachemgrStateFree(mgr);
 	return;
     }
-    debug(16, 1) ("CACHEMGR: %s@%s requesting '%s'\n",
+
+	action_params.origin = (char*)httpHeaderGetStr(&request->header, HDR_ORIGIN);
+		
+    debugs(16, 1, "CACHEMGR: %s@%s requesting '%s'",
 	mgr->user_name ? mgr->user_name : "<unknown>",
 	fd_table[fd].ipaddrstr, mgr->action);
+
+    if (UsingSmp() && IamWorkerProcess()) {
+		
+        // is client the right connection to pass here?
+		action_params.action = mgr->action;	
+		action_params.passwd = mgr->passwd;	
+	    action_params.user_name = mgr->user_name;
+	 	action_params.method = request->method->code;
+		action_params.flags = request->flags;
+		
+        StartMgrForwarder(fd, &action_params, entry);
+		
+		cachemgrStateFree(mgr);
+		
+        return;
+    }
+	
     /* retrieve object requested */
     a = cachemgrFindAction(mgr->action);
+	
     assert(a != NULL);
     storeBuffer(entry);
     {
@@ -258,7 +511,7 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
 	httpReplySetHeaders(rep, HTTP_OK, NULL, "text/plain", -1, -1, squid_curtime);
 	httpReplySwapOut(rep, entry);
     }
-    a->handler(entry);
+    a->handler(entry,NULL);
     storeBufferFlush(entry);
     if (a->flags.atomic)
 	storeComplete(entry);
@@ -266,25 +519,25 @@ cachemgrStart(int fd, request_t * request, StoreEntry * entry)
 }
 
 static void
-cachemgrShutdown(StoreEntry * entryunused)
+cachemgrShutdown(StoreEntry * entryunused, void* data)
 {
-    debug(16, 0) ("Shutdown by command.\n");
+    debugs(16, 0, "Shutdown by command.");
     shut_down(0);
 }
 
 static void
-cachemgrReconfigure(StoreEntry * sentry)
+cachemgrReconfigure(StoreEntry * sentry, void* data)
 {
-    debug(16, 0) ("Reconfigure by command.\n");
+    debugs(16, 0, "Reconfigure by command.");
     storeAppendPrintf(sentry, "Reconfiguring Squid Process ....");
     reconfigure(SIGHUP);
 }
 
 static void
-cachemgrOfflineToggle(StoreEntry * sentry)
+cachemgrOfflineToggle(StoreEntry * sentry, void* data)
 {
     Config.onoff.offline = !Config.onoff.offline;
-    debug(16, 0) ("offline_mode now %s.\n",
+    debugs(16, 0, "offline_mode now %s.",
 	Config.onoff.offline ? "ON" : "OFF");
     storeAppendPrintf(sentry, "offline_mode is now %s\n",
 	Config.onoff.offline ? "ON" : "OFF");
@@ -306,7 +559,7 @@ cachemgrActionProtection(const action_table * at)
 }
 
 static void
-cachemgrMenu(StoreEntry * sentry)
+cachemgrMenu(StoreEntry * sentry, void* data)
 {
     action_table *a;
     for (a = ActionTable; a != NULL; a = a->next) {
@@ -331,21 +584,21 @@ cachemgrPasswdGet(cachemgr_passwd * a, const char *action)
     return NULL;
 }
 static void
-cachemgrFlushIpcache(StoreEntry * sentry)
+cachemgrFlushIpcache(StoreEntry * sentry, void* data)
 {
-    debug(16, 0) ("IP cache flushed by cachemgr...\n");
+    debugs(16, 0, "IP cache flushed by cachemgr...");
     int removed;
     removed = ipcacheFlushAll();
-    debug(16, 0) (" removed %d entries\n", removed);
+    debugs(16, 0, " removed %d entries", removed);
     storeAppendPrintf(sentry, "IP cache flushed ...\n removed %d entries\n", removed);
 }
 static void
-cachemgrFlushFqdn(StoreEntry * sentry)
+cachemgrFlushFqdn(StoreEntry * sentry, void* data)
 {
-    debug(16, 0) ("FQDN cache flushed by cachemgr...\n");
+    debugs(16, 0, "FQDN cache flushed by cachemgr...");
     int removed;
     removed = fqdncacheFlushAll();
-    debug(16, 0) (" removed %d entries\n", removed);
+    debugs(16, 0, " removed %d entries", removed);
     storeAppendPrintf(sentry, "FQDN cache flushed ...\n removed %d entries\n", removed);
 }
 
@@ -354,21 +607,21 @@ cachemgrInit(void)
 {
     cachemgrRegister("menu",
 	"This Cachemanager Menu",
-	cachemgrMenu, 0, 1);
+	cachemgrMenu, NULL, NULL, 0, 1, 0);
     cachemgrRegister("shutdown",
 	"Shut Down the Squid Process",
-	cachemgrShutdown, 1, 1);
+	cachemgrShutdown, NULL, NULL, 1, 1, 0);
     cachemgrRegister("reconfigure",
 	"Reconfigure the Squid Process",
-	cachemgrReconfigure, 1, 1);
+	cachemgrReconfigure, NULL, NULL,  1, 1, 0);
     cachemgrRegister("offline_toggle",
 	"Toggle offline_mode setting",
-	cachemgrOfflineToggle, 1, 1);
+	cachemgrOfflineToggle, NULL, NULL,  1, 1, 0);
     cachemgrRegister("flushdns",
         "Flush ALL DNS Cache Entries",
-        cachemgrFlushIpcache, 0, 1);
+        cachemgrFlushIpcache, NULL, NULL,  0, 1, 0);
     cachemgrRegister("flushfqdn",
         "Flush ALL FQDN Cache Entries",
-        cachemgrFlushFqdn, 0, 1);
+        cachemgrFlushFqdn, NULL, NULL, 0, 1, 0);
 
 }

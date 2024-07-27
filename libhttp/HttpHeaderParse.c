@@ -104,7 +104,7 @@ hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 	    HttpHeaderEntry *e2;
 
 	    if (!httpHeaderParseSize2(var, vlen, &l1)) {
-		debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", vlen, var);
+		debugs(55, 1, "WARNING: Unparseable content-length '%.*s'", vlen, var);
 		return PR_ERROR;
 	    }
 	    e2 = httpHeaderFindEntry(hdr, HDR_CONTENT_LENGTH);
@@ -116,7 +116,7 @@ hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 	    /* Do the contents match? */
 	    if ((vlen == strLen2(e2->value)) &&
 		(strNCmp(e2->value, var, vlen) == 0)) {
-		debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("NOTICE: found double content-length header\n");
+		debugs(55, httpConfig_relaxed_parser <= 0 ? 1 : 2, "NOTICE: found double content-length header");
 		if (httpConfig_relaxed_parser) {
 		    return PR_IGNORE;
 		} else {
@@ -125,7 +125,7 @@ hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
             }
 
             /* We have two conflicting Content-Length headers at this point */
-	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2) ("WARNING: found two conflicting content-length headers\n");
+	    debugs(55, httpConfig_relaxed_parser <= 0 ? 1 : 2, "WARNING: found two conflicting content-length headers");
 
 	    /* XXX Relaxed parser is off - return an error? */
 	    /* XXX what was this before? */
@@ -135,7 +135,7 @@ hh_check_content_length(HttpHeader *hdr, const char *var, int vlen)
 
 	    /* Is the original entry parseable? If not, definitely error out. It shouldn't be here */
 	    if (!httpHeaderParseSize2(strBuf2(e2->value), strLen2(e2->value), &l2)) {
-	        debug(55, 1) ("WARNING: Unparseable content-length '%.*s'\n", vlen, var);
+	        debugs(55, 1, "WARNING: Unparseable content-length '%.*s'", vlen, var);
 	        return PR_ERROR;
 	    }
 
@@ -153,15 +153,14 @@ int
 httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_end)
 {
     const char *field_ptr = header_start;
-    HttpHeaderEntry *e;
     parse_retval_t r;
 
     assert(hdr);
     assert(header_start && header_end);
-    debug(55, 7) ("parsing hdr: (%p)\n%.*s\n", hdr, charBufferSize(header_start, header_end), header_start);
+    debugs(55, 7, "parsing hdr: (%p)\n%.*s", hdr, charBufferSize(header_start, header_end), header_start);
     HttpHeaderStats[hdr->owner].parsedCount++;
     if (memchr(header_start, '\0', header_end - header_start)) {
-	debug(55, 1) ("WARNING: HTTP header contains NULL characters {%.*s}\n",
+	debugs(55, 1, "WARNING: HTTP header contains NULL characters {%.*s}",
 	    charBufferSize(header_start, header_end), header_start);
 	return httpHeaderReset(hdr);
     }
@@ -181,14 +180,14 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		field_end--;	/* Ignore CR LF */
 		/* Ignore CR CR LF in relaxed mode */
 		if (httpConfig_relaxed_parser && field_end > this_line + 1 && field_end[-1] == '\r') {
-		    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-			("WARNING: Double CR characters in HTTP header {%.*s}\n", charBufferSize(field_start, field_end), field_start);
+		    debugs(55, httpConfig_relaxed_parser <= 0 ? 1 : 2,
+			"WARNING: Double CR characters in HTTP header {%.*s}\n", charBufferSize(field_start, field_end), field_start);
 		    field_end--;
 		}
 	    }
 	    /* Barf on stray CR characters */
 	    if (memchr(this_line, '\r', field_end - this_line)) {
-		debug(55, 1) ("WARNING: suspicious CR characters in HTTP header {%.*s}\n",
+		debugs(55, 1, "WARNING: suspicious CR characters in HTTP header {%.*s}",
 		    charBufferSize(field_start, field_end), field_start);
 		if (httpConfig_relaxed_parser) {
 		    char *p = (char *) this_line;	/* XXX Warning! This destroys original header content and violates specifications somewhat */
@@ -198,14 +197,14 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 		    return httpHeaderReset(hdr);
 	    }
 	    if (this_line + 1 == field_end && this_line > field_start) {
-		debug(55, 1) ("WARNING: Blank continuation line in HTTP header {%.*s}\n",
+		debugs(55, 1, "WARNING: Blank continuation line in HTTP header {%.*s}",
 		    charBufferSize(header_start, header_end), header_start);
 		return httpHeaderReset(hdr);
 	    }
 	} while (field_ptr < header_end && (*field_ptr == ' ' || *field_ptr == '\t'));
 	if (field_start == field_end) {
 	    if (field_ptr < header_end) {
-		debug(55, 1) ("WARNING: unparseable HTTP header field near {%.*s}\n",
+		debugs(55, 1, "WARNING: unparseable HTTP header field near {%.*s}",
 		    charBufferSize(field_start, field_end), field_start);
 		return httpHeaderReset(hdr);
 	    }
@@ -217,10 +216,10 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 	if (r == PR_ERROR)
 	    return httpHeaderReset(hdr);
 	else if (r == PR_WARN) {
-	    debug(55, 1) ("WARNING: unparseable HTTP header field {%.*s}\n",
+	    debugs(55, 1, "WARNING: unparseable HTTP header field {%.*s}",
 		charBufferSize(field_start, field_end), field_start);
-	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		(" in {%.*s}\n", charBufferSize(header_start, header_end), header_start);
+	    debugs(55, httpConfig_relaxed_parser <= 0 ? 1 : 2,
+		" in {%.*s}\n", charBufferSize(header_start, header_end), header_start);
 	    if (httpConfig_relaxed_parser)
 		continue;
 	    else
@@ -238,7 +237,6 @@ httpHeaderParse(HttpHeader * hdr, const char *header_start, const char *header_e
 parse_retval_t
 httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char *field_end)
 {
-    HttpHeaderEntry *e;
     int id;
     parse_retval_t r = PR_OK;
 
@@ -255,12 +253,12 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 	return PR_IGNORE;
     if (name_len > 65534) {
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
-	debug(55, 1) ("WARNING: ignoring header name of %d bytes\n", name_len);
+	debugs(55, 1, "WARNING: ignoring header name of %d bytes", name_len);
 	return PR_IGNORE;
     }
     if (httpConfig_relaxed_parser && xisspace(field_start[name_len - 1])) {
-	debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-	    ("NOTICE: Whitespace after header name in '%.*s'\n", charBufferSize(field_start, field_end), field_start);
+	debugs(55, httpConfig_relaxed_parser <= 0 ? 1 : 2,
+	    "NOTICE: Whitespace after header name in '%.*s'\n", charBufferSize(field_start, field_end), field_start);
 	while (name_len > 0 && xisspace(field_start[name_len - 1]))
 	    name_len--;
 	if (!name_len)
@@ -283,7 +281,7 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
 
     if (field_end - value_start > 65534) {
 	/* String must be LESS THAN 64K and it adds a terminating NULL */
-	debug(55, 1) ("WARNING: ignoring '%.*s' header of %d bytes\n",
+	debugs(55, 1, "WARNING: ignoring '%.*s' header of %d bytes",
 	   charBufferSize(field_start, field_end), field_start,  charBufferSize(value_start, field_end));
 	return PR_IGNORE;
     }
@@ -291,8 +289,8 @@ httpHeaderEntryParseCreate(HttpHeader *hdr, const char *field_start, const char 
     /* Is it an OTHER header? Verify the header contents don't have whitespace! */
 
     if (id == HDR_OTHER && strpbrk_n(field_start, name_len, w_space)) {
-	    debug(55, httpConfig_relaxed_parser <= 0 ? 1 : 2)
-		("WARNING: found whitespace in HTTP header name {%.*s}\n", name_len, field_start);
+	    debugs(55, httpConfig_relaxed_parser <= 0 ? 1 : 2,
+		"WARNING: found whitespace in HTTP header name {%.*s}\n", name_len, field_start);
 	    if (!httpConfig_relaxed_parser) {
 		return PR_IGNORE;
 	    }
@@ -327,7 +325,7 @@ httpHeaderParseSize2(const char *start, int len, squid_off_t * value)
 
     *value = strtol_n(start, len, &end, 10);
     if (start == end || errno != 0) {
-        debug(55, 2) ("httpHeaderParseSize2: failed to parse a size/offset header field near '%s'\n", start);
+        debugs(55, 2, "httpHeaderParseSize2: failed to parse a size/offset header field near '%s'", start);
         *value = -1;
         return 0;
     }
@@ -348,7 +346,7 @@ httpHeaderParseInt(const char *start, int *value)
     errno = 0;
     v = *value = strtol(start, &end, 10);
     if (start == end || errno != 0 || v != *value) {
-        debug(66, 2) ("failed to parse an int header field near '%s'\n", start);
+        debugs(66, 2, "failed to parse an int header field near '%s'", start);
         *value = -1;
         return 0;
     }
@@ -363,7 +361,7 @@ httpHeaderParseSize(const char *start, squid_off_t * value)
     assert(value);
     *value = strto_off_t(start, &end, 10);
     if (start == end || errno != 0) {
-        debug(66, 2) ("failed to parse a size/offset header field near '%s'\n", start);
+        debugs(66, 2, "failed to parse a size/offset header field near '%s'", start);
         *value = -1;
         return 0;
     }
@@ -376,7 +374,7 @@ httpHeaderNoteParsedEntry(http_hdr_type id, String context, int error)
     Headers[id].stat.parsCount++;
     if (error) {
         Headers[id].stat.errCount++;
-        debug(55, 2) ("cannot parse hdr field: '%.*s: %.*s'\n",
+        debugs(55, 2, "cannot parse hdr field: '%.*s: %.*s'",
             strLen2(Headers[id].name),  strBuf2(Headers[id].name), strLen2(context), strBuf2(context));
     }
 }

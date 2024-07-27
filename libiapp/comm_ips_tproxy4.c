@@ -85,7 +85,7 @@ comm_ips_keepCapabilities(void)
     if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0)) {
 	/* Silent failure unless TPROXY is required. Maybe not started as root */
 	if (need_linux_tproxy) {
-		debug(1, 1) ("Error - Linux tproxy support requires capability setting which has failed.  Continuing without tproxy support\n");
+		debugs(1, 1, "Error - Linux tproxy support requires capability setting which has failed.  Continuing without tproxy support");
 		need_linux_tproxy = 0;
 	}
     }
@@ -99,11 +99,11 @@ comm_ips_restoreCapabilities(int keep)
 
     head->version = _LINUX_CAPABILITY_VERSION;
     if (capget(head, cap) != 0) {
-	debug(50, 1) ("Can't get current capabilities\n");
+	debugs(50, 1, "Can't get current capabilities");
 	goto nocap;
     }
     if (head->version != _LINUX_CAPABILITY_VERSION) {
-	debug(50, 1) ("Invalid capability version %d (expected %d)\n", head->version, _LINUX_CAPABILITY_VERSION);
+	debugs(50, 1, "Invalid capability version %d (expected %d)", head->version, _LINUX_CAPABILITY_VERSION);
 	goto nocap;
     }
     head->pid = 0;
@@ -117,7 +117,7 @@ comm_ips_restoreCapabilities(int keep)
     if (capset(head, cap) != 0) {
 	/* Silent failure unless TPROXY is required */
 	if (need_linux_tproxy)
-	    debug(50, 1) ("Error enabling needed capabilities. Will continue without tproxy support\n");
+	    debugs(50, 1, "Error enabling needed capabilities. Will continue without tproxy support");
 	need_linux_tproxy = 0;
     }
   nocap:

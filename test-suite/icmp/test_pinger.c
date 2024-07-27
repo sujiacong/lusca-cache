@@ -81,18 +81,18 @@ icmpSend(int icmp_sock, PingerEchoData * pkt, int len)
     int x; 
     if (icmp_sock < 0)
         return;
-    debug(37, 1) ("icmpSend: to %s, opcode %d, len %d\n",
+    debugs(37, 1, "icmpSend: to %s, opcode %d, len %d",
         inet_ntoa(pkt->to), (int) pkt->opcode, pkt->psize);
     x = send(icmp_sock, (char *) pkt, len, 0);
-    debug(37, 1) ("send of %d bytes returned %d\n", len, x);
+    debugs(37, 1, "send of %d bytes returned %d", len, x);
     if (x < 0) {
-        debug(37, 1) ("icmpSend: send: %s\n", xstrerror());
+        debugs(37, 1, "icmpSend: send: %s", xstrerror());
         if (errno == ECONNREFUSED || errno == EPIPE) {
 		debug(1, 1)( "icmpSend: bad error\n");
             return;
         }
     } else if (x != len) {
-        debug(37, 1) ("icmpSend: Wrote %d of %d bytes\n", x, len);
+        debugs(37, 1, "icmpSend: Wrote %d of %d bytes", x, len);
     }
 }   
 
@@ -147,7 +147,7 @@ main(int argc, const char *argv[])
     commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
     commSetTimeout(icmp_sock, -1, NULL, NULL);
 #endif
-    debug(37, 1) ("Pinger PID (%d) socket opened on FD %d\n", pid, rfd);
+    debugs(37, 1, "Pinger PID (%d) socket opened on FD %d", pid, rfd);
 
     while (1) {
 	struct in_addr to;

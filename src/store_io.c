@@ -16,6 +16,9 @@ static struct {
 } store_io_stats;
 
 OBJH storeIOStats;
+ADD  AddStoreIoAction;
+COL  StoreIoActionCollect;
+OBJH storeIOStatsEx;
 
 static void
 storeIOFreeCB(void *data)
@@ -63,11 +66,11 @@ storeCreate(StoreEntry * e, STIOCB * file_callback, STIOCB * close_callback, voi
      */
     dirn = storeDirSelectSwapDir(e);
     if (dirn == -1) {
-	debug(20, 2) ("storeCreate: no valid swapdirs for this object\n");
+	debugs(20, 2, "storeCreate: no valid swapdirs for this object");
 	store_io_stats.create.select_fail++;
 	return NULL;
     }
-    debug(20, 2) ("storeCreate: Selected dir '%d' for obj size '%" PRINTF_OFF_T "'\n", dirn, objsize);
+    debugs(20, 2, "storeCreate: Selected dir '%d' for obj size '%" PRINTF_OFF_T "'", dirn, objsize);
     SD = &Config.cacheSwap.swapDirs[dirn];
 
     /* Now that we have a fs to use, call its storeCreate function */
@@ -163,20 +166,87 @@ storeOffset(storeIOState * sio)
     return sio->offset;
 }
 
+int
+AddStoreIoAction(void* A, void* B)
+{
+	if(!A || !B) return sizeof(StoreIoActionData);
+	StoreIoActionData* stats = (StoreIoActionData*)A;
+	StoreIoActionData* statsB = (StoreIoActionData*)B;
+
+	stats->create_calls	+=	   statsB->create_calls; 
+	stats->create_select_fail  +=	 statsB->create_select_fail;
+	stats->create_create_fail  +=	 statsB->create_create_fail;
+	stats->create_success  +=	 statsB->create_success; 
+
+	stats->open_calls  +=   statsB->open_calls; 
+	stats->open_success	+=	   statsB->open_success;
+	stats->loadav_fail  +=  statsB->loadav_fail; 
+	stats->open_fail  +=    statsB->open_fail; 
+
+	return sizeof(StoreIoActionData);
+}
+
+void* StoreIoActionCollect()
+{
+	StoreIoActionData* stats = (StoreIoActionData*)xcalloc(1,sizeof(StoreIoActionData));
+    stats->create_calls = store_io_stats.create.calls;
+    stats->create_select_fail = store_io_stats.create.select_fail;
+    stats->create_create_fail = store_io_stats.create.create_fail;
+    stats->create_success = store_io_stats.create.success;
+
+	stats->open_calls = store_io_stats.open.calls;
+	stats->open_success = store_io_stats.open.success;
+	stats->loadav_fail = store_io_stats.open.loadav_fail;
+	stats->open_fail = store_io_stats.open.open_fail;
+	return (void*)stats;
+}
+
+void
+StoreIoActionDump(StoreEntry* entry, StoreIoActionData* stats)
+{
+    assert(entry != NULL);
+    storeAppendPrintf(entry, "Store IO Interface Stats\n");
+    storeAppendPrintf(entry, "create.calls %.0f\n", stats->create_calls);
+    storeAppendPrintf(entry, "create.select_fail %.0f\n", stats->create_select_fail);
+    storeAppendPrintf(entry, "create.create_fail %.0f\n", stats->create_create_fail);
+    storeAppendPrintf(entry, "create.success %.0f\n", stats->create_success);
+
+    storeAppendPrintf(entry, "open.calls %.0f\n", stats->open_calls);
+    storeAppendPrintf(entry, "open.success %.0f\n", stats->open_success);
+    storeAppendPrintf(entry, "open.loadav_fail %.0f\n", stats->loadav_fail);
+    storeAppendPrintf(entry, "open.open_fail %.0f\n", stats->open_fail);	
+}
+
+
 /*
  * Make this non-static so we can register
  * it from storeInit();
  */
 void
-storeIOStats(StoreEntry * sentry)
+storeIOStats(StoreEntry * sentry, void* data)
 {
     storeAppendPrintf(sentry, "Store IO Interface Stats\n");
     storeAppendPrintf(sentry, "create.calls %d\n", store_io_stats.create.calls);
     storeAppendPrintf(sentry, "create.select_fail %d\n", store_io_stats.create.select_fail);
     storeAppendPrintf(sentry, "create.create_fail %d\n", store_io_stats.create.create_fail);
     storeAppendPrintf(sentry, "create.success %d\n", store_io_stats.create.success);
+	
     storeAppendPrintf(sentry, "open.calls %d\n", store_io_stats.open.calls);
     storeAppendPrintf(sentry, "open.success %d\n", store_io_stats.open.success);
     storeAppendPrintf(sentry, "open.loadav_fail %d\n", store_io_stats.open.loadav_fail);
     storeAppendPrintf(sentry, "open.open_fail %d\n", store_io_stats.open.open_fail);
 }
+
+void storeIOStatsEx(StoreEntry * sentry, void* data)
+{
+	if(data)
+	{
+		StoreIoActionData* stats = (StoreIoActionData*)data;
+		StoreIoActionDump(sentry,stats);
+	}
+	else
+	{
+		storeIOStats(sentry, data);
+	}
+}
+

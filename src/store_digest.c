@@ -99,18 +99,18 @@ storeDigestInit(void)
 
     if (!Config.onoff.digest_generation) {
 	store_digest = NULL;
-	debug(71, 3) ("Local cache digest generation disabled\n");
+	debugs(71, 3, "Local cache digest generation disabled");
 	return;
     }
     store_digest = cacheDigestCreate(cap, Config.digest.bits_per_entry);
-    debug(71, 1) ("Local cache digest enabled; rebuild/rewrite every %d/%d sec\n",
+    debugs(71, 1, "Local cache digest enabled; rebuild/rewrite every %d/%d sec",
 	(int) Config.digest.rebuild_period, (int) Config.digest.rewrite_period);
     memset(&sd_state, 0, sizeof(sd_state));
     cachemgrRegister("store_digest", "Store Digest",
-	storeDigestReport, 0, 1);
+	storeDigestReport, NULL, NULL, 0, 1, 0);
 #else
     store_digest = NULL;
-    debug(71, 3) ("Local cache digest is 'off'\n");
+    debugs(71, 3, "Local cache digest is 'off'");
 #endif
 }
 
@@ -134,17 +134,17 @@ storeDigestDel(const StoreEntry * entry)
 	return;
     }
     assert(entry && store_digest);
-    debug(71, 6) ("storeDigestDel: checking entry, key: %s\n",
+    debugs(71, 6, "storeDigestDel: checking entry, key: %s",
 	storeKeyText(entry->hash.key));
     if (!EBIT_TEST(entry->flags, KEY_PRIVATE)) {
 	if (!cacheDigestTest(store_digest, entry->hash.key)) {
 	    sd_stats.del_lost_count++;
-	    debug(71, 6) ("storeDigestDel: lost entry, key: %s url: %s\n",
+	    debugs(71, 6, "storeDigestDel: lost entry, key: %s url: %s",
 		storeKeyText(entry->hash.key), storeUrl(entry));
 	} else {
 	    sd_stats.del_count++;
 	    cacheDigestDel(store_digest, entry->hash.key);
-	    debug(71, 6) ("storeDigestDel: deled entry, key: %s\n",
+	    debugs(71, 6, "storeDigestDel: deled entry, key: %s",
 		storeKeyText(entry->hash.key));
 	}
     }
@@ -152,7 +152,7 @@ storeDigestDel(const StoreEntry * entry)
 }
 
 void
-storeDigestReport(StoreEntry * e)
+storeDigestReport(StoreEntry * e, void* data)
 {
 #if USE_CACHE_DIGESTS
     if (!Config.onoff.digest_generation) {
@@ -186,39 +186,39 @@ storeDigestAddable(const StoreEntry * e)
 {
     /* add some stats! XXX */
 
-    debug(71, 6) ("storeDigestAddable: checking entry, key: %s\n",
+    debugs(71, 6, "storeDigestAddable: checking entry, key: %s",
 	storeKeyText(e->hash.key));
 
     /* check various entry flags (mimics storeCheckCachable XXX) */
     if (!EBIT_TEST(e->flags, ENTRY_CACHABLE)) {
-	debug(71, 6) ("storeDigestAddable: NO: not cachable\n");
+	debugs(71, 6, "storeDigestAddable: NO: not cachable");
 	return 0;
     }
     if (EBIT_TEST(e->flags, KEY_PRIVATE)) {
-	debug(71, 6) ("storeDigestAddable: NO: private key\n");
+	debugs(71, 6, "storeDigestAddable: NO: private key");
 	return 0;
     }
     if (EBIT_TEST(e->flags, ENTRY_NEGCACHED)) {
-	debug(71, 6) ("storeDigestAddable: NO: negative cached\n");
+	debugs(71, 6, "storeDigestAddable: NO: negative cached");
 	return 0;
     }
     if (EBIT_TEST(e->flags, RELEASE_REQUEST)) {
-	debug(71, 6) ("storeDigestAddable: NO: release requested\n");
+	debugs(71, 6, "storeDigestAddable: NO: release requested");
 	return 0;
     }
     if (e->store_status == STORE_OK && EBIT_TEST(e->flags, ENTRY_BAD_LENGTH)) {
-	debug(71, 6) ("storeDigestAddable: NO: wrong content-length\n");
+	debugs(71, 6, "storeDigestAddable: NO: wrong content-length");
 	return 0;
     }
     /* do not digest huge objects */
     if (e->swap_file_sz > Config.Store.maxObjectSize) {
-	debug(71, 6) ("storeDigestAddable: NO: too big\n");
+	debugs(71, 6, "storeDigestAddable: NO: too big");
 	return 0;
     }
     /* still here? check staleness */
     /* Note: We should use the time of the next rebuild, not (cur_time+period) */
     if (refreshCheckDigest(e, Config.digest.rebuild_period)) {
-	debug(71, 6) ("storeDigestAddable: entry expires within %d secs, ignoring\n",
+	debugs(71, 6, "storeDigestAddable: entry expires within %d secs, ignoring",
 	    (int) Config.digest.rebuild_period);
 	return 0;
     }
@@ -248,7 +248,7 @@ storeDigestAdd(const StoreEntry * entry)
 	if (cacheDigestTest(store_digest, entry->hash.key))
 	    sd_stats.add_coll_count++;
 	cacheDigestAdd(store_digest, entry->hash.key);
-	debug(71, 6) ("storeDigestAdd: added entry, key: %s\n",
+	debugs(71, 6, "storeDigestAdd: added entry, key: %s",
 	    storeKeyText(entry->hash.key));
     } else {
 	sd_stats.rej_count++;
@@ -264,13 +264,13 @@ storeDigestRebuildStart(void *datanotused)
     assert(store_digest);
     /* prevent overlapping if rebuild schedule is too tight */
     if (sd_state.rebuild_lock) {
-	debug(71, 1) ("storeDigestRebuildStart: overlap detected, consider increasing rebuild period\n");
+	debugs(71, 1, "storeDigestRebuildStart: overlap detected, consider increasing rebuild period");
 	return;
     }
     sd_state.rebuild_lock = 1;
-    debug(71, 2) ("storeDigestRebuildStart: rebuild #%d\n", sd_state.rebuild_count + 1);
+    debugs(71, 2, "storeDigestRebuildStart: rebuild #%d", sd_state.rebuild_count + 1);
     if (sd_state.rewrite_lock) {
-	debug(71, 2) ("storeDigestRebuildStart: waiting for Rewrite to finish.\n");
+	debugs(71, 2, "storeDigestRebuildStart: waiting for Rewrite to finish.");
 	return;
     }
     storeDigestRebuildResume();
@@ -297,7 +297,7 @@ storeDigestRebuildFinish(void)
     assert(sd_state.rebuild_lock);
     sd_state.rebuild_lock = 0;
     sd_state.rebuild_count++;
-    debug(71, 2) ("storeDigestRebuildFinish: done.\n");
+    debugs(71, 2, "storeDigestRebuildFinish: done.");
     eventAdd("storeDigestRebuildStart", storeDigestRebuildStart, NULL, (double)
 	Config.digest.rebuild_period, 1);
     /* resume pending Rewrite if any */
@@ -314,7 +314,7 @@ storeDigestRebuildStep(void *datanotused)
     assert(sd_state.rebuild_lock);
     if (sd_state.rebuild_offset + bcount > store_hash_buckets)
 	bcount = store_hash_buckets - sd_state.rebuild_offset;
-    debug(71, 3) ("storeDigestRebuildStep: buckets: %d offset: %d chunk: %d buckets\n",
+    debugs(71, 3, "storeDigestRebuildStep: buckets: %d offset: %d chunk: %d buckets",
 	store_hash_buckets, sd_state.rebuild_offset, bcount);
     while (bcount--) {
 	hash_link *link_ptr = hash_get_bucket(store_table, sd_state.rebuild_offset);
@@ -344,10 +344,10 @@ storeDigestRewriteStart(void *datanotused)
     method_get = urlMethodGetKnownByCode(METHOD_GET);
     /* prevent overlapping if rewrite schedule is too tight */
     if (sd_state.rewrite_lock) {
-	debug(71, 1) ("storeDigestRewriteStart: overlap detected, consider increasing rewrite period\n");
+	debugs(71, 1, "storeDigestRewriteStart: overlap detected, consider increasing rewrite period");
 	return;
     }
-    debug(71, 2) ("storeDigestRewriteStart: start rewrite #%d\n", sd_state.rewrite_count + 1);
+    debugs(71, 2, "storeDigestRewriteStart: start rewrite #%d", sd_state.rewrite_count + 1);
     /* make new store entry */
     url = internalStoreUri("/squid-internal-periodic/", StoreDigestFileName);
     flags = null_request_flags;
@@ -357,11 +357,11 @@ storeDigestRewriteStart(void *datanotused)
     CBDATA_INIT_TYPE(generic_cbdata);
     sd_state.rewrite_lock = cbdataAlloc(generic_cbdata);
     sd_state.rewrite_lock->data = e;
-    debug(71, 3) ("storeDigestRewriteStart: url: %s key: %s\n", url, storeKeyText(e->hash.key));
+    debugs(71, 3, "storeDigestRewriteStart: url: %s key: %s", url, storeKeyText(e->hash.key));
     e->mem_obj->request = requestLink(urlParse(method_get, url));
     /* wait for rebuild (if any) to finish */
     if (sd_state.rebuild_lock) {
-	debug(71, 2) ("storeDigestRewriteStart: waiting for rebuild to finish.\n");
+	debugs(71, 2, "storeDigestRewriteStart: waiting for rebuild to finish.");
 	return;
     }
     storeDigestRewriteResume();
@@ -382,7 +382,7 @@ storeDigestRewriteResume(void)
     /* fake reply */
     httpReplyReset(e->mem_obj->reply);
     httpReplySetHeaders(e->mem_obj->reply, 200, "Cache Digest OK", "application/cache-digest", store_digest->mask_size + sizeof(sd_state.cblock), squid_curtime, squid_curtime + Config.digest.rewrite_period);
-    debug(71, 3) ("storeDigestRewriteResume: entry expires on %ld (%+d)\n",
+    debugs(71, 3, "storeDigestRewriteResume: entry expires on %ld (%+d)",
 	(long int) e->mem_obj->reply->expires, (int) (e->mem_obj->reply->expires - squid_curtime));
     storeBuffer(e);
     httpReplySwapOut(e->mem_obj->reply, e);
@@ -399,7 +399,7 @@ storeDigestRewriteFinish(StoreEntry * e)
     assert(sd_state.rewrite_lock && e == sd_state.rewrite_lock->data);
     storeComplete(e);
     storeTimestampsSet(e);
-    debug(71, 2) ("storeDigestRewriteFinish: digest expires at %ld (%+d)\n",
+    debugs(71, 2, "storeDigestRewriteFinish: digest expires at %ld (%+d)",
 	(long int) e->expires, (int) (e->expires - squid_curtime));
     /* is this the write order? @?@ */
     requestUnlink(e->mem_obj->request);
@@ -429,7 +429,7 @@ storeDigestSwapOutStep(void *data)
     if (sd_state.rewrite_offset + chunk_size > store_digest->mask_size)
 	chunk_size = store_digest->mask_size - sd_state.rewrite_offset;
     storeAppend(e, store_digest->mask + sd_state.rewrite_offset, chunk_size);
-    debug(71, 3) ("storeDigestSwapOutStep: size: %d offset: %d chunk: %d bytes\n",
+    debugs(71, 3, "storeDigestSwapOutStep: size: %d offset: %d chunk: %d bytes",
 	store_digest->mask_size, sd_state.rewrite_offset, chunk_size);
     sd_state.rewrite_offset += chunk_size;
     /* are we done ? */
@@ -468,7 +468,7 @@ storeDigestCalcCap(void)
     const int lo_cap = 1 + store_swap_size / Config.Store.avgObjectSize;
     const int e_count = memPoolInUseCount(pool_storeentry);
     int cap = e_count ? e_count : hi_cap;
-    debug(71, 2) ("storeDigestCalcCap: have: %d, want %d entries; limits: [%d, %d]\n",
+    debugs(71, 2, "storeDigestCalcCap: have: %d, want %d entries; limits: [%d, %d]",
 	e_count, cap, lo_cap, hi_cap);
     if (cap < lo_cap)
 	cap = lo_cap;
@@ -487,15 +487,15 @@ storeDigestResize(void)
     int diff;
     assert(store_digest);
     diff = abs(cap - store_digest->capacity);
-    debug(71, 2) ("storeDigestResize: %d -> %d; change: %d (%d%%)\n",
+    debugs(71, 2, "storeDigestResize: %d -> %d; change: %d (%d%%)",
 	store_digest->capacity, cap, diff,
 	xpercentInt(diff, store_digest->capacity));
     /* avoid minor adjustments */
     if (diff <= store_digest->capacity / 10) {
-	debug(71, 2) ("storeDigestResize: small change, will not resize.\n");
+	debugs(71, 2, "storeDigestResize: small change, will not resize.");
 	return 0;
     } else {
-	debug(71, 2) ("storeDigestResize: big change, resizing.\n");
+	debugs(71, 2, "storeDigestResize: big change, resizing.");
 	cacheDigestChangeCap(store_digest, cap);
 	return 1;
     }

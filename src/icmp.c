@@ -87,7 +87,7 @@ icmpRecv(int unused1, void *unused2)
 	sizeof(pingerReplyData),
 	0);
     if (n < 0 && EAGAIN != errno) {
-	debug(37, 1) ("icmpRecv: recv: %s\n", xstrerror());
+	debugs(37, 1, "icmpRecv: recv: %s", xstrerror());
 	if (++fail_count == 10 || errno == ECONNREFUSED)
 	    icmpClose();
 	return;
@@ -110,7 +110,7 @@ icmpRecv(int unused1, void *unused2)
 	netdbHandlePingReply(&F, preply.hops, preply.rtt);
 	break;
     default:
-	debug(37, 1) ("icmpRecv: Bad opcode: %d\n", (int) preply.opcode);
+	debugs(37, 1, "icmpRecv: Bad opcode: %d", (int) preply.opcode);
 	break;
     }
 }
@@ -121,17 +121,17 @@ icmpSend(pingerEchoData * pkt, int len)
     int x;
     if (icmp_sock < 0)
 	return;
-    debug(37, 2) ("icmpSend: to %s, opcode %d, len %d\n",
+    debugs(37, 2, "icmpSend: to %s, opcode %d, len %d",
 	inet_ntoa(pkt->to), (int) pkt->opcode, pkt->psize);
     x = send(icmp_sock, (char *) pkt, len, 0);
     if (x < 0) {
-	debug(37, 1) ("icmpSend: send: %s\n", xstrerror());
+	debugs(37, 1, "icmpSend: send: %s", xstrerror());
 	if (errno == ECONNREFUSED || errno == EPIPE) {
 	    icmpClose();
 	    return;
 	}
     } else if (x != len) {
-	debug(37, 1) ("icmpSend: Wrote %d of %d bytes\n", x, len);
+	debugs(37, 1, "icmpSend: Wrote %d of %d bytes", x, len);
     }
 }
 
@@ -145,7 +145,7 @@ icmpHandleSourcePing(const struct sockaddr_in *from, const char *buf)
     xmemcpy(&header, buf, sizeof(icp_common_t));
     url = buf + sizeof(icp_common_t);
     key = icpGetCacheKey(url, (int) header.reqnum);
-    debug(37, 3) ("icmpHandleSourcePing: from %s, key '%s'\n",
+    debugs(37, 3, "icmpHandleSourcePing: from %s, key '%s'",
 	inet_ntoa(from->sin_addr), storeKeyText(key));
     /* call neighborsUdpAck even if ping_status != PING_WAITING */
     neighborsUdpAck(key, &header, from);
@@ -163,7 +163,7 @@ icmpSourcePing(struct in_addr to, const icp_common_t * header, const char *url)
     char *payload;
     int len;
     int ulen;
-    debug(37, 3) ("icmpSourcePing: '%s'\n", url);
+    debugs(37, 3, "icmpSourcePing: '%s'", url);
     if ((ulen = strlen(url)) > MAX_URL)
 	return;
     payload = memAllocate(MEM_8K_BUF);
@@ -181,7 +181,7 @@ void
 icmpDomainPing(struct in_addr to, const char *domain)
 {
 #if USE_ICMP
-    debug(37, 3) ("icmpDomainPing: '%s'\n", domain);
+    debugs(37, 3, "icmpDomainPing: '%s'", domain);
     icmpSendEcho(to, S_ICMP_DOM, domain, 0);
 #endif
 }
@@ -204,7 +204,7 @@ icmpOpen(void)
         return;
 
     if (strcmp("none", Config.Program.pinger) == 0) {
-	debug(37, 1) ("Pinger not started - disabled in configuration file.\n");
+	debugs(37, 1, "Pinger not started - disabled in configuration file.");
 	return;
     }
     args[0] = "(pinger)";
@@ -224,7 +224,7 @@ icmpOpen(void)
     fd_note(icmp_sock, "pinger");
     commSetSelect(icmp_sock, COMM_SELECT_READ, icmpRecv, NULL, 0);
     commSetTimeout(icmp_sock, -1, NULL, NULL);
-    debug(37, 1) ("Pinger socket opened on FD %d\n", icmp_sock);
+    debugs(37, 1, "Pinger socket opened on FD %d", icmp_sock);
 #endif
 }
 
@@ -234,7 +234,7 @@ icmpClose(void)
 #if USE_ICMP
     if (icmp_sock < 0)
 	return;
-    debug(37, 1) ("Closing Pinger socket on FD %d\n", icmp_sock);
+    debugs(37, 1, "Closing Pinger socket on FD %d", icmp_sock);
 #ifdef _SQUID_MSWIN_
     send(icmp_sock, "$shutdown\n", 10, 0);
 #endif

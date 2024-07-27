@@ -53,8 +53,10 @@ int opt_syslog_enable = 0;
 int syslog_facility = LOG_LOCAL4;
 
 void
-_db_print_syslog(const char *format, va_list args)
+_db_print_syslog(const char *format,...)
 {
+	va_list args;
+	va_start (args, format);
     LOCAL_ARRAY(char, tmpbuf, BUFSIZ);
     /* level 0,1 go to syslog */
     if (_db_level > 1)

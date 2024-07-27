@@ -129,6 +129,8 @@ read_file(const char *path)
 	fclose(fp);
 }
 
+int KidIdentifier = 0;
+
 int
 main(int argc, char *argv[])
 {

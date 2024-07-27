@@ -177,11 +177,11 @@ refreshStaleness(const StoreEntry * entry, time_t check_time, time_t age, const 
     if (entry->expires > -1) {
 	sf->expires = 1;
 	if (entry->expires > check_time) {
-	    debug(22, 3) ("FRESH: expires %d >= check_time %d \n",
+	    debugs(22, 3, "FRESH: expires %d >= check_time %d ",
 		(int) entry->expires, (int) check_time);
 	    return -1;
 	} else {
-	    debug(22, 3) ("STALE: expires %d < check_time %d \n",
+	    debugs(22, 3, "STALE: expires %d < check_time %d ",
 		(int) entry->expires, (int) check_time);
 	    return (check_time - entry->expires);
 	}
@@ -192,15 +192,15 @@ refreshStaleness(const StoreEntry * entry, time_t check_time, time_t age, const 
      * max age from the refresh_pattern rule.
      */
     if (age > R->max) {
-	debug(22, 3) ("STALE: age %d > max %d \n", (int) age, (int) R->max);
+	debugs(22, 3, "STALE: age %d > max %d ", (int) age, (int) R->max);
 	sf->max = 1;
 	return (age - R->max);
     }
     if (check_time < entry->timestamp) {
-	debug(22, 1) ("STALE: Entry's timestamp greater than check time. Clock going backwards?\n");
-	debug(22, 1) ("\tcheck_time:\t%s\n", mkrfc1123(check_time));
-	debug(22, 1) ("\tentry->timestamp:\t%s\n", mkrfc1123(entry->timestamp));
-	debug(22, 1) ("\tstaleness:\t%ld\n", (long int) entry->timestamp - check_time);
+	debugs(22, 1, "STALE: Entry's timestamp greater than check time. Clock going backwards?");
+	debugs(22, 1, "\tcheck_time:\t%s", mkrfc1123(check_time));
+	debugs(22, 1, "\tentry->timestamp:\t%s", mkrfc1123(entry->timestamp));
+	debugs(22, 1, "\tstaleness:\t%ld", (long int) entry->timestamp - check_time);
 	return (entry->timestamp - check_time);
     }
     /*
@@ -214,11 +214,11 @@ refreshStaleness(const StoreEntry * entry, time_t check_time, time_t age, const 
 	time_t stale_age = (entry->timestamp - entry->lastmod) * R->pct;
 	sf->lmfactor = 1;
 	if (age >= stale_age) {
-	    debug(22, 3) ("STALE: age %d > stale_age %d\n",
+	    debugs(22, 3, "STALE: age %d > stale_age %d",
 		(int) age, (int) stale_age);
 	    return (age - stale_age);
 	} else {
-	    debug(22, 3) ("FRESH: age %d <= stale_age %d\n",
+	    debugs(22, 3, "FRESH: age %d <= stale_age %d",
 		(int) age, (int) stale_age);
 	    return -1;
 	}
@@ -228,11 +228,11 @@ refreshStaleness(const StoreEntry * entry, time_t check_time, time_t age, const 
      * configured minimum age.
      */
     if (age < R->min) {
-	debug(22, 3) ("FRESH: age %d < min %d\n", (int) age, (int) R->min);
+	debugs(22, 3, "FRESH: age %d < min %d", (int) age, (int) R->min);
 	sf->min = 1;
 	return -1;
     }
-    debug(22, 3) ("STALE: age %d >= min %d\n", (int) age, (int) R->min);
+    debugs(22, 3, "STALE: age %d >= min %d", (int) age, (int) R->min);
     return (age - R->min);
 }
 
@@ -255,7 +255,7 @@ refreshCheck(const StoreEntry * entry, request_t * request, time_t delta)
     else if (request)
 	uri = urlCanonical(request);
 
-    debug(22, 3) ("refreshCheck: '%s'\n", uri ? uri : "<none>");
+    debugs(22, 3, "refreshCheck: '%s'", uri ? uri : "<none>");
 
     if (delta > 0)
 	check_time += delta;
@@ -266,20 +266,20 @@ refreshCheck(const StoreEntry * entry, request_t * request, time_t delta)
 	R = &DefaultRefresh;
     memset(&sf, '\0', sizeof(sf));
     staleness = refreshStaleness(entry, check_time, age, R, &sf);
-    debug(22, 3) ("Staleness = %d\n", staleness);
+    debugs(22, 3, "Staleness = %d", staleness);
 
-    debug(22, 3) ("refreshCheck: Matched '%s %d %d%% %d'\n",
+    debugs(22, 3, "refreshCheck: Matched '%s %d %d%% %d'",
 	R->pattern, (int) R->min, (int) (100.0 * R->pct), (int) R->max);
-    debug(22, 3) ("refreshCheck: age = %d\n", (int) age);
-    debug(22, 3) ("\tcheck_time:\t%s\n", mkrfc1123(check_time));
-    debug(22, 3) ("\tentry->timestamp:\t%s\n", mkrfc1123(entry->timestamp));
+    debugs(22, 3, "refreshCheck: age = %d", (int) age);
+    debugs(22, 3, "\tcheck_time:\t%s", mkrfc1123(check_time));
+    debugs(22, 3, "\tentry->timestamp:\t%s", mkrfc1123(entry->timestamp));
 
     if (EBIT_TEST(entry->flags, ENTRY_REVALIDATE) && staleness > -1
 #if HTTP_VIOLATIONS
         && !R->flags.ignore_must_revalidate
 #endif
       ) {
-        debug(22, 3) ("refreshCheck: YES: Must revalidate stale response\n");
+        debugs(22, 3, "refreshCheck: YES: Must revalidate stale response");
 	return STALE_MUST_REVALIDATE;
     }
     /* request-specific checks */
@@ -290,14 +290,14 @@ refreshCheck(const StoreEntry * entry, request_t * request, time_t delta)
 	    (void) 0;
 	} else if (R->flags.ignore_reload) {
 	    /* The clients no-cache header is ignored */
-	    debug(22, 3) ("refreshCheck: MAYBE: ignore-reload\n");
+	    debugs(22, 3, "refreshCheck: MAYBE: ignore-reload");
 	} else if (R->flags.reload_into_ims || Config.onoff.reload_into_ims) {
 	    /* The clients no-cache header is changed into a IMS query */
-	    debug(22, 3) ("refreshCheck: YES: reload-into-ims\n");
+	    debugs(22, 3, "refreshCheck: YES: reload-into-ims");
 	    return STALE_RELOAD_INTO_IMS;
 	} else {
 	    /* The clients no-cache header is not overridden on this request */
-	    debug(22, 3) ("refreshCheck: YES: client reload\n");
+	    debugs(22, 3, "refreshCheck: YES: client reload");
 	    request->flags.nocache = 1;
 	    return STALE_FORCED_RELOAD;
 	}
@@ -309,17 +309,17 @@ refreshCheck(const StoreEntry * entry, request_t * request, time_t delta)
 		} else
 #endif
 		if (age > cc->max_age) {
-		    debug(22, 3) ("refreshCheck: YES: age > client-max-age\n");
+		    debugs(22, 3, "refreshCheck: YES: age > client-max-age");
 		    return STALE_EXCEEDS_REQUEST_MAX_AGE_VALUE;
 		}
 	    }
 	    if (EBIT_TEST(cc->mask, CC_MAX_STALE) && staleness >= 0) {
 		if (cc->max_stale < 0) {
 		    /* max-stale directive without a value */
-		    debug(22, 3) ("refreshCheck: NO: max-stale wildcard\n");
+		    debugs(22, 3, "refreshCheck: NO: max-stale wildcard");
 		    return FRESH_REQUEST_MAX_STALE_ALL;
 		} else if (staleness < cc->max_stale) {
-		    debug(22, 3) ("refreshCheck: NO: staleness < max-stale\n");
+		    debugs(22, 3, "refreshCheck: NO: staleness < max-stale");
 		    return FRESH_REQUEST_MAX_STALE_VALUE;
 		}
 	    }
@@ -340,11 +340,11 @@ refreshCheck(const StoreEntry * entry, request_t * request, time_t delta)
      */
 #if HTTP_VIOLATIONS
     if (sf.expires && R->flags.override_expire && age < R->min) {
-        debug(22, 3) ("refreshCheck: NO: age < min && override-expire\n");
+        debugs(22, 3, "refreshCheck: NO: age < min && override-expire");
         return FRESH_OVERRIDE_EXPIRES;
     }
     if (sf.lmfactor && R->flags.override_lastmod && age < R->min) {
-        debug(22, 3) ("refreshCheck: NO: age < min && override-lastmod\n");
+        debugs(22, 3, "refreshCheck: NO: age < min && override-lastmod");
         return FRESH_OVERRIDE_LASTMOD;
     }
 #endif
@@ -355,7 +355,7 @@ refreshCheck(const StoreEntry * entry, request_t * request, time_t delta)
 	if (R->flags.ignore_stale_while_revalidate || stale_while_revalidate == -1)
 	    stale_while_revalidate = R->stale_while_revalidate;
 	if (staleness < stale_while_revalidate) {
-	    debug(22, 3) ("stale-while-revalidate: age=%d, staleness=%d, stale_while_revalidate=%d\n", (int) age, staleness, stale_while_revalidate);
+	    debugs(22, 3, "stale-while-revalidate: age=%d, staleness=%d, stale_while_revalidate=%d", (int) age, staleness, stale_while_revalidate);
 	    entry->mem_obj->stale_while_revalidate = stale_while_revalidate;
 	    return STALE_ASYNC_REFRESH;
 	}
@@ -483,7 +483,7 @@ time_t
 getMaxAge(const char *url)
 {
     const refresh_t *R;
-    debug(22, 3) ("getMaxAge: '%s'\n", url);
+    debugs(22, 3, "getMaxAge: '%s'", url);
     if ((R = refreshLimits(url)))
 	return R->max;
     else
@@ -550,7 +550,7 @@ refreshCountsStats(StoreEntry * sentry, struct RefreshCounts *rc)
 }
 
 static void
-refreshStats(StoreEntry * sentry)
+refreshStats(StoreEntry * sentry, void* data)
 {
     int i;
     int total = 0;
@@ -589,9 +589,10 @@ refreshInit(void)
 #endif
     cachemgrRegister("refresh",
 	"Refresh Algorithm Statistics",
-	refreshStats,
+	refreshStats, NULL, NULL,
 	0,
-	1);
+	1,
+	0);
     memset(&DefaultRefresh, '\0', sizeof(DefaultRefresh));
     DefaultRefresh.pattern = "<none>";
     DefaultRefresh.min = REFRESH_DEFAULT_MIN;

@@ -115,7 +115,7 @@ store_ufs_has_valid_rebuild_log(store_ufs_dir_t *sd)
 
 	x = stat(sd->swaplog_path, &sb);
 	if (x < 0) {
-		debug(47, 1) ("store_ufs_has_valid_rebuild_log: %s: no valid swaplog found: (%d) %s\n", sd->swaplog_path, errno, xstrerror());
+		debugs(47, 1, "store_ufs_has_valid_rebuild_log: %s: no valid swaplog found: (%d) %s", sd->swaplog_path, errno, xstrerror());
 		return 0;
 	}
 

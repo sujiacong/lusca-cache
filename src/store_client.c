@@ -153,7 +153,7 @@ storeClientType(StoreEntry * e)
 	return STORE_DISK_CLIENT;
     if (EBIT_TEST(e->flags, ENTRY_ABORTED)) {
 	/* I don't think we should be adding clients to aborted entries */
-	debug(20, 1) ("storeClientType: adding to ENTRY_ABORTED entry\n");
+	debugs(20, 1, "storeClientType: adding to ENTRY_ABORTED entry");
 	return STORE_MEM_CLIENT;
     }
     if (e->store_status == STORE_OK) {
@@ -295,7 +295,7 @@ static void
 storeClientCopyEvent(void *data)
 {
     store_client *sc = data;
-    debug(20, 3) ("storeClientCopyEvent: Running\n");
+    debugs(20, 3, "storeClientCopyEvent: Running");
     sc->flags.copy_event_pending = 0;
     if (!sc->new_callback)
 	return;
@@ -336,7 +336,7 @@ storeClientRef(store_client * sc,
     STNCB * callback,
     void *data)
 {
-    debug(20, 3) ("storeClientRef: %s, seen %" PRINTF_OFF_T ", want %" PRINTF_OFF_T ", size %d, cb %p, cbdata %p\n",
+    debugs(20, 3, "storeClientRef: %s, seen %" PRINTF_OFF_T ", want %" PRINTF_OFF_T ", size %d, cb %p, cbdata %p",
 	storeKeyText(e->hash.key),
 	seen_offset,
 	copy_offset,
@@ -416,18 +416,18 @@ storeClientCopy2(StoreEntry * e, store_client * sc)
     if (sc->flags.copy_event_pending)
 	return;
     if (EBIT_TEST(e->flags, ENTRY_FWD_HDR_WAIT)) {
-	debug(20, 5) ("storeClientCopy2: returning because ENTRY_FWD_HDR_WAIT set\n");
+	debugs(20, 5, "storeClientCopy2: returning because ENTRY_FWD_HDR_WAIT set");
 	return;
     }
     if (sc->flags.store_copying) {
 	sc->flags.copy_event_pending = 1;
-	debug(20, 3) ("storeClientCopy2: Queueing storeClientCopyEvent()\n");
+	debugs(20, 3, "storeClientCopy2: Queueing storeClientCopyEvent()");
 	eventAdd("storeClientCopyEvent", storeClientCopyEvent, sc, 0.0, 0);
 	return;
     }
     cbdataLock(sc);		/* ick, prevent sc from getting freed */
     sc->flags.store_copying = 1;
-    debug(20, 3) ("storeClientCopy2: %s\n", storeKeyText(e->hash.key));
+    debugs(20, 3, "storeClientCopy2: %s", storeKeyText(e->hash.key));
     assert(sc->new_callback);
     /*
      * We used to check for ENTRY_ABORTED here.  But there were some
@@ -467,13 +467,13 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
     }
     if (e->store_status == STORE_PENDING && sc->seen_offset >= mem->inmem_hi) {
 	/* client has already seen this, wait for more */
-	debug(20, 3) ("storeClientCopy3: Waiting for more\n");
+	debugs(20, 3, "storeClientCopy3: Waiting for more");
 
 	/* If the read is backed off and all clients have seen all the data in
 	 * memory, re-poll the fd */
 	if ((EBIT_TEST(e->flags, ENTRY_DEFER_READ)) &&
 	    (storeLowestMemReaderOffset(e) == mem->inmem_hi)) {
-	    debug(20, 3) ("storeClientCopy3: %s - clearing ENTRY_DEFER_READ\n", e->mem_obj->url);
+	    debugs(20, 3, "storeClientCopy3: %s - clearing ENTRY_DEFER_READ", e->mem_obj->url);
 	    /* Clear the flag and re-poll the fd */
 	    storeResumeRead(e);
 	}
@@ -491,7 +491,7 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
      * if needed.
      */
     if (STORE_DISK_CLIENT == sc->type && NULL == sc->swapin_sio) {
-	debug(20, 3) ("storeClientCopy3: Need to open swap in file\n");
+	debugs(20, 3, "storeClientCopy3: Need to open swap in file");
 	/* gotta open the swapin file */
 	if (storeTooManyDiskFilesOpen()) {
 	    /* yuck -- this causes a TCP_SWAPFAIL_MISS on the client side */
@@ -509,13 +509,13 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
 	     * schedule a disk read in the next block.
 	     */
 	} else {
-	    debug(20, 1) ("WARNING: Averted multiple fd operation (1)\n");
+	    debugs(20, 1, "WARNING: Averted multiple fd operation (1)");
 	    return;
 	}
     }
     if (sc->copy_offset >= mem->inmem_lo && sc->copy_offset < mem->inmem_hi) {
 	/* What the client wants is in memory */
-	debug(20, 3) ("storeClientCopy3: Copying from memory\n");
+	debugs(20, 3, "storeClientCopy3: Copying from memory");
 	assert(sc->new_callback);
 	assert(sc->node_ref.node == NULL);	/* We should never, ever have a node here; or we'd leak! */
 	sz = stmemRef(&mem->data_hdr, sc->copy_offset, &sc->node_ref);
@@ -527,7 +527,7 @@ storeClientCopy3(StoreEntry * e, store_client * sc)
     /* What the client wants is not in memory. Schedule a disk read */
     assert(STORE_DISK_CLIENT == sc->type);
     assert(!sc->flags.disk_io_pending);
-    debug(20, 3) ("storeClientCopy3: reading from STORE\n");
+    debugs(20, 3, "storeClientCopy3: reading from STORE");
     /* Just in case there's a node here; free it */
     stmemNodeUnref(&sc->node_ref);
     storeClientFileRead(sc);
@@ -587,7 +587,7 @@ storeClientReadBody(void *data, const char *buf_unused, ssize_t len)
     cbuf = sc->node_ref.node->data;
     /* XXX update how much data in that mem page is active; argh this should be done in a storage layer */
     sc->node_ref.node->len = len;
-    debug(20, 3) ("storeClientReadBody: len %d\n", (int) len);
+    debugs(20, 3, "storeClientReadBody: len %d", (int) len);
     (void) storeClientParseHeader(sc, cbuf, len);
     storeClientCallback(sc, len);
 }
@@ -613,11 +613,11 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
     assert(sc->new_callback);
     assert(sc->node_ref.node);
     cbuf = sc->node_ref.node->data;
-    debug(20, 3) ("storeClientReadHeader: len %d\n", (int) len);
+    debugs(20, 3, "storeClientReadHeader: len %d", (int) len);
     /* XXX update how much data in that mem page is active; argh this should be done in a storage layer */
     sc->node_ref.node->len = len;
     if (len < 0) {
-	debug(20, 3) ("storeClientReadHeader: %s\n", xstrerror());
+	debugs(20, 3, "storeClientReadHeader: %s", xstrerror());
 	storeClientCallback(sc, len);
 	return;
     }
@@ -625,12 +625,12 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
     tlv_list = storeSwapMetaUnpack(cbuf, &swap_hdr_sz);
     if (swap_hdr_sz > len) {
 	/* oops, bad disk file? */
-	debug(20, 1) ("WARNING: swapfile header too small\n");
+	debugs(20, 1, "WARNING: swapfile header too small");
 	storeClientCallback(sc, -1);
 	return;
     }
     if (tlv_list == NULL) {
-	debug(20, 1) ("WARNING: failed to unpack meta data\n");
+	debugs(20, 1, "WARNING: failed to unpack meta data");
 	storeClientCallback(sc, -1);
 	return;
     }
@@ -643,11 +643,11 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 	    assert(t->length == SQUID_MD5_DIGEST_LENGTH);
 	    if (!EBIT_TEST(e->flags, KEY_PRIVATE) &&
 		memcmp(t->value, e->hash.key, SQUID_MD5_DIGEST_LENGTH)) {
-		debug(20, 2) ("storeClientReadHeader: swapin MD5 mismatch\n");
-		debug(20, 2) ("\t%s\n", storeKeyText(t->value));
-		debug(20, 2) ("\t%s\n", storeKeyText(e->hash.key));
+		debugs(20, 2, "storeClientReadHeader: swapin MD5 mismatch");
+		debugs(20, 2, "\t%s", storeKeyText(t->value));
+		debugs(20, 2, "\t%s", storeKeyText(e->hash.key));
 		if (isPowTen(++md5_mismatches))
-		    debug(20, 1) ("WARNING: %d swapin MD5 mismatches\n",
+		    debugs(20, 1, "WARNING: %d swapin MD5 mismatches",
 			md5_mismatches);
 		swap_object_ok = 0;
 	    }
@@ -666,7 +666,7 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 #if HTTP_GZIP
 	case STORE_META_GZIP:
 
-	    debug(20, 2) ("Got STORE_META_GZIP: %s\n", (char *)t->value);
+	    debugs(20, 2, "Got STORE_META_GZIP: %s", (char *)t->value);
 
 	    if (strcmp("gzip", t->value) == 0) {
 		e->compression_type = SQUID_CACHE_GZIP;
@@ -687,7 +687,7 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 	    }
 	    break;
 	default:
-	    debug(20, 2) ("WARNING: got unused STORE_META type %d\n", t->type);
+	    debugs(20, 2, "WARNING: got unused STORE_META type %d", t->type);
 	    break;
 	}
     }
@@ -695,7 +695,7 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
     /* Check url / store_url */
     do {
 	if (new_url == NULL) {
-	    debug(20, 1) ("storeClientReadHeader: no URL!\n");
+	    debugs(20, 1, "storeClientReadHeader: no URL!");
 	    swap_object_ok = 0;
 	    break;
 	}
@@ -711,16 +711,16 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 	    else if (0 == strcasecmp(mem->store_url, new_store_url))
 		(void) 0;	/* a match! */
 	    else {
-		debug(20, 1) ("storeClientReadHeader: store URL mismatch\n");
-		debug(20, 1) ("\t{%s} != {%s}\n", (char *) new_store_url, mem->store_url);
+		debugs(20, 1, "storeClientReadHeader: store URL mismatch");
+		debugs(20, 1, "\t{%s} != {%s}", (char *) new_store_url, mem->store_url);
 		swap_object_ok = 0;
 		break;
 	    }
 	}
 	/* If we have no store URL then the request and the memory URL must match */
 	if ((!new_store_url) && mem->url && strcasecmp(mem->url, new_url) != 0) {
-	    debug(20, 1) ("storeClientReadHeader: URL mismatch\n");
-	    debug(20, 1) ("\t{%s} != {%s}\n", (char *) new_url, mem->url);
+	    debugs(20, 1, "storeClientReadHeader: URL mismatch");
+	    debugs(20, 1, "\t{%s} != {%s}", (char *) new_url, mem->url);
 	    swap_object_ok = 0;
 	    break;
 	}
@@ -748,9 +748,9 @@ storeClientReadHeader(void *data, const char *buf_unused, ssize_t len)
 	 * we have (part of) what they want
 	 */
 	copy_sz = XMIN(sc->copy_size, body_sz);
-	debug(20, 3) ("storeClientReadHeader: copying %d bytes of body\n",
+	debugs(20, 3, "storeClientReadHeader: copying %d bytes of body",
 	    (int) copy_sz);
-	debug(20, 8) ("sc %p; node_ref->node %p; data %p; copy size %d; data size %d\n",
+	debugs(20, 8, "sc %p; node_ref->node %p; data %p; copy size %d; data size %d",
 	    sc, sc->node_ref.node, sc->node_ref.node->data, (int) copy_sz, (int) len);
 	xmemmove(cbuf, cbuf + swap_hdr_sz, copy_sz);
 	if (sc->copy_offset == 0 && len > 0 && memHaveHeaders(mem) == 0)
@@ -815,7 +815,7 @@ storeClientUnregister(store_client * sc, StoreEntry * e, void *owner)
     MemObject *mem = e->mem_obj;
     if (sc == NULL)
 	return 0;
-    debug(20, 3) ("storeClientUnregister: called for '%s'\n", storeKeyText(e->hash.key));
+    debugs(20, 3, "storeClientUnregister: called for '%s'", storeKeyText(e->hash.key));
 #if STORE_CLIENT_LIST_DEBUG
     assert(sc == storeClientListSearch(e->mem_obj, owner));
 #endif
@@ -834,7 +834,7 @@ storeClientUnregister(store_client * sc, StoreEntry * e, void *owner)
     }
     if (NULL != sc->new_callback) {
 	/* callback with ssize = -1 to indicate unexpected termination */
-	debug(20, 3) ("storeClientUnregister: store_client for %s has a callback\n",
+	debugs(20, 3, "storeClientUnregister: store_client for %s has a callback",
 	    mem->url);
 	storeClientCallback(sc, -1);
     }
@@ -886,12 +886,12 @@ InvokeHandlers(StoreEntry * e)
     dlink_node *nx = NULL;
     dlink_node *node;
 
-    debug(20, 3) ("InvokeHandlers: %s\n", storeKeyText(e->hash.key));
+    debugs(20, 3, "InvokeHandlers: %s", storeKeyText(e->hash.key));
     /* walk the entire list looking for valid callbacks */
     for (node = mem->clients.head; node; node = nx) {
 	sc = node->data;
 	nx = node->next;
-	debug(20, 3) ("InvokeHandlers: checking client #%d\n", i++);
+	debugs(20, 3, "InvokeHandlers: checking client #%d", i++);
 	if (sc->new_callback == NULL)
 	    continue;
 	if (sc->flags.disk_io_pending)
@@ -905,7 +905,7 @@ storePendingNClients(const StoreEntry * e)
 {
     MemObject *mem = e->mem_obj;
     int npend = NULL == mem ? 0 : mem->nclients;
-    debug(20, 3) ("storePendingNClients: returning %d\n", npend);
+    debugs(20, 3, "storePendingNClients: returning %d", npend);
     return npend;
 }
 
@@ -918,43 +918,43 @@ CheckQuickAbort2(StoreEntry * entry)
     squid_off_t expectlen;
     MemObject *mem = entry->mem_obj;
     assert(mem);
-    debug(20, 3) ("CheckQuickAbort2: entry=%p, mem=%p\n", entry, mem);
+    debugs(20, 3, "CheckQuickAbort2: entry=%p, mem=%p", entry, mem);
     if (mem->request && !mem->request->flags.cachable) {
-	debug(20, 3) ("CheckQuickAbort2: YES !mem->request->flags.cachable\n");
+	debugs(20, 3, "CheckQuickAbort2: YES !mem->request->flags.cachable");
 	return 1;
     }
     if (EBIT_TEST(entry->flags, KEY_PRIVATE)) {
-	debug(20, 3) ("CheckQuickAbort2: YES KEY_PRIVATE\n");
+	debugs(20, 3, "CheckQuickAbort2: YES KEY_PRIVATE");
 	return 1;
     }
     expectlen = mem->reply->content_length + mem->reply->hdr_sz;
     curlen = mem->inmem_hi;
     minlen = Config.quickAbort.min << 10;
     if (minlen < 0) {
-	debug(20, 3) ("CheckQuickAbort2: NO disabled\n");
+	debugs(20, 3, "CheckQuickAbort2: NO disabled");
 	return 0;
     }
     if (curlen > expectlen) {
-	debug(20, 3) ("CheckQuickAbort2: YES bad content length\n");
+	debugs(20, 3, "CheckQuickAbort2: YES bad content length");
 	return 1;
     }
     if ((expectlen - curlen) < minlen) {
-	debug(20, 3) ("CheckQuickAbort2: NO only little more left\n");
+	debugs(20, 3, "CheckQuickAbort2: NO only little more left");
 	return 0;
     }
     if ((expectlen - curlen) > (Config.quickAbort.max << 10)) {
-	debug(20, 3) ("CheckQuickAbort2: YES too much left to go\n");
+	debugs(20, 3, "CheckQuickAbort2: YES too much left to go");
 	return 1;
     }
     if (expectlen < 100) {
-	debug(20, 3) ("CheckQuickAbort2: NO avoid FPE\n");
+	debugs(20, 3, "CheckQuickAbort2: NO avoid FPE");
 	return 0;
     }
     if ((curlen / (expectlen / 100)) > Config.quickAbort.pct) {
-	debug(20, 3) ("CheckQuickAbort2: NO past point of no return\n");
+	debugs(20, 3, "CheckQuickAbort2: NO past point of no return");
 	return 0;
     }
-    debug(20, 3) ("CheckQuickAbort2: YES default, returning 1\n");
+    debugs(20, 3, "CheckQuickAbort2: YES default, returning 1");
     return 1;
 }
 

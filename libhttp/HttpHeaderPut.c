@@ -144,7 +144,7 @@ void
 httpHeaderPutInt(HttpHeader * hdr, http_hdr_type id, int number)
 {   
     assert_eid(id);
-    assert(Headers[id].type == ftInt);  /* must be of an appropriate type */
+    assert(Headers[id].type == ftInt || Headers[id].type == ftInt64);  /* must be of an appropriate type */
     assert(number >= 0);
     httpHeaderAddEntryStr(hdr, id, NULL, xitoa(number));
 }
@@ -154,7 +154,7 @@ httpHeaderPutSize(HttpHeader * hdr, http_hdr_type id, squid_off_t number)
 {   
     char size[64];
     assert_eid(id);
-    assert(Headers[id].type == ftSize);         /* must be of an appropriate type */
+    assert(Headers[id].type == ftInt64);         /* must be of an appropriate type */
     assert(number >= 0);
     snprintf(size, sizeof(size), "%" PRINTF_OFF_T, number);
     httpHeaderAddEntryStr(hdr, id, NULL, size);
@@ -191,7 +191,7 @@ void
 httpHeaderPutExt(HttpHeader * hdr, const char *name, const char *value, int value_len)
 {
     assert(name && value);
-    debug(55, 8) ("%p adds ext entry '%s: %.*s'\n", hdr, name, value_len, value);
+    debugs(55, 8, "%p adds ext entry '%s: %.*s'", hdr, name, value_len, value);
     httpHeaderAddEntryStr2(hdr, HDR_OTHER, name, -1, value, value_len);
 }
 

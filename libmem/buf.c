@@ -49,7 +49,7 @@ buf_changesize(buf_t *b, int newsize)
 	 * buffer shouldn't ever be smaller than 'len', but we'll try
 	 * to handle it..
 	 */
-	debug (85, 5) ("buf_changesize: %p: size %d -> %d\n", b, b->size, newsize);
+	debugs(85, 5, "buf_changesize: %p: size %d -> %d", b, b->size, newsize);
         if (newsize <= b->size)
             return 1;
 	assert(b->flags.isfinal == 0);
@@ -94,7 +94,7 @@ buf_create_int(const char *file, int line)
 	dlinkAddTail(b, &b->node, &buf_active_list);
 #endif
 	buf_active_num++;
-	debug (85, 5) ("buf_create: %p\n", b);
+	debugs(85, 5, "buf_create: %p", b);
 	buf_ref(b);
 	b->create.file = file;
 	b->create.line = line;
@@ -129,7 +129,7 @@ buf_create_const_int(const void *data, size_t len, const char *file, int line)
 	dlinkAddTail(b, &b->node, &buf_active_list);
 #endif
 	buf_active_num++;
-	debug(85, 5) ("buf_create: %p\n", b);
+	debugs(85, 5, "buf_create: %p", b);
 	b->b = (char *)data;
 	b->len = b->size = b->sofs = len;
 	b->flags.isconst = 1;
@@ -144,7 +144,7 @@ void
 buf_free(buf_t *b)
 {
 	assert(b->flags.isfreed == 0);
-	debug (85, 5) ("buf_free: %p\n", b);
+	debugs(85, 5, "buf_free: %p", b);
 	if (b->flags.isfreed == 0) {
 		b->flags.isfreed = 1;
 		(void) buf_deref(b);
@@ -155,7 +155,7 @@ buf_free(buf_t *b)
 buf_t *
 buf_ref(buf_t *b)
 {
-	debug(85, 5) ("buf_ref: %p\n", b);
+	debugs(85, 5, "buf_ref: %p", b);
 	b->nref++;
 	return b;	/* for now, this might change .. */
 }
@@ -166,10 +166,10 @@ buf_deref(buf_t *b)
 {
 	assert(b->nref >= 1);
 	b->nref--;
-	debug(85, 5) ("buf_deref: %p\n", b);
+	debugs(85, 5, "buf_deref: %p", b);
 	/* the free actually goes on 'ere */
 	if (b->nref == 0) {
-		debug (85, 5) ("buf_deref: %p: FREEing\n", b);
+		debugs(85, 5, "buf_deref: %p: FREEing", b);
 		if (!b->flags.isconst) {
 		    free(b->b); b->b = NULL;
 		}
@@ -189,7 +189,7 @@ buf_fill(buf_t *b, int fd, int dogrow)
 {
 	int ret;
 	/* for now, always make sure there's 16k available space */
-	debug(85, 5) ("buf_fill: fd %d\n", fd);
+	debugs(85, 5, "buf_fill: fd %d", fd);
 	if (dogrow && b->size - b->len < 8192) {
 		if (! buf_changesize(b, b->size + 8192)) {
 			/* tsk! */
@@ -199,7 +199,7 @@ buf_fill(buf_t *b, int fd, int dogrow)
 	/* XXX we should never be given a full buffer to fill! */
 	assert(!buf_isfull(b));
 	ret = read(fd, b->b + b->len, b->size - b->len);
-	debug(85, 5) ("buf_fill: fd %d read %d bytes\n", fd, ret);
+	debugs(85, 5, "buf_fill: fd %d read %d bytes", fd, ret);
 	if (ret > 0) {
 		b->len += ret;
 	}
@@ -232,10 +232,10 @@ buf_make_immutable(buf_t *buf, int newofs)
 	if (newofs == -1)
 		newofs = buf->len;
 	if (newofs < buf->sofs) {
-		debug(85, 5) ("buf_make_immutable: %p: already seen %d bytes as immutable!!\n", buf, newofs);
+		debugs(85, 5, "buf_make_immutable: %p: already seen %d bytes as immutable!!", buf, newofs);
 		return 1;
 	}
-	debug(85, 5) ("buf_make_immutable: %p: immutable amount now %d bytes\n", buf, newofs);
+	debugs(85, 5, "buf_make_immutable: %p: immutable amount now %d bytes", buf, newofs);
 	buf->sofs = newofs;
 	return 1;
 }

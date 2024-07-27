@@ -21,11 +21,11 @@ clientEatRequestBodyHandler(char *buf, ssize_t size, void *data)
     }
 
     if (conn->in.offset == 0 && conn->body.size_left != 0) {
-        debug(1, 1) ("clientEatRequestBodyHandler: FD %d: no more data left in socket; but request header says there should be; aborting for now\n", conn->fd);
+        debugs(1, 1, "clientEatRequestBodyHandler: FD %d: no more data left in socket; but request header says there should be; aborting for now", conn->fd);
         return;
     }
     if (http->request->flags.proxy_keepalive) {
-        debug(33, 5) ("clientEatRequestBodyHandler: FD %d Keeping Alive\n", conn->fd);
+        debugs(33, 5, "clientEatRequestBodyHandler: FD %d Keeping Alive", conn->fd);
         clientKeepaliveNextRequest(http);
     } else {
         comm_close(conn->fd);
@@ -99,12 +99,12 @@ clientProcessBody(ConnStateData * conn)
     CBCB *callback = conn->body.callback;
     request_t *request = conn->body.request;
     /* Note: request is null while eating "aborted" transfers */
-    debug(33, 2) ("clientProcessBody: start fd=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
+    debugs(33, 2, "clientProcessBody: start fd=%d body_size=%lu in.offset=%ld cb=%p req=%p", conn->fd, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
 #if 0
     if (conn->in.offset == 0) {
 	/* This typically will only occur when some recursive call through the body eating path has occured -adrian */
 	/* XXX so no need atm to call the callback handler; the original code didn't! -adrian */
-	debug(33, 1) ("clientProcessBody: cbdata %p: would've leaked; conn->in.offset=0 here\n", cbdata);
+	debugs(33, 1, "clientProcessBody: cbdata %p: would've leaked; conn->in.offset=0 here", cbdata);
 	cbdataUnlock(conn->body.cbdata);
 	conn->body.cbdata = conn->body.callback = NULL;
 	return;
@@ -159,7 +159,7 @@ clientProcessBody(ConnStateData * conn)
 	    callback(buf, size, cbdata);
 	if (request != NULL)
 	    requestUnlink(request);	/* Linked in clientReadBody */
-	debug(33, 2) ("clientProcessBody: end fd=%d size=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, size, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
+	debugs(33, 2, "clientProcessBody: end fd=%d size=%d body_size=%lu in.offset=%ld cb=%p req=%p", conn->fd, size, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
     }
 }
 
@@ -189,7 +189,7 @@ clientAbortBody(request_t * request)
     if (valid)
 	callback(buf, -1, cbdata);	/* Signal abort to clientReadBody caller to allow them to clean up */
     else
-	debug(33, 1) ("NOTICE: A request body was aborted with cancelled callback: %p, possible memory leak\n", callback);
+	debugs(33, 1, "NOTICE: A request body was aborted with cancelled callback: %p, possible memory leak", callback);
     requestUnlink(request);	/* Linked in clientReadBody */
 }
 
@@ -203,12 +203,12 @@ clientReadBody(request_t * request, char *buf, size_t size, CBCB * callback, voi
         return;
     }
     if (!conn) {
-        debug(33, 5) ("clientReadBody: no body to read, request=%p\n", request);
+        debugs(33, 5, "clientReadBody: no body to read, request=%p", request);
         callback(buf, 0, cbdata);       /* Signal end of body */
         return;
     }
     assert(cbdataValid(conn));   
-    debug(33, 2) ("clientReadBody: start fd=%d body_size=%lu in.offset=%ld cb=%p req=%p\n", conn->fd, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
+    debugs(33, 2, "clientReadBody: start fd=%d body_size=%lu in.offset=%ld cb=%p req=%p", conn->fd, (unsigned long int) conn->body.size_left, (long int) conn->in.offset, callback, request);
     conn->body.callback = callback;
     conn->body.cbdata = cbdata;
     cbdataLock(conn->body.cbdata);

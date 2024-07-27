@@ -124,12 +124,12 @@ ssl_temp_rsa_cb(SSL * ssl, int export, int keylen)
 	rsa = rsa_1024;
 	break;
     default:
-	debug(83, 1) ("ssl_temp_rsa_cb: Unexpected key length %d\n", keylen);
+	debugs(83, 1, "ssl_temp_rsa_cb: Unexpected key length %d", keylen);
 	return NULL;
     }
 
     if (rsa == NULL) {
-	debug(83, 1) ("ssl_temp_rsa_cb: Failed to generate key %d\n", keylen);
+	debugs(83, 1, "ssl_temp_rsa_cb: Failed to generate key %d", keylen);
 	return NULL;
     }
 #if NOTYET
@@ -137,7 +137,7 @@ ssl_temp_rsa_cb(SSL * ssl, int export, int keylen)
     if (newkey) {
 	if (do_debug(83, 5))
 	    PEM_write_RSAPrivateKey(debug_log, rsa, NULL, NULL, 0, NULL, NULL);
-	debug(83, 1) ("Generated ephemeral RSA key of length %d\n", keylen);
+	debugs(83, 1, "Generated ephemeral RSA key of length %d", keylen);
     }
 #endif
     return rsa;
@@ -153,26 +153,26 @@ ssl_verify_cb(int ok, X509_STORE_CTX * ctx)
 	sizeof(buffer));
 
     if (ok) {
-	debug(83, 5) ("SSL Certificate signature OK: %s\n", buffer);
+	debugs(83, 5, "SSL Certificate signature OK: %s", buffer);
     } else {
 	switch (ctx->error) {
 	case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
-	    debug(83, 5) ("SSL Certficate error: CA not known: %s\n", buffer);
+	    debugs(83, 5, "SSL Certficate error: CA not known: %s", buffer);
 	    break;
 	case X509_V_ERR_CERT_NOT_YET_VALID:
-	    debug(83, 5) ("SSL Certficate not yet valid: %s\n", buffer);
+	    debugs(83, 5, "SSL Certficate not yet valid: %s", buffer);
 	    break;
 	case X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD:
-	    debug(83, 5) ("SSL Certificate has illegal \'not before\' field: %s\n", buffer);
+	    debugs(83, 5, "SSL Certificate has illegal \'not before\' field: %s", buffer);
 	    break;
 	case X509_V_ERR_CERT_HAS_EXPIRED:
-	    debug(83, 5) ("SSL Certificate expired: %s\n", buffer);
+	    debugs(83, 5, "SSL Certificate expired: %s", buffer);
 	    break;
 	case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD:
-	    debug(83, 5) ("SSL Certificate has invalid \'not after\' field: %s\n", buffer);
+	    debugs(83, 5, "SSL Certificate has invalid \'not after\' field: %s", buffer);
 	    break;
 	default:
-	    debug(83, 1) ("SSL unknown certificate error %d in %s\n",
+	    debugs(83, 1, "SSL unknown certificate error %d in %s",
 		ctx->error, buffer);
 	    break;
 	}
@@ -445,12 +445,12 @@ ssl_load_crl(SSL_CTX * sslContext, const char *CRLfile)
     BIO *in = BIO_new_file(CRLfile, "r");
     int count = 0;
     if (!in) {
-	debug(83, 2) ("WARNING: Failed to open CRL file '%s'\n", CRLfile);
+	debugs(83, 2, "WARNING: Failed to open CRL file '%s'", CRLfile);
 	return 0;
     }
     while ((crl = PEM_read_bio_X509_CRL(in, NULL, NULL, NULL))) {
 	if (!X509_STORE_add_crl(st, crl))
-	    debug(83, 2) ("WARNING: Failed to add CRL from file '%s'\n", CRLfile);
+	    debugs(83, 2, "WARNING: Failed to add CRL from file '%s'", CRLfile);
 	else
 	    count++;
 	X509_CRL_free(crl);
@@ -477,23 +477,23 @@ sslCreateServerContext(const char *certfile, const char *keyfile, int version, c
 	CAfile = clientCA;
 
     ERR_clear_error();
-    debug(83, 1) ("Initialising SSL.\n");
+    debugs(83, 1, "Initialising SSL.");
     switch (version) {
     case 2:
-	debug(83, 5) ("Using SSLv2.\n");
+	debugs(83, 5, "Using SSLv2.");
 	method = SSLv2_server_method();
 	break;
     case 3:
-	debug(83, 5) ("Using SSLv3.\n");
+	debugs(83, 5, "Using SSLv3.");
 	method = SSLv3_server_method();
 	break;
     case 4:
-	debug(83, 5) ("Using TLSv1.\n");
+	debugs(83, 5, "Using TLSv1.");
 	method = TLSv1_server_method();
 	break;
     case 1:
     default:
-	debug(83, 5) ("Using SSLv2/SSLv3.\n");
+	debugs(83, 5, "Using SSLv2/SSLv3.");
 	method = SSLv23_server_method();
 	break;
     }
@@ -513,71 +513,71 @@ sslCreateServerContext(const char *certfile, const char *keyfile, int version, c
 	SSL_CTX_set_session_cache_mode(sslContext, SSL_SESS_CACHE_OFF);
     }
     if (ssl_unclean_shutdown) {
-	debug(83, 5) ("Enabling quiet SSL shutdowns (RFC violation).\n");
+	debugs(83, 5, "Enabling quiet SSL shutdowns (RFC violation).");
 	SSL_CTX_set_quiet_shutdown(sslContext, 1);
     }
     if (cipher) {
-	debug(83, 5) ("Using chiper suite %s.\n", cipher);
+	debugs(83, 5, "Using chiper suite %s.", cipher);
 	if (!SSL_CTX_set_cipher_list(sslContext, cipher)) {
 	    ssl_error = ERR_get_error();
 	    libcore_fatalf("Failed to set SSL cipher suite '%s': %s\n",
 		cipher, ERR_error_string(ssl_error, NULL));
 	}
     }
-    debug(83, 1) ("Using certificate in %s\n", certfile);
+    debugs(83, 1, "Using certificate in %s", certfile);
     if (!SSL_CTX_use_certificate_chain_file(sslContext, certfile)) {
 	ssl_error = ERR_get_error();
-	debug(83, 0) ("Failed to acquire SSL certificate '%s': %s\n",
+	debugs(83, 0, "Failed to acquire SSL certificate '%s': %s",
 	    certfile, ERR_error_string(ssl_error, NULL));
 	goto error;
     }
-    debug(83, 1) ("Using private key in %s\n", keyfile);
+    debugs(83, 1, "Using private key in %s", keyfile);
     ssl_ask_password(sslContext, keyfile);
     if (!SSL_CTX_use_PrivateKey_file(sslContext, keyfile, SSL_FILETYPE_PEM)) {
 	ssl_error = ERR_get_error();
-	debug(83, 0) ("Failed to acquire SSL private key '%s': %s\n",
+	debugs(83, 0, "Failed to acquire SSL private key '%s': %s",
 	    keyfile, ERR_error_string(ssl_error, NULL));
 	goto error;
     }
-    debug(83, 5) ("Comparing private and public SSL keys.\n");
+    debugs(83, 5, "Comparing private and public SSL keys.");
     if (!SSL_CTX_check_private_key(sslContext)) {
 	ssl_error = ERR_get_error();
-	debug(83, 0) ("SSL private key '%s' does not match public key '%s': %s\n",
+	debugs(83, 0, "SSL private key '%s' does not match public key '%s': %s",
 	    certfile, keyfile, ERR_error_string(ssl_error, NULL));
 	goto error;
     }
-    debug(83, 9) ("Setting RSA key generation callback.\n");
+    debugs(83, 9, "Setting RSA key generation callback.");
     SSL_CTX_set_tmp_rsa_callback(sslContext, ssl_temp_rsa_cb);
 
-    debug(83, 9) ("Setting CA certificate locations.\n");
+    debugs(83, 9, "Setting CA certificate locations.");
     if ((CAfile || CApath) && (!SSL_CTX_load_verify_locations(sslContext, CAfile, CApath))) {
 	ssl_error = ERR_get_error();
-	debug(83, 1) ("Error error setting CA certificate locations: %s\n",
+	debugs(83, 1, "Error error setting CA certificate locations: %s",
 	    ERR_error_string(ssl_error, NULL));
-	debug(83, 1) ("continuing anyway...\n");
+	debugs(83, 1, "continuing anyway...");
     }
     if (!(fl & SSL_FLAG_NO_DEFAULT_CA) &&
 	!SSL_CTX_set_default_verify_paths(sslContext)) {
 	ssl_error = ERR_get_error();
-	debug(83, 1) ("Error error setting default CA certificate location: %s\n",
+	debugs(83, 1, "Error error setting default CA certificate location: %s",
 	    ERR_error_string(ssl_error, NULL));
-	debug(83, 1) ("continuing anyway...\n");
+	debugs(83, 1, "continuing anyway...");
     }
     if (clientCA) {
 	STACK_OF(X509_NAME) * cert_names;
-	debug(83, 9) ("Set client certifying authority list.\n");
+	debugs(83, 9, "Set client certifying authority list.");
 	cert_names = SSL_load_client_CA_file(clientCA);
 	if (cert_names == NULL) {
-	    debug(83, 1) ("Error loading the client CA certificates from '%s\': %s\n", clientCA, ERR_error_string(ERR_get_error(), NULL));
+	    debugs(83, 1, "Error loading the client CA certificates from '%s\': %s", clientCA, ERR_error_string(ERR_get_error(), NULL));
 	    goto error;
 	}
 	ERR_clear_error();
 	SSL_CTX_set_client_CA_list(sslContext, cert_names);
 	if (fl & SSL_FLAG_DELAYED_AUTH) {
-	    debug(83, 9) ("Not requesting client certificates until acl processing requires one\n");
+	    debugs(83, 9, "Not requesting client certificates until acl processing requires one");
 	    SSL_CTX_set_verify(sslContext, SSL_VERIFY_NONE, NULL);
 	} else {
-	    debug(83, 9) ("Requiring client certificates.\n");
+	    debugs(83, 9, "Requiring client certificates.");
 	    SSL_CTX_set_verify(sslContext, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, ssl_verify_cb);
 	}
 	if (CRLfile) {
@@ -591,7 +591,7 @@ sslCreateServerContext(const char *certfile, const char *keyfile, int version, c
 	    X509_STORE_set_flags(SSL_CTX_get_cert_store(sslContext), X509_V_FLAG_CRL_CHECK);
 #endif
     } else {
-	debug(83, 9) ("Not requiring any client certificates\n");
+	debugs(83, 9, "Not requiring any client certificates");
 	SSL_CTX_set_verify(sslContext, SSL_VERIFY_NONE, NULL);
     }
     if (dhfile) {
@@ -603,10 +603,10 @@ sslCreateServerContext(const char *certfile, const char *keyfile, int version, c
 	    fclose(in);
 	}
 	if (!dh)
-	    debug(83, 1) ("WARNING: Failed to read DH parameters '%s'\n", dhfile);
+	    debugs(83, 1, "WARNING: Failed to read DH parameters '%s'", dhfile);
 	else if (dh && DH_check(dh, &codes) == 0) {
 	    if (codes) {
-		debug(83, 1) ("WARNING: Failed to verify DH parameters '%s' (%x)\n", dhfile, codes);
+		debugs(83, 1, "WARNING: Failed to verify DH parameters '%s' (%x)", dhfile, codes);
 		DH_free(dh);
 		dh = NULL;
 	    }
@@ -636,23 +636,23 @@ sslCreateClientContext(const char *certfile, const char *keyfile, int version, c
 	certfile = keyfile;
 
     ERR_clear_error();
-    debug(83, 1) ("Initialising SSL.\n");
+    debugs(83, 1, "Initialising SSL.");
     switch (version) {
     case 2:
-	debug(83, 5) ("Using SSLv2.\n");
+	debugs(83, 5, "Using SSLv2.");
 	method = SSLv2_client_method();
 	break;
     case 3:
-	debug(83, 5) ("Using SSLv3.\n");
+	debugs(83, 5, "Using SSLv3.");
 	method = SSLv3_client_method();
 	break;
     case 4:
-	debug(83, 5) ("Using TLSv1.\n");
+	debugs(83, 5, "Using TLSv1.");
 	method = TLSv1_client_method();
 	break;
     case 1:
     default:
-	debug(83, 5) ("Using SSLv2/SSLv3.\n");
+	debugs(83, 5, "Using SSLv2/SSLv3.");
 	method = SSLv23_client_method();
 	break;
     }
@@ -666,7 +666,7 @@ sslCreateClientContext(const char *certfile, const char *keyfile, int version, c
     SSL_CTX_set_options(sslContext, ssl_parse_options(options));
 
     if (cipher) {
-	debug(83, 5) ("Using chiper suite %s.\n", cipher);
+	debugs(83, 5, "Using chiper suite %s.", cipher);
 	if (!SSL_CTX_set_cipher_list(sslContext, cipher)) {
 	    ssl_error = ERR_get_error();
 	    libcore_fatalf("Failed to set SSL cipher suite '%s': %s\n",
@@ -674,50 +674,50 @@ sslCreateClientContext(const char *certfile, const char *keyfile, int version, c
 	}
     }
     if (certfile) {
-	debug(83, 1) ("Using certificate in %s\n", certfile);
+	debugs(83, 1, "Using certificate in %s", certfile);
 	if (!SSL_CTX_use_certificate_chain_file(sslContext, certfile)) {
 	    ssl_error = ERR_get_error();
 	    libcore_fatalf("Failed to acquire SSL certificate '%s': %s\n",
 		certfile, ERR_error_string(ssl_error, NULL));
 	}
-	debug(83, 1) ("Using private key in %s\n", keyfile);
+	debugs(83, 1, "Using private key in %s", keyfile);
 	ssl_ask_password(sslContext, keyfile);
 	if (!SSL_CTX_use_PrivateKey_file(sslContext, keyfile, SSL_FILETYPE_PEM)) {
 	    ssl_error = ERR_get_error();
 	    libcore_fatalf("Failed to acquire SSL private key '%s': %s\n",
 		keyfile, ERR_error_string(ssl_error, NULL));
 	}
-	debug(83, 5) ("Comparing private and public SSL keys.\n");
+	debugs(83, 5, "Comparing private and public SSL keys.");
 	if (!SSL_CTX_check_private_key(sslContext)) {
 	    ssl_error = ERR_get_error();
 	    libcore_fatalf("SSL private key '%s' does not match public key '%s': %s\n",
 		certfile, keyfile, ERR_error_string(ssl_error, NULL));
 	}
     }
-    debug(83, 9) ("Setting RSA key generation callback.\n");
+    debugs(83, 9, "Setting RSA key generation callback.");
     SSL_CTX_set_tmp_rsa_callback(sslContext, ssl_temp_rsa_cb);
 
     if (fl & SSL_FLAG_DONT_VERIFY_PEER) {
-	debug(83, 1) ("NOTICE: Peer certificates are not verified for validity!\n");
+	debugs(83, 1, "NOTICE: Peer certificates are not verified for validity!");
 	SSL_CTX_set_verify(sslContext, SSL_VERIFY_NONE, NULL);
     } else {
-	debug(83, 9) ("Setting certificate verification callback.\n");
+	debugs(83, 9, "Setting certificate verification callback.");
 	SSL_CTX_set_verify(sslContext, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, ssl_verify_cb);
     }
 
-    debug(83, 9) ("Setting CA certificate locations.\n");
+    debugs(83, 9, "Setting CA certificate locations.");
     if ((CAfile || CApath) && (!SSL_CTX_load_verify_locations(sslContext, CAfile, CApath))) {
 	ssl_error = ERR_get_error();
-	debug(83, 1) ("Error error setting CA certificate locations: %s\n",
+	debugs(83, 1, "Error error setting CA certificate locations: %s",
 	    ERR_error_string(ssl_error, NULL));
-	debug(83, 1) ("continuing anyway...\n");
+	debugs(83, 1, "continuing anyway...");
     }
     if (!(fl & SSL_FLAG_NO_DEFAULT_CA) &&
 	!SSL_CTX_set_default_verify_paths(sslContext)) {
 	ssl_error = ERR_get_error();
-	debug(83, 1) ("Error error setting default CA certificate location: %s\n",
+	debugs(83, 1, "Error error setting default CA certificate location: %s",
 	    ERR_error_string(ssl_error, NULL));
-	debug(83, 1) ("continuing anyway...\n");
+	debugs(83, 1, "continuing anyway...");
     }
     if (CRLfile) {
 	ssl_load_crl(sslContext, CRLfile);
@@ -754,7 +754,7 @@ ssl_read_method(fd, buf, len)
 
     fd_table[fd].read_pending = COMM_PENDING_NOW;
     if (i > 0 && SSL_pending(ssl) > 0) {
-	debug(83, 3) ("SSL fd %d is pending\n", fd);
+	debugs(83, 3, "SSL fd %d is pending", fd);
     } else if (i <= 0) {
 	int err = SSL_get_error(ssl, i);
 	switch (err) {
@@ -777,11 +777,11 @@ ssl_read_method(fd, buf, len)
 		break;
 	    if (errno == ECONNRESET)
 		break;
-	    debug(83, 2) ("SSL fd %d read error %s (%d)\n", fd, strerror(errno), errno);
+	    debugs(83, 2, "SSL fd %d read error %s (%d)", fd, strerror(errno), errno);
 	    break;
 
 	default:
-	    debug(83, 2) ("SSL fd %d read error %s (%d/%d)\n", fd, ERR_error_string(ERR_get_error(), NULL), i, err);
+	    debugs(83, 2, "SSL fd %d read error %s (%d/%d)", fd, ERR_error_string(ERR_get_error(), NULL), i, err);
 	    break;
 	}
     }
@@ -827,11 +827,11 @@ ssl_write_method(fd, buf, len)
 		break;
 	    if (errno == ECONNRESET)
 		break;
-	    debug(83, 2) ("SSL fd %d write error %s (%d)\n", fd, strerror(errno), errno);
+	    debugs(83, 2, "SSL fd %d write error %s (%d)", fd, strerror(errno), errno);
 	    break;
 
 	default:
-	    debug(83, 2) ("SSL fd %d write error %s (%d/%d)\n", fd, ERR_error_string(ERR_get_error(), NULL), i, err);
+	    debugs(83, 2, "SSL fd %d write error %s (%d/%d)", fd, ERR_error_string(ERR_get_error(), NULL), i, err);
 	    i = -1;
 	    break;
 	}
@@ -875,7 +875,7 @@ ssl_shutdown_method(int fd)
 		break;
 	    }
 	default:
-	    debug(83, 2) ("WARNING: Unexpected error on SSL_shutdown '%d' (%d)\n", err, errno);
+	    debugs(83, 2, "WARNING: Unexpected error on SSL_shutdown '%d' (%d)", err, errno);
 	    return -1;
 	    break;
 	}
@@ -897,7 +897,7 @@ ssl_get_attribute(X509_NAME * name, const char *attribute_name)
     }
     nid = OBJ_txt2nid((char *) attribute_name);
     if (nid == 0) {
-	debug(83, 1) ("WARNING: Unknown SSL attribute name '%s'\n", attribute_name);
+	debugs(83, 1, "WARNING: Unknown SSL attribute name '%s'", attribute_name);
 	return NULL;
     }
     X509_NAME_get_text_by_NID(name, nid, buffer, sizeof(buffer));
@@ -1066,7 +1066,7 @@ ssl_verify_domain(const char *host, SSL * ssl)
     altnames = X509_get_ext_d2i(server_cert, NID_subject_alt_name, NULL, NULL);
     if (altnames) {
 	int numalts = sk_GENERAL_NAME_num(altnames);
-	debug(83, 3) ("Verifying server domain %s to certificate subjectAltName\n", host);
+	debugs(83, 3, "Verifying server domain %s to certificate subjectAltName", host);
 	for (i = 0; i < numalts; i++) {
 	    const GENERAL_NAME *check = sk_GENERAL_NAME_value(altnames, i);
 	    if (check->type != GEN_DNS)
@@ -1076,7 +1076,7 @@ ssl_verify_domain(const char *host, SSL * ssl)
 		continue;
 	    memcpy(name, data->data, data->length);
 	    name[data->length] = '\0';
-	    debug(83, 4) ("Verifying server domain %s to certificate name %s\n", server, name);
+	    debugs(83, 4, "Verifying server domain %s to certificate name %s", server, name);
 	    if (matchDomainName(server, name[0] == '*' ? name + 1 : name) == 0) {
 		found = 1;
 		break;
@@ -1087,14 +1087,14 @@ ssl_verify_domain(const char *host, SSL * ssl)
     }
     if (found == 0) {
 	X509_NAME *name = X509_get_subject_name(server_cert);
-	debug(83, 3) ("Verifying server domain %s to certificate cn\n", host);
+	debugs(83, 3, "Verifying server domain %s to certificate cn", host);
 	for (i = X509_NAME_get_index_by_NID(name, NID_commonName, -1); i >= 0; i = X509_NAME_get_index_by_NID(name, NID_commonName, i)) {
 	    ASN1_STRING *data = X509_NAME_ENTRY_get_data(X509_NAME_get_entry(name, i));
 	    if (data->length > sizeof(name) - 1)
 		continue;
 	    memcpy(name, data->data, data->length);
 	    name[data->length] = '\0';
-	    debug(83, 4) ("Verifying server domain %s to certificate cn %s\n",
+	    debugs(83, 4, "Verifying server domain %s to certificate cn %s",
 		server, name);
 	    if (matchDomainName(server, name[0] == '*' ? name + 1 : name) == 0) {
 		found = 1;
@@ -1105,7 +1105,7 @@ ssl_verify_domain(const char *host, SSL * ssl)
     if (found) {
 	return 1;
     } else {
-	debug(83, 2) ("ERROR: Certificate does not match domainname %s\n", host);
+	debugs(83, 2, "ERROR: Certificate does not match domainname %s", host);
 	return 0;
     }
 }

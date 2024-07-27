@@ -61,3 +61,16 @@ dlinkRemoveHead(dlink_list *list)
 	dlinkDelete(n, list);
 	return n->data;
 }
+
+int dlinkSize(dlink_list *list)
+{
+	int i = 0;
+	
+	dlink_node *n;
+
+	for(n = list->head;n != NULL;n = n->next) ++i;
+	
+	return i;
+}
+
+

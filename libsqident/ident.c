@@ -148,7 +148,7 @@ identTimeout(int fd, void *data)
     IdentStateData *state = data;
     LOCAL_ARRAY(char, buf, MAX_IPSTRLEN);
     (void) sqinet_ntoa(&state->my_peer, buf, sizeof(buf), SQADDR_NONE);
-    debug(30, 3) ("identTimeout: FD %d: %s\n", fd, buf);
+    debugs(30, 3, "identTimeout: FD %d: %s", fd, buf);
     comm_close(fd);
 }
 
@@ -209,7 +209,7 @@ identReadReply(int fd, void *data)
 	*t = '\0';
     if ((t = strchr(buf, '\n')))
 	*t = '\0';
-    debug(30, 5) ("identReadReply: FD %d: Read '%s'\n", fd, buf);
+    debugs(30, 5, "identReadReply: FD %d: Read '%s'", fd, buf);
     if (strstr(buf, "USERID")) {
 	if ((ident = strrchr(buf, ':'))) {
 	    while (xisspace(*++ident));

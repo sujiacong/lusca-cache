@@ -153,7 +153,7 @@ peerMonitorRequest(void *data)
     }
     req = urlParse(urlMethodGetKnownByCode(METHOD_GET), url);
     if (!req) {
-	debug(DBG, 1) ("peerMonitorRequest: Failed to parse URL '%s' for cache_peer %s\n", url, pm->peer->name);
+	debugs(DBG, 1, "peerMonitorRequest: Failed to parse URL '%s' for cache_peer %s", url, pm->peer->name);
 	cbdataFree(pm);
 	return;
     }
@@ -191,30 +191,30 @@ peerMonitorCompleted(PeerMonitor * pm)
     }
     /* Figure out if the response was OK or not */
     if (pm->running.status != HTTP_OK) {
-	debug(DBG, 1) ("peerMonitor %s: Failed, status != 200 (%d)\n",
+	debugs(DBG, 1, "peerMonitor %s: Failed, status != 200 (%d)",
 	    p->name, pm->running.status);
 	state = PEER_DEAD;
     } else if (pm->running.size < p->monitor.min) {
-	debug(DBG, 1) ("peerMonitor %s: Failed, reply size %d < min %d\n",
+	debugs(DBG, 1, "peerMonitor %s: Failed, reply size %d < min %d",
 	    p->name, pm->running.size, p->monitor.min);
 	state = PEER_DEAD;
     } else if (pm->running.size > p->monitor.max && p->monitor.max > 0) {
-	debug(DBG, 1) ("peerMonitor %s: Failed, reply size %d > max %d\n",
+	debugs(DBG, 1, "peerMonitor %s: Failed, reply size %d > max %d",
 	    p->name, pm->running.size, p->monitor.max);
 	state = PEER_DEAD;
     } else {
-	debug(DBG, 2) ("peerMonitor %s: OK\n", p->name);
+	debugs(DBG, 2, "peerMonitor %s: OK", p->name);
     }
     p->monitor.state = state;
     if (state != p->stats.logged_state) {
 	switch (state) {
 	case PEER_ALIVE:
-	    debug(DBG, 1) ("Detected REVIVED %s: %s\n",
+	    debugs(DBG, 1, "Detected REVIVED %s: %s",
 		neighborTypeStr(p), p->name);
 	    peerClearRR();
 	    break;
 	case PEER_DEAD:
-	    debug(DBG, 1) ("Detected DEAD %s: %s\n",
+	    debugs(DBG, 1, "Detected DEAD %s: %s",
 		neighborTypeStr(p), p->name);
 	    break;
 	}

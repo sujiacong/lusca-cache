@@ -80,7 +80,9 @@
 #include "../libiapp/comm_types.h"
 #include "../libiapp/comm.h"
 #include "../libiapp/event.h"
-   
+#include "../libstat/StatHist.h"
+#include "../libiapp/globals.h"
+
 #if defined(_SQUID_CYGWIN_)
 #include <sys/ioctl.h>
 #endif
@@ -176,12 +178,12 @@ idnsAddNameserver(const char *buf)
     sqinet_init(&A);
 
     if (! sqinet_aton(&A, buf, SQATON_PASSIVE)) {
-	debug(78, 0) ("WARNING: rejecting '%s' as a name server, because it is not a numeric IP address\n", buf);
+	debugs(78, 0, "WARNING: rejecting '%s' as a name server, because it is not a numeric IP address", buf);
         goto finish;
     }
     if (sqinet_is_anyaddr(&A)) {
-	debug(78, 0) ("WARNING: Squid does not accept 0.0.0.0 / ::0 in DNS server specifications.\n");
-	debug(78, 0) ("Will be using 127.0.0.1 instead, assuming you meant that DNS is running on the same machine\n");
+	debugs(78, 0, "WARNING: Squid does not accept 0.0.0.0 / ::0 in DNS server specifications.");
+	debugs(78, 0, "Will be using 127.0.0.1 instead, assuming you meant that DNS is running on the same machine");
 	(void) sqinet_aton(&A, "127.0.0.1", SQATON_PASSIVE);
     }
     if (nns == nns_alloc) {
@@ -206,7 +208,7 @@ idnsAddNameserver(const char *buf)
     sqinet_copy(&nameservers[nns].S, &A);
     sqinet_set_port(&nameservers[nns].S, NS_DEFAULTPORT, SQADDR_NONE);
     sqinet_ntoa(&A, sbuf, sizeof(sbuf), SQADDR_NONE);
-    debug(78, 3) ("idnsAddNameserver: Added nameserver #%d: %s\n", nns, sbuf);
+    debugs(78, 3, "idnsAddNameserver: Added nameserver #%d: %s", nns, sbuf);
     nns++;
     idnsOpenSockets();
 finish:
@@ -231,7 +233,7 @@ idnsAddPathComponent(const char *buf)
     }
     assert(npc < npc_alloc);
     strcpy(searchpath[npc].domain, buf);
-    debug(78, 3) ("idnsAddPathComponent: Added domain #%d: %s\n",
+    debugs(78, 3, "idnsAddPathComponent: Added domain #%d: %s",
 	npc, searchpath[npc].domain);
     npc++;
 }
@@ -256,12 +258,18 @@ idnsFreeSearchpath(void)
 
 static void
 idnsTickleQueue(void)
-{
+{	
+#define min(A,B) (A<B?A:B)
+
     if (event_queued)
 	return;
     if (NULL == idns_lru_list.tail)
 	return;
-    eventAdd("idnsCheckQueue", idnsCheckQueue, NULL, 1.0, 1);
+	
+	const double when = min(DnsConfig.idns_query, DnsConfig.idns_retransmit);
+	 
+    eventAdd("idnsCheckQueue", idnsCheckQueue, NULL, when, 1);
+	
     event_queued = 1;
 }
 
@@ -285,6 +293,11 @@ idnsSendQuery(idns_query * q)
     int ns;
     int ds = -1;
 
+	if (DnsSocket < 0 && DnsSocketv6 < 0) {
+		   debugs(78, DBG_IMPORTANT, "WARNING: idnsSendQuery: Can't send query, no DNS socket!");
+		   return;
+	}
+
     /* XXX Select nameserver */
     assert(nns > 0);
     assert(q->lru.next == NULL);
@@ -306,16 +319,16 @@ idnsSendQuery(idns_query * q)
     }
     if (ds < 0) {
 		/* XXX I don't like this failure mode but its inherited from the previous code! -[ahc] */
-		debug(78, 1) ("idnsSendQuery: Can't send query, no DNS socket for address family %d!\n", sqinet_get_family(&nameservers[ns].S));
+		debugs(78, 1, "idnsSendQuery: Can't send query, no DNS socket for address family %d!", sqinet_get_family(&nameservers[ns].S));
 		return;
     }
 
     x = comm_udp_sendto6(ds, &nameservers[ns].S, q->buf, q->sz);
 
     q->nsends++;
-    q->queue_t = q->sent_t = current_time;
+    q->sent_t = current_time;
     if (x < 0) {
-	debug(50, 1) ("idnsSendQuery: FD %d: sendto: %s\n",
+	debugs(50, 1, "idnsSendQuery: FD %d: sendto: %s",
 	    DnsSocket, xstrerror());
 	if (q->nsends % nns != 0)
 	    goto try_again;
@@ -324,6 +337,7 @@ idnsSendQuery(idns_query * q)
 	commSetSelect(ds, COMM_SELECT_READ, idnsRead, NULL, 0);
     }
     nameservers[ns].nqueries++;
+	q->queue_t = current_time;
     dlinkAdd(q, &q->lru, &idns_lru_list);
     idnsTickleQueue();
 }
@@ -366,7 +380,7 @@ idnsQueryID(void)
 	id++;
 
 	if (id == first_id) {
-	    debug(78, 1) ("idnsQueryID: Warning, too many pending DNS requests\n");
+	    debugs(78, 1, "idnsQueryID: Warning, too many pending DNS requests");
 	    break;
 	}
     }
@@ -413,7 +427,7 @@ idnsReadTcp(int fd, void *data)
 	return;
     }
     if (n <= 0) {
-	debug(78, 1) ("idnsReadTcp: Short response from nameserver %d for %s.\n", ns + 1, q->name);
+	debugs(78, 1, "idnsReadTcp: Short response from nameserver %d for %s.", ns + 1, q->name);
 	idnsTcpCleanup(q);
 	return;
     }
@@ -455,7 +469,7 @@ idnsSendTcpQuery(int fd, int status, void *data)
     short nsz;
     if (status != COMM_OK) {
 	int ns = (q->nsends - 1) % nns;
-	debug(78, 1) ("idnsSendTcpQuery: Failed to connect to DNS server %d using TCP\n", ns + 1);
+	debugs(78, 1, "idnsSendTcpQuery: Failed to connect to DNS server %d using TCP", ns + 1);
 	idnsTcpCleanup(q);
 	return;
     }
@@ -490,7 +504,7 @@ idnsRetryTcp(idns_query * q)
 		break;
 	default:
 		/* XXX this error handling is horrible? */
-		debug(1, 1) ("idnsRetryTcp: Nameserver %d: can't select an address family!\n", ns);
+		debugs(1, 1, "idnsRetryTcp: Nameserver %d: can't select an address family!", ns);
 		return;
     }
 
@@ -515,26 +529,26 @@ idnsGrokReply(const char *buf, size_t sz)
 	sz,
 	&message);
     if (message == NULL) {
-	debug(78, 2) ("idnsGrokReply: Malformed DNS response\n");
+	debugs(78, 2, "idnsGrokReply: Malformed DNS response");
 	return;
     }
-    debug(78, 3) ("idnsGrokReply: ID %#hx, %d answers\n", message->id, n);
+    debugs(78, 3, "idnsGrokReply: ID %#hx, %d answers", message->id, n);
 
     q = idnsFindQuery(message->id);
 
     if (q == NULL) {
-	debug(78, 3) ("idnsGrokReply: Late response\n");
+	debugs(78, 3, "idnsGrokReply: Late response");
 	rfc1035MessageDestroy(message);
 	return;
     }
     if (rfc1035QueryCompare(&q->query, message->query) != 0) {
-	debug(78, 3) ("idnsGrokReply: Query mismatch (%s != %s)\n", q->query.name, message->query->name);
+	debugs(78, 3, "idnsGrokReply: Query mismatch (%s != %s)", q->query.name, message->query->name);
 	rfc1035MessageDestroy(message);
 	return;
     }
     dlinkDelete(&q->lru, &idns_lru_list);
     if (message->tc && q->tcp_socket == -1) {
-	debug(78, 2) ("idnsGrokReply: Response for %s truncated. Retrying using TCP\n", message->query->name);
+	debugs(78, 2, "idnsGrokReply: Response for %s truncated. Retrying using TCP", message->query->name);
 	rfc1035MessageDestroy(message);
 	idnsRetryTcp(q);
 	return;
@@ -542,7 +556,7 @@ idnsGrokReply(const char *buf, size_t sz)
     idnsRcodeCount(n, q->attempt);
     q->error = NULL;
     if (n < 0) {
-	debug(78, 3) ("idnsGrokReply: error %s (%d)\n", rfc1035_error_message, rfc1035_errno);
+	debugs(78, 3, "idnsGrokReply: error %s (%d)", rfc1035_error_message, rfc1035_errno);
 	q->error = rfc1035_error_message;
 	q->rcode = -n;
 	if (q->rcode == 2 && ++q->attempt < MAX_ATTEMPT) {
@@ -563,7 +577,7 @@ idnsGrokReply(const char *buf, size_t sz)
 	    if (q->domain < npc) {
 		strcat(q->name, ".");
 		strcat(q->name, searchpath[q->domain].domain);
-		debug(78, 3) ("idnsGrokReply: searchpath used for %s\n",
+		debugs(78, 3, "idnsGrokReply: searchpath used for %s",
 		    q->name);
 		q->domain++;
 	    } else {
@@ -618,13 +632,13 @@ idnsRead(int fd, void *data)
 	    /* or maybe an EHOSTUNREACH "No route to host" message */
 	    if (errno != ECONNREFUSED && errno != EHOSTUNREACH)
 #endif
-		debug(50, 1) ("idnsRead: FD %d recvfrom: %s\n",
+		debugs(50, 1, "idnsRead: FD %d recvfrom: %s",
 		    fd, xstrerror());
 	    sqinet_done(&from);
 	    break;
 	}
 	fd_bytes(fd, len, FD_READ);
-	debug(78, 3) ("idnsRead: FD %d: received %d bytes\n", fd, (int) len);
+	debugs(78, 3, "idnsRead: FD %d: received %d bytes", fd, (int) len);
 	ns = idnsFromKnownNameserver(&from);
 	if (ns >= 0) {
 	    nameservers[ns].nreplies++;
@@ -633,7 +647,7 @@ idnsRead(int fd, void *data)
 	    LOCAL_ARRAY(char, sbuf, 256);
 	    if (squid_curtime - last_warning > 60) {
 		(void) sqinet_ntoa(&from, sbuf, sizeof(sbuf), SQADDR_NONE);
-		debug(78, 1) ("WARNING: Reply from unknown nameserver [%s]\n", sbuf);
+		debugs(78, 1, "WARNING: Reply from unknown nameserver [%s]", sbuf);
 		last_warning = squid_curtime;
 	    }
 	    continue;
@@ -663,11 +677,24 @@ idnsCheckQueue(void *unused)
 {
     dlink_node *n;
     dlink_node *p = NULL;
-    idns_query *q;
+    idns_query *q = NULL;
     event_queued = 0;
     if (0 == nns)
 	/* name servers went away; reconfiguring or shutting down */
 	return;
+
+	if(reconfiguring)
+	{
+		debugs(78, 1, "reconfiguring");
+		return;
+	}
+
+	if(!DnsConfig.idns_retransmit || !DnsConfig.idns_query)
+	{
+		debugs(78, 1, "Warnning, DnsConfig not set");
+		return;
+	}
+	
     for (n = idns_lru_list.tail; n; n = p) {
 	p = n->prev;
 	q = n->data;
@@ -681,13 +708,13 @@ idnsCheckQueue(void *unused)
 	    dlinkAdd(q, &q->lru, &idns_lru_list);
 	    continue;
 	}
-	debug(78, 3) ("idnsCheckQueue: ID %#04x timeout\n",
+	debugs(78, 3, "idnsCheckQueue: ID %#04x timeout",
 	    q->id);
 	dlinkDelete(&q->lru, &idns_lru_list);
 	if (tvSubDsec(q->start_t, current_time) < DnsConfig.idns_query) {
 	    idnsSendQuery(q);
 	} else {
-	    debug(78, 2) ("idnsCheckQueue: ID %x: giving up after %d tries and %5.1f seconds\n",
+	    debugs(78, 2, "idnsCheckQueue: ID %x: giving up after %d tries and %5.1f seconds",
 		(int) q->id, q->nsends,
 		tvSubDsec(q->start_t, current_time));
 	    if (q->rcode != 0)
@@ -726,6 +753,16 @@ idnsConfigure(int ignore_unknown_nameservers, int idns_retransmit, int idns_quer
 	DnsConfig.idns_retransmit = idns_retransmit;
 	DnsConfig.idns_query = idns_query;
 	DnsConfig.res_defnames = res_defnames;
+
+	if(DnsConfig.idns_query < 1) 
+	{
+		DnsConfig.idns_query = 1;
+	}
+
+	if(DnsConfig.idns_retransmit < 1) 
+	{
+		DnsConfig.idns_retransmit = 1;
+	}
 }
 
 void
@@ -759,7 +796,7 @@ idnsInitSocket(sqaddr_t *addr, const char *note)
 	 * statement. Doing so messes up the internal _db_level
 	 */
 	(void) sqinet_ntoa(addr, buf, sizeof(buf), SQADDR_NONE);
-	debug(78, 1) ("DNS Socket created at %s, port %d, FD %d\n", buf, comm_local_port(fd), fd);
+	debugs(78, 1, "DNS Socket created at %s, port %d, FD %d", buf, comm_local_port(fd), fd);
 	return fd;
 }
 
@@ -852,7 +889,7 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
 	q->domain = 0;
 	strcat(q->name, ".");
 	strcat(q->name, searchpath[q->domain].domain);
-	debug(78, 3) ("idnsALookup: searchpath used for %s\n",
+	debugs(78, 3, "idnsALookup: searchpath used for %s",
 	    q->name);
     }
     q->sz = rfc1035BuildAQuery(q->name, q->buf, sizeof(q->buf), q->id,
@@ -864,7 +901,7 @@ idnsALookup(const char *name, IDNSCB * callback, void *data)
 	cbdataFree(q);
 	return;
     }
-    debug(78, 3) ("idnsALookup: buf is %d bytes for %s, id = %#hx\n",
+    debugs(78, 3, "idnsALookup: buf is %d bytes for %s, id = %#hx",
 	(int) q->sz, q->name, q->id);
     q->callback = callback;
     q->callback_data = data;
@@ -883,7 +920,7 @@ idnsPTRLookup(const struct in_addr addr, IDNSCB * callback, void *data)
     q->tcp_socket = -1;
     q->id = idnsQueryID();
     q->sz = rfc1035BuildPTRQuery(addr, q->buf, sizeof(q->buf), q->id, &q->query);
-    debug(78, 3) ("idnsPTRLookup: buf is %d bytes for %s, id = %#hx\n",
+    debugs(78, 3, "idnsPTRLookup: buf is %d bytes for %s, id = %#hx",
 	(int) q->sz, ip, q->id);
     if (q->sz < 0) {
 	/* problem with query data -- query not sent */

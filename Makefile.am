@@ -4,8 +4,8 @@
 #
 
 AUTOMAKE_OPTIONS = dist-bzip2 subdir-objects 1.5
-DIST_SUBDIRS	= lib libcore libmem libsqname libcb libiapp libstat libsqftp libsqurl libhttp libsqdns libsqident libsqinet libhelper libmime libsqdebug libstmem libasyncio libsqtlv libsqstore snmplib scripts src icons errors contrib doc helpers tools app test-suite
-SUBDIRS		= lib libcore libmem libsqname libcb libiapp libstat libsqftp libsqurl libhttp libsqdns libsqident libsqinet libhelper libmime libsqdebug libstmem libasyncio libsqtlv libsqstore @makesnmplib@ scripts src icons errors doc helpers tools app test-suite
+DIST_SUBDIRS	= lib libcore libmem libsqname libcb libiapp libstat libsqftp libsqurl libhttp libsqdns libsqident libsqinet libhelper libmime libsqdebug libstmem libasyncio libsqtlv libsqstore libmutiprocess snmplib scripts src icons errors contrib doc helpers tools app test-suite
+SUBDIRS		= lib libcore libmem libsqname libcb libiapp libstat libsqftp libsqurl libhttp libsqdns libsqident libsqinet libhelper libmime libsqdebug libstmem libasyncio libsqtlv libsqstore libmutiprocess @makesnmplib@ scripts src icons errors doc helpers tools app test-suite
 
 DISTCLEANFILES = include/stamp-h include/stamp-h[0-9]*
 DEFAULT_PINGER		= $(libexecdir)/`echo pinger | sed '$(transform);s/$$/$(EXEEXT)/'`

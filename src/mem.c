@@ -83,7 +83,7 @@ memBufStats(StoreEntry * sentry)
 }
 
 static void
-memStats(StoreEntry * sentry)
+memStats(StoreEntry * sentry, void* data)
 {
     storeBuffer(sentry);
     memReport(sentry);
@@ -95,9 +95,9 @@ memStats(StoreEntry * sentry)
 	long int leaked = 0, dubious = 0, reachable = 0, suppressed = 0;
 	storeAppendPrintf(sentry, "Valgrind Report:\n");
 	storeAppendPrintf(sentry, "Type\tAmount\n");
-	debug(13, 1) ("Asking valgrind for memleaks\n");
+	debugs(13, 1, "Asking valgrind for memleaks");
 	VALGRIND_DO_LEAK_CHECK;
-	debug(13, 1) ("Getting valgrind statistics\n");
+	debugs(13, 1, "Getting valgrind statistics");
 	VALGRIND_COUNT_LEAKS(leaked, dubious, reachable, suppressed);
 	storeAppendPrintf(sentry, "Leaked\t%ld\n", leaked);
 	storeAppendPrintf(sentry, "Dubious\t%ld\n", dubious);
@@ -135,7 +135,7 @@ memInit(void)
     /* Those below require conversion */
     cachemgrRegister("mem",
 	"Memory Utilization",
-	memStats, 0, 1);
+	memStats,  NULL, NULL, 0, 1, 0);
 }
 
 void

@@ -213,7 +213,7 @@ heap_purgeDone(RemovalPurgeWalker * walker)
     heap->nwalkers -= 1;
     if (heap_walker->min_age > 0) {
 	heap->heap->age = heap_walker->min_age;
-	debug(81, 3) ("heap_purgeDone: Heap age set to %f\n",
+	debugs(81, 3, "heap_purgeDone: Heap age set to %f",
 	    (double) heap->heap->age);
     }
     /*
@@ -278,7 +278,7 @@ createRemovalPolicy_heap(wordlist * args)
 	keytype = args->key;
 	args = args->next;
     } else {
-	debug(81, 1) ("createRemovalPolicy_heap: No key type specified. Using LRU\n");
+	debugs(81, 1, "createRemovalPolicy_heap: No key type specified. Using LRU");
 	keytype = "LRU";
     }
     if (!strcmp(keytype, "GDSF"))
@@ -288,7 +288,7 @@ createRemovalPolicy_heap(wordlist * args)
     else if (!strcmp(keytype, "LRU"))
 	heap_data->keyfunc = HeapKeyGen_StoreEntry_LRU;
     else {
-	debug(81, 0) ("createRemovalPolicy_heap: Unknown key type \"%s\". Using LRU\n",
+	debugs(81, 0, "createRemovalPolicy_heap: Unknown key type \"%s\". Using LRU",
 	    keytype);
 	heap_data->keyfunc = HeapKeyGen_StoreEntry_LRU;
     }

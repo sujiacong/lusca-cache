@@ -73,7 +73,7 @@ httpReplyCreate(void)
 {
     HttpReply *rep = memPoolAlloc(pool_http_reply);
 
-    debug(58, 7) ("creating rep: %p\n", rep);
+    debugs(58, 7, "creating rep: %p", rep);
     httpReplyInit(rep);
     return rep;
 }
@@ -104,7 +104,7 @@ void
 httpReplyDestroy(HttpReply * rep)
 {
     assert(rep);
-    debug(58, 7) ("destroying rep: %p\n", rep);
+    debugs(58, 7, "destroying rep: %p", rep);
     httpReplyClean(rep);
     httpReplyDoDestroy(rep);
 }

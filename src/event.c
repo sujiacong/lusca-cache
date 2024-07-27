@@ -43,11 +43,11 @@ eventLocalInit(void)
 {
     cachemgrRegister("events",
 	"Event Queue",
-	eventMgr, 0, 1);
+	eventMgr, NULL, NULL, 0, 1, 0);
 }
 
 static void
-eventDump(StoreEntry * sentry)
+eventDump(StoreEntry * sentry,void* data)
 {
     struct ev_entry *e = tasks;
     if (last_event_ran)
@@ -66,7 +66,7 @@ eventDump(StoreEntry * sentry)
 }
 
 static void
-eventMgr(StoreEntry * e)
+eventMgr(StoreEntry * e, void* data)
 {
-    eventDump(e);
+    eventDump(e,NULL);
 }

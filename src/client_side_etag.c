@@ -37,16 +37,16 @@ clientHandleETagReply(void *data, HttpReply * rep)
 	return;
     }
     if (!rep) {
-	debug(33, 3) ("clientHandleETagReply: FAILED '%s'\n", url);
+	debugs(33, 3, "clientHandleETagReply: FAILED '%s'", url);
 	clientHandleETagMiss(http);
 	return;
     }
     if (EBIT_TEST(entry->flags, ENTRY_ABORTED)) {
-	debug(33, 3) ("clientHandleETagReply: ABORTED '%s'\n", url);
+	debugs(33, 3, "clientHandleETagReply: ABORTED '%s'", url);
 	clientHandleETagMiss(http);
 	return;
     }
-    debug(33, 3) ("clientHandleETagReply: %s = %d\n", url, (int) rep->sline.status);
+    debugs(33, 3, "clientHandleETagReply: %s = %d", url, (int) rep->sline.status);
     if (HTTP_NOT_MODIFIED == rep->sline.status) {
 	/* Remember the ETag and restart */
 	if (rep) {
@@ -80,7 +80,7 @@ clientProcessETag(clientHttpRequest * http)
 {
     char *url = http->uri;
     StoreEntry *entry = NULL;
-    debug(33, 3) ("clientProcessETag: '%s'\n", http->uri);
+    debugs(33, 3, "clientProcessETag: '%s'", http->uri);
     entry = storeCreateEntry(url, http->request->flags, http->request->method);
     if (http->request->store_url)
 	storeEntrySetStoreUrl(entry, http->request->store_url);
@@ -94,7 +94,7 @@ clientProcessETag(clientHttpRequest * http)
     fwdStart(http->conn->fd, http->entry, http->request);
     /* Register with storage manager to receive updates when data comes in. */
     if (EBIT_TEST(entry->flags, ENTRY_ABORTED))
-	debug(33, 0) ("clientProcessETag: found ENTRY_ABORTED object\n");
+	debugs(33, 0, "clientProcessETag: found ENTRY_ABORTED object");
     storeClientCopyHeaders(http->sc, entry,
 	clientHandleETagReply,
 	http);

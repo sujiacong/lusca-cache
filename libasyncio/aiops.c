@@ -376,7 +376,7 @@ static void
 squidaio_queue_request(squidaio_request_t * request)
 {
     static int high_start = 0;
-    debug(43, 9) ("squidaio_queue_request: %p type=%d result=%p\n",
+    debugs(43, 9, "squidaio_queue_request: %p type=%d result=%p",
 	request, request->request_type, request->resultp);
     /* Mark it as not executed (failing result, no error) */
     request->ret = -1;
@@ -421,7 +421,7 @@ squidaio_queue_request(squidaio_request_t * request)
 	if (++filter >= filter_limit) {
 	    filter_limit += filter;
 	    filter = 0;
-	    debug(43, 1) ("squidaio_queue_request: WARNING - Queue congestion\n");
+	    debugs(43, 1, "squidaio_queue_request: WARNING - Queue congestion");
 	}
     }
     /* Warn if out of threads */
@@ -439,9 +439,9 @@ squidaio_queue_request(squidaio_request_t * request)
 	    queue_low = request_queue_len;
 	if (squid_curtime >= (last_warn + 15) &&
 	    squid_curtime >= (high_start + 5)) {
-	    debug(43, 1) ("squidaio_queue_request: WARNING - Disk I/O overloading\n");
+	    debugs(43, 1, "squidaio_queue_request: WARNING - Disk I/O overloading");
 	    if (squid_curtime >= (high_start + 15))
-		debug(43, 1) ("squidaio_queue_request: Queue Length: current=%d, high=%d, low=%d, duration=%ld\n",
+		debugs(43, 1, "squidaio_queue_request: Queue Length: current=%d, high=%d, low=%d, duration=%ld",
 		    request_queue_len, queue_high, queue_low, (long int) (squid_curtime - high_start));
 	    last_warn = squid_curtime;
 	}
@@ -450,10 +450,10 @@ squidaio_queue_request(squidaio_request_t * request)
     }
     /* Warn if seriously overloaded */
     if (request_queue_len > RIDICULOUS_LENGTH) {
-	debug(43, 0) ("squidaio_queue_request: Async request queue growing uncontrollably!\n");
-	debug(43, 0) ("squidaio_queue_request: Syncing pending I/O operations.. (blocking)\n");
+	debugs(43, 0, "squidaio_queue_request: Async request queue growing uncontrollably!");
+	debugs(43, 0, "squidaio_queue_request: Syncing pending I/O operations.. (blocking)");
 	squidaio_sync();
-	debug(43, 0) ("squidaio_queue_request: Synced\n");
+	debugs(43, 0, "squidaio_queue_request: Synced");
     }
 }				/* squidaio_queue_request */
 
@@ -509,7 +509,7 @@ squidaio_cancel(squidaio_result_t * resultp)
     squidaio_request_t *request = resultp->_data;
 
     if (request && request->resultp == resultp) {
-	debug(43, 9) ("squidaio_cancel: %p type=%d result=%p\n",
+	debugs(43, 9, "squidaio_cancel: %p type=%d result=%p",
 	    request, request->request_type, request->resultp);
 	request->cancelled = 1;
 	request->resultp = NULL;
@@ -549,11 +549,11 @@ squidaio_do_open(squidaio_request_t * requestp)
 	int flags;
 	int dummy = 0;
 	if ((flags = fcntl(fd, F_GETFL, dummy)) < 0) {
-	    debug(50, 0) ("FD %d: fcntl F_GETFL: %s\n", fd, xstrerror());
+	    debugs(50, 0, "FD %d: fcntl F_GETFL: %s", fd, xstrerror());
 	    return;
 	}
 	if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0)
-	    debug(50, 0) ("FD %d: set close-on-exec failed: %s\n", fd, xstrerror());
+	    debugs(50, 0, "FD %d: set close-on-exec failed: %s", fd, xstrerror());
 	fd_table[fd].flags.close_on_exec = 1;
     }
 #endif
@@ -814,7 +814,7 @@ squidaio_poll_done(void)
     if (!request) {
 	return NULL;
     }
-    debug(43, 9) ("squidaio_poll_done: %p type=%d result=%p\n",
+    debugs(43, 9, "squidaio_poll_done: %p type=%d result=%p",
 	request, request->request_type, request->resultp);
     done_requests.head = request->next;
     if (!done_requests.head)
@@ -822,7 +822,7 @@ squidaio_poll_done(void)
     resultp = request->resultp;
     cancelled = request->cancelled;
     squidaio_debug(request);
-    debug(43, 5) ("DONE: %d -> %d\n", request->ret, request->err);
+    debugs(43, 5, "DONE: %d -> %d", request->ret, request->err);
     squidaio_cleanup_request(request);
     if (cancelled)
 	goto AIO_REPOLL;
@@ -856,22 +856,22 @@ squidaio_debug(squidaio_request_t * request)
 {
     switch (request->request_type) {
     case _AIO_OP_OPEN:
-	debug(43, 5) ("OPEN of %s to FD %d\n", request->path, request->ret);
+	debugs(43, 5, "OPEN of %s to FD %d", request->path, request->ret);
 	break;
     case _AIO_OP_READ:
-	debug(43, 5) ("READ on fd: %d\n", request->fd);
+	debugs(43, 5, "READ on fd: %d", request->fd);
 	break;
     case _AIO_OP_WRITE:
-	debug(43, 5) ("WRITE on fd: %d\n", request->fd);
+	debugs(43, 5, "WRITE on fd: %d", request->fd);
 	break;
     case _AIO_OP_CLOSE:
-	debug(43, 5) ("CLOSE of fd: %d\n", request->fd);
+	debugs(43, 5, "CLOSE of fd: %d", request->fd);
 	break;
     case _AIO_OP_UNLINK:
-	debug(43, 5) ("UNLINK of %s\n", request->path);
+	debugs(43, 5, "UNLINK of %s", request->path);
 	break;
     case _AIO_OP_TRUNCATE:
-	debug(43, 5) ("UNLINK of %s\n", request->path);
+	debugs(43, 5, "UNLINK of %s", request->path);
 	break;
     default:
 	break;

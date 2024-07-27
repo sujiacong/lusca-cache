@@ -49,6 +49,8 @@ extern void WIN32_svcstatusupdate(DWORD, DWORD);
 void WINAPI WIN32_svcHandler(DWORD);
 #endif
 
+#include "../libmutiprocess/ipcsupport.h"
+
 /* for error reporting from xmalloc and friends */
 extern void (*failure_notify) (const char *);
 
@@ -61,12 +63,26 @@ static int malloc_debug_level = 0;
 static volatile int do_reconfigure = 0;
 static volatile int do_rotate = 0;
 static volatile int do_shutdown = 0;
+static volatile int shutdown_status = 0;
+
+static int RotateSignal = -1;
+static int ReconfigureSignal = -1;
+static int ShutdownSignal = -1;
+
+extern struct _fde_disk *fde_disk;
+
+extern void closeHttpPortIfNeeded(http_port_list* oldport, http_port_list* newport);
+#if USE_SSL
+extern void closeHttpsPortIfNeeded(http_port_list* oldport, http_port_list* newport);
+#endif
 
 static void mainRotate(void);
-static void mainReconfigure(void);
+static void mainReconfigureStart(void);
+static void mainReconfigureFinish(void*);
 static void mainInitialize(void);
 static void usage(void);
 static void mainParseOptions(int, char **);
+static void sig_shutdown(int sig);
 static void sendSignal(void);
 static void serverConnectionsOpen(void);
 static void watch_child(char **);
@@ -78,6 +94,10 @@ extern void log_trace_init(char *);
 static EVH SquidShutdown;
 static void mainSetCwd(void);
 static int checkRunningPid(void);
+
+
+static void doShutdown();
+
 
 #ifndef _SQUID_MSWIN_
 static const char *squid_start_script = "squid_start";
@@ -119,7 +139,6 @@ usage(void)
 	"       -C        Do not catch fatal signals.\n"
 	"       -D        Disable initial DNS tests.\n"
 	"       -F        Don't serve any requests until store is rebuilt.\n"
-	"       -I        Override HTTP port with the bound socket passed in on stdin.\n"
 	"       -N        No daemon mode.\n"
 #if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
 	"       -O options\n"
@@ -131,6 +150,37 @@ usage(void)
 	"       -Y        Only return UDP_HIT or UDP_MISS_NOFETCH during fast reload.\n",
 	appname, DefaultConfigFile, CACHE_ICP_PORT);
     exit(1);
+}
+
+void doShutdown()
+{
+	time_t wait = do_shutdown > 0 ? (int) Config.shutdownLifetime : 0;
+	debugs(1, 1, "Preparing for shutdown after %d requests",
+	statCounter.client_http.requests);
+	debugs(1, 1, "Waiting %d seconds for active connections to finish",
+	(int) wait);
+	do_shutdown = 0;
+	shutting_down = 1;
+#if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
+	WIN32_svcstatusupdate(SERVICE_STOP_PENDING, (wait + 1) * 1000);
+#endif
+	serverConnectionsClose();
+	eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
+}
+
+int broadCastSignal()
+{
+    CoordinatorBroadcastSignal(DebugSignal);
+    CoordinatorBroadcastSignal(RotateSignal);
+    CoordinatorBroadcastSignal(ReconfigureSignal);
+    CoordinatorBroadcastSignal(ShutdownSignal);
+
+	DebugSignal = -1;
+	RotateSignal = -1;
+	ReconfigureSignal = -1;
+	ShutdownSignal = -1;
+	
+    return -1;
 }
 
 static void
@@ -153,9 +203,6 @@ mainParseOptions(int argc, char *argv[])
 	    break;
 	case 'F':
 	    opt_foreground_rebuild = 1;
-	    break;
-	case 'I':
-	    opt_stdin_overrides_http_port = 1;
 	    break;
 	case 'N':
 	    opt_no_daemon = 1;
@@ -267,7 +314,7 @@ mainParseOptions(int argc, char *argv[])
 		icpPortNumOverride = 0;
 	    break;
 	case 'v':
-	    printf("Squid Cache: Version %s\nconfigure options: %s\n", version_string, SQUID_CONFIGURE_OPTIONS);
+            printf("Squid Cache: Version %s\nconfigure options: %s\n", version_string, SQUID_CONFIGURE_OPTIONS);
 #if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
 	    printf("Compiled as Windows System Service.\n");
 #endif
@@ -289,6 +336,7 @@ void
 rotate_logs(int sig)
 {
     do_rotate = 1;
+	RotateSignal = sig;
 #ifndef _SQUID_MSWIN_
 #if !HAVE_SIGACTION
     signal(sig, rotate_logs);
@@ -301,6 +349,7 @@ void
 reconfigure(int sig)
 {
     do_reconfigure = 1;
+	ReconfigureSignal = sig;
 #ifndef _SQUID_MSWIN_
 #if !HAVE_SIGACTION
     signal(sig, reconfigure);
@@ -312,13 +361,31 @@ void
 shut_down(int sig)
 {
     do_shutdown = sig == SIGINT ? -1 : 1;
+	ShutdownSignal = sig;
+	
+#if defined(SIGTTIN)
+    if (SIGTTIN == sig)
+        shutdown_status = 1;
+#endif
+
 #ifndef _SQUID_MSWIN_
+
+	const pid_t ppid = getppid();
+
+	if (!IamMasterProcess() && ppid > 1) {
+		debugs(1, 1, "Killing master process, pid %ld, sig:%d", ppid, SIGUSR1);	
+		// notify master that we are shutting down
+		if (kill(ppid, SIGUSR1) < 0)
+			debugs(1, 1, "Failed to send SIGUSR1 to master process, pid:%d, error:%s",ppid, xstrerror());
+	}
+
 #ifdef KILL_PARENT_OPT
-    if (getppid() > 1) {
-	debug(1, 1) ("Killing RunCache, pid %ld\n", (long) getppid());
-	if (kill(getppid(), sig) < 0)
-	    debug(1, 1) ("kill %ld: %s\n", (long) getppid(), xstrerror());
+    if (!IamMasterProcess() && ppid > 1) {
+	debugs(1, 1, "Killing master process, pid %ld, sig:%d", ppid, sig);	
+	if (kill(ppid, sig) < 0)
+	    debugs(1, 1, "Failed to send SIGUSR1 to master process pid:%ld, error:%s", ppid, xstrerror());
     }
+	
 #endif
 #if SA_RESETHAND == 0
     signal(SIGTERM, SIG_DFL);
@@ -330,58 +397,74 @@ shut_down(int sig)
 static void
 serverConnectionsOpen(void)
 {
-    clientOpenListenSockets();
-    icpConnectionsOpen();
+	if (IamPrimaryProcess()) 
+	{
+	
+#if USE_WCCP
+		wccpConnectionOpen();
+#endif
+	
+#if USE_WCCPv2
+		wccp2ConnectionOpen();
+#endif
+	}
+	
+	if (IamWorkerProcess()) {
+	    clientOpenListenSockets();
+	    icpConnectionsOpen();
 #if USE_HTCP
-    htcpInit();
+	    htcpInit();
 #endif
 #ifdef SQUID_SNMP
-    snmpConnectionOpen();
+	    snmpConnectionOpen();
 #endif
-#if USE_WCCP
-    wccpConnectionOpen();
-#endif
-#if USE_WCCPv2
-    wccp2ConnectionOpen();
-#endif
-    clientdbInit();
-    icmpOpen();
-    netdbInit();
-    asnInit();
-    peerSelectInit();
-    carpInit();
-    peerSourceHashInit();
-    peerUserHashInit();
-    peerMonitorInit();
+
+	    clientdbInit();
+	    icmpOpen();
+	    netdbInit();
+	    asnInit();
+	    peerSelectInit();
+	    carpInit();
+	    peerSourceHashInit();
+	    peerUserHashInit();
+	    peerMonitorInit();
+	}
 }
 
 void
 serverConnectionsClose(void)
 {
     assert(shutting_down || reconfiguring);
-    clientHttpConnectionsClose();
-    icpConnectionShutdown();
-#if USE_HTCP
-    htcpSocketShutdown();
-#endif
-    icmpClose();
-#ifdef SQUID_SNMP
-    snmpConnectionShutdown();
-#endif
+	if (IamPrimaryProcess()) 
+	{
 #if USE_WCCP
-    wccpConnectionClose();
+    	wccpConnectionClose();
 #endif
 #if USE_WCCPv2
-    wccp2ConnectionClose();
+    	wccp2ConnectionClose();
 #endif
-    asnFreeMemory();
+	}
+	
+	if (IamWorkerProcess()) 
+	{
+	    clientHttpConnectionsClose();
+	    icpConnectionShutdown();
+#if USE_HTCP
+	    htcpSocketShutdown();
+#endif
+	    icmpClose();
+#ifdef SQUID_SNMP
+	    snmpConnectionShutdown();
+#endif
+
+	    asnFreeMemory();
+	}
 }
 
 static void
-mainReconfigure(void)
+mainReconfigureStart(void)
 {
-	sqaddr_t ai, ao;
-    debug(1, 1) ("Reconfiguring Squid Cache (version %s)...\n", version_string);
+    debugs(1, 1, "Reconfiguring Squid Cache (version %s)...", version_string);
     reconfiguring = 1;
     /* Already called serverConnectionsClose and ipcacheShutdownServers() */
     serverConnectionsClose();
@@ -405,9 +488,82 @@ mainReconfigure(void)
     accessLogClose();
     useragentLogClose();
     refererCloseLog();
+
+	eventAdd("mainReconfigureFinish", mainReconfigureFinish, NULL, 0, 1);
+}
+
+
+static void
+free_old_http_port_list(http_port_list ** head)
+{
+    http_port_list *s;
+    while ((s = *head) != NULL) {
+	*head = s->next;
+	cbdataFree(s);
+    }
+}
+
+
+#if USE_SSL
+static void
+free_old_https_port_list(https_port_list ** head)
+{
+    https_port_list *s;
+    while ((s = *head) != NULL) {
+	*head = (https_port_list *) (s->http.next);
+	cbdataFree(s);
+    }
+}
+#endif
+
+static void
+mainReconfigureFinish(void *data)
+{
+	http_port_list* oldHttpPorts = NULL;
+#if USE_SSL	
+	https_port_list* oldHttpsPorts = NULL;
+#endif
+	sqaddr_t ai, ao;
+	debugs(1, 3, "finishing reconfiguring");
+	
     errorClean();
     enter_suid();		/* root to read config file */
+
+	// parse the config returns a count of errors encountered.
+    const int oldWorkers = Config.workers;	
+
+	if(IamCoordinatorProcess())
+	{
+		oldHttpPorts = Config.Sockaddr.http;	
+		Config.Sockaddr.http = NULL;
+#if USE_SSL			
+		oldHttpsPorts = Config.Sockaddr.https;
+		Config.Sockaddr.https = NULL;
+#endif
+
+	}
+	
     parseConfigFile(ConfigFile);
+
+	if(IamCoordinatorProcess())
+	{
+		closeHttpPortIfNeeded(oldHttpPorts, Config.Sockaddr.http);	
+		free_old_http_port_list(&oldHttpPorts);	
+#if USE_SSL		
+		closeHttpsPortIfNeeded(oldHttpPorts, Config.Sockaddr.https);
+		free_old_https_port_list(&oldHttpsPorts);	
+#endif
+	}
+
+    if (oldWorkers != Config.workers) {
+        debugs(1, 0, "WARNING: Changing 'workers' (from %d to %d) "
+			"requires a full restart. It has been ignored by reconfigure.",oldWorkers,Config.workers);
+        Config.workers = oldWorkers;
+    }
+
+    if (IamPrimaryProcess())
+        CpuAffinityCheck();
+    CpuAffinityReconfigure();
 
     /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
     iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
@@ -465,12 +621,17 @@ mainReconfigure(void)
     authenticateInit(&Config.authConfig);
     externalAclInit();
     refreshCheckInit();
+	
+if (IamPrimaryProcess()) 
+	{	
 #if USE_WCCP
-    wccpInit();
+	    wccpInit();
 #endif
 #if USE_WCCPv2
-    wccp2Init();
+	    wccp2Init();
 #endif
+	}
+
 #if DELAY_POOLS
     clientReassignDelaypools();
 #endif
@@ -488,8 +649,12 @@ mainReconfigure(void)
     }
     eventCleanup();
     writePidFile();		/* write PID file */
-    debug(1, 1) ("Ready to serve requests.\n");
+    debugs(1, 1, "Ready to serve requests.");
     reconfiguring = 0;
+
+    // ignore any pending re-reconfigure signals if shutdown received
+    if (do_shutdown)
+        do_reconfigure = 0;	
 }
 
 static void
@@ -530,10 +695,10 @@ setEffectiveUser(void)
     return;
 #endif
     if (geteuid() == 0) {
-	debug(0, 0) ("Squid is not safe to run as root!  If you must\n");
-	debug(0, 0) ("start Squid as root, then you must configure\n");
-	debug(0, 0) ("it to run as a non-priveledged user with the\n");
-	debug(0, 0) ("'cache_effective_user' option in the config file.\n");
+	debugs(0, 0, "Squid is not safe to run as root!  If you must");
+	debugs(0, 0, "start Squid as root, then you must configure");
+	debugs(0, 0, "it to run as a non-priveledged user with the");
+	debugs(0, 0, "'cache_effective_user' option in the config file.");
 	fatal("Don't run Squid as root, set 'cache_effective_user'!");
     }
 }
@@ -546,17 +711,17 @@ mainSetCwd(void)
 	if (0 == strcmp("none", Config.coredump_dir)) {
 	    (void) 0;
 	} else if (chdir(Config.coredump_dir) == 0) {
-	    debug(0, 1) ("Set Current Directory to %s\n", Config.coredump_dir);
+	    debugs(0, 1, "Set Current Directory to %s", Config.coredump_dir);
 	    return;
 	} else {
-	    debug(50, 0) ("chdir: %s: %s\n", Config.coredump_dir, xstrerror());
+	    debugs(50, 0, "chdir: %s: %s", Config.coredump_dir, xstrerror());
 	}
     }
     /* If we don't have coredump_dir or couldn't cd there, report current dir */
     if (getcwd(pathbuf, MAXPATHLEN)) {
-	debug(0, 1) ("Current Directory is %s\n", pathbuf);
+	debugs(0, 1, "Current Directory is %s", pathbuf);
     } else {
-	debug(50, 0) ("WARNING: Can't find current directory, getcwd: %s\n", xstrerror());
+	debugs(50, 0, "WARNING: Can't find current directory, getcwd: %s", xstrerror());
     }
 }
 
@@ -586,23 +751,28 @@ mainInitialize(void)
 #if MEM_GEN_TRACE
     log_trace_init("/tmp/squid.alloc");
 #endif
-    debug(1, 0) ("Starting Squid Cache version %s for %s...\n",
+    debugs(1, 0, "Starting Squid Cache version %s for %s...",
 	version_string,
 	CONFIG_HOST_TYPE);
+
+	debugs(1, 0, "CurrentKid,id:%d,kind:%d", KidIdentifier,TheProcessKind);
+
+	CpuAffinityPrint();
+
 #ifdef _SQUID_WIN32_
     if (WIN32_run_mode == _WIN_SQUID_RUN_MODE_SERVICE) {
-	debug(1, 0) ("Running as %s Windows System Service on %s\n", WIN32_Service_name, WIN32_OS_string);
-	debug(1, 0) ("Service command line is: %s\n", WIN32_Service_Command_Line);
+	debugs(1, 0, "Running as %s Windows System Service on %s", WIN32_Service_name, WIN32_OS_string);
+	debugs(1, 0, "Service command line is: %s", WIN32_Service_Command_Line);
     } else
-	debug(1, 0) ("Running on %s\n", WIN32_OS_string);
+	debugs(1, 0, "Running on %s", WIN32_OS_string);
 #endif
-    debug(1, 1) ("Process ID %d\n", (int) getpid());
+    debugs(1, 1, "Process ID %d", (int) getpid());
     setSystemLimits();
-    debug(1, 1) ("With %d file descriptors available\n", Squid_MaxFD);
+    debugs(1, 1, "With %d file descriptors available", Squid_MaxFD);
 #ifdef _SQUID_MSWIN_
-    debug(1, 1) ("With %d CRT stdio descriptors available\n", _getmaxstdio());
+    debugs(1, 1, "With %d CRT stdio descriptors available", _getmaxstdio());
     if (WIN32_Socks_initialized)
-	debug(1, 1) ("Windows sockets initialized\n");
+	debugs(1, 1, "Windows sockets initialized");
     if (WIN32_OS_version > _WIN_OS_WINNT) {
 	WIN32_IpAddrChangeMonitorInit();
     }
@@ -677,13 +847,19 @@ mainInitialize(void)
 #endif
 	fwdInit();
     }
+
+	if (IamPrimaryProcess())	
+	{
 #if USE_WCCP
     wccpInit();
 #endif
 #if USE_WCCPv2
     wccp2Init();
 #endif
+	}
+
     serverConnectionsOpen();
+	
     neighbors_init();
     if (Config.chroot_dir)
 	no_suid();
@@ -701,7 +877,7 @@ mainInitialize(void)
     squid_signal(SIGTERM, shut_down, SA_NODEFER | SA_RESETHAND | SA_RESTART);
     squid_signal(SIGINT, shut_down, SA_NODEFER | SA_RESETHAND | SA_RESTART);
     memCheckInit();
-    debug(1, 1) ("Ready to serve requests.\n");
+    debugs(1, 1, "Ready to serve requests.");
     if (!configured_once) {
 	eventAdd("storeMaintain", storeMaintainSwapSpace, NULL, 1.0, 1);
 	if (Config.onoff.announce)
@@ -715,7 +891,8 @@ mainInitialize(void)
 #if USE_WIN32_SERVICE
 /* When USE_WIN32_SERVICE is defined, the main function is placed in win32.c */
 void WINAPI
-SquidWinSvcMain(int argc, char **argv)
+SquidWinSvc
+int argc, char **argv)
 {
     SquidMain(argc, argv);
 }
@@ -727,8 +904,11 @@ int
 main(int argc, char **argv)
 #endif
 {
+	ConfigureCurrentKid(argv[0]);
+
     int errcount = 0;
     int loop_delay;
+	int default_squid_maxfd;
 #ifdef _SQUID_WIN32_
     int WIN32_init_err;
 #endif
@@ -801,7 +981,6 @@ main(int argc, char **argv)
 	leakInit();
 #endif
         libcore_set_fatalf(fatalvf);
-        setMaxFD();
 	iapp_init();		/* required for configuration parsing */
 	memInit();
 	buf_init();
@@ -809,11 +988,13 @@ main(int argc, char **argv)
 	eventLocalInit();
 	storeFsInit();		/* required for config parsing */
 	authenticateSchemeInit();	/* required for config parsing */
+
+	default_squid_maxfd=Squid_MaxFD;
 	parse_err = parseConfigFile(ConfigFile);
 
 	if (opt_parse_cfg_only)
 	    return parse_err;
-
+	
         /* XXX hacks for now to setup config options in libiapp; rethink this! -adrian */
         iapp_tcpRcvBufSz = Config.tcpRcvBufsz;
         iapp_useAcceptFilter = Config.accept_filter;
@@ -836,6 +1017,11 @@ main(int argc, char **argv)
     if (-1 == opt_send_signal)
 	if (checkRunningPid())
 	    exit(1);
+
+	if (IamCoordinatorProcess())
+		 initIpcCoordinatorInstance();
+	 else if (UsingSmp() && (IamWorkerProcess() || IamDiskProcess()))
+		 initIpcStrandInstance();
 
     /* Make sure the OS allows core dumps if enabled in squid.conf */
     enableCoredumps();
@@ -862,23 +1048,44 @@ main(int argc, char **argv)
 	sendSignal();
 	/* NOTREACHED */
     }
+
+    if (!opt_no_daemon && Config.workers > 0)
+	watch_child(argv);
+	
     if (opt_create_swap_dirs) {
 	/* chroot if configured to run inside chroot */
 	if (Config.chroot_dir && chroot(Config.chroot_dir)) {
 	    fatal("failed to chroot");
 	}
 	setEffectiveUser();
-	debug(0, 0) ("Creating Swap Directories\n");
+	debugs(0, 0, "Creating Swap Directories");
 	storeCreateSwapDirectories();
 	return 0;
     }
-    if (!opt_no_daemon)
-	watch_child(argv);
+	
+    if (IamPrimaryProcess())
+        CpuAffinityCheck();
+    CpuAffinityInit();
 
+	setMaxFD();
+
+	if(default_squid_maxfd != Squid_MaxFD)
+	{
+		 safe_free(fd_table);
+		 fd_table = xcalloc(Squid_MaxFD, sizeof(fde));
+		 RESERVED_FD = XMIN(100, Squid_MaxFD / 4);
+
+		 safe_free(fde_disk);
+		 fde_disk = xcalloc(Squid_MaxFD, sizeof(struct _fde_disk));
+
+		comm_select_shutdown();
+		
+		comm_select_init();
+	}
+	
     if (opt_no_daemon) {
 	/* we have to init fdstat here. */
-	if (!opt_stdin_overrides_http_port)
-	    fd_open(0, FD_LOG, "stdin");
+	fd_open(0, FD_LOG, "stdin");
 	fd_open(1, FD_LOG, "stdout");
 	fd_open(2, FD_LOG, "stderr");
     }
@@ -891,29 +1098,26 @@ main(int argc, char **argv)
     WIN32_svcstatusupdate(SERVICE_RUNNING, 0);
 #endif
 
+	if (IamCoordinatorProcess())
+		 StartIpcCoordinatorInstance();
+	 else if (UsingSmp() && (IamWorkerProcess() || IamDiskProcess()))
+		 StartIpcStrandInstance();
+
     /* main loop */
     for (;;) {
 	if (do_reconfigure) {
-	    mainReconfigure();
+	    mainReconfigureStart();
 	    do_reconfigure = 0;
 	} else if (do_rotate) {
 	    mainRotate();
 	    do_rotate = 0;
 	} else if (do_shutdown) {
-	    time_t wait = do_shutdown > 0 ? (int) Config.shutdownLifetime : 0;
-	    debug(1, 1) ("Preparing for shutdown after %d requests\n",
-		statCounter.client_http.requests);
-	    debug(1, 1) ("Waiting %d seconds for active connections to finish\n",
-		(int) wait);
-	    do_shutdown = 0;
-	    shutting_down = 1;
-#if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
-	    WIN32_svcstatusupdate(SERVICE_STOP_PENDING, (wait + 1) * 1000);
-#endif
-	    serverConnectionsClose();
-	    eventAdd("SquidShutdown", SquidShutdown, NULL, (double) (wait + 1), 1);
+		doShutdown();
 	}
-        /* Set a maximum loop delay; it'll be lowered elsewhere as appropriate */
+
+	broadCastSignal();
+	
+    /* Set a maximum loop delay; it'll be lowered elsewhere as appropriate */
 	loop_delay = 60000;
 	if (debug_log_flush() && loop_delay > 1000)
 	    loop_delay = 1000;
@@ -923,7 +1127,7 @@ main(int argc, char **argv)
 	    break;
 	case COMM_ERROR:
 	    errcount++;
-	    debug(1, 0) ("Select loop Error. Retry %d\n", errcount);
+	    debugs(1, 0, "Select loop Error. Retry %d", errcount);
 	    if (errcount == 10)
 		fatal_dump("Select Loop failed!");
 	    break;
@@ -941,6 +1145,12 @@ main(int argc, char **argv)
     }
     /* NOTREACHED */
     return 0;
+}
+
+static void
+sig_shutdown(int sig)
+{
+    shutting_down = 1;
 }
 
 static void
@@ -1025,7 +1235,7 @@ checkRunningPid(void)
     pid_t pid;
     debug_log = stderr;
     if (strcmp(Config.pidFilename, "none") == 0) {
-	debug(0, 1) ("No pid_filename specified. Trusting you know what you are doing.\n");
+	debugs(0, 1, "No pid_filename specified. Trusting you know what you are doing.");
 	return 0;
     }
     pid = readPidFile();
@@ -1033,7 +1243,7 @@ checkRunningPid(void)
 	return 0;
     if (kill(pid, 0) < 0)
 	return 0;
-    debug(0, 0) ("Squid is already running!  Process ID %ld\n", (long int) pid);
+    debugs(0, 0, "Squid is already running!  Process ID %ld", (long int) pid);
     return 1;
 }
 
@@ -1042,7 +1252,7 @@ watch_child(char *argv[])
 {
 #ifndef _SQUID_MSWIN_
     char *prog;
-    int failcount = 0;
+    //int failcount = 0;
     time_t start;
     time_t stop;
 #ifdef _SQUID_NEXT_
@@ -1055,14 +1265,22 @@ watch_child(char *argv[])
     int i;
 #endif
     int nullfd;
+
+
+    if (!IamMasterProcess())
+        return;
+
     if (*(argv[0]) == '(')
 	return;
+	
     if ((pid = fork()) < 0)
 	syslog(LOG_ALERT, "fork failed: %s", xstrerror());
     else if (pid > 0)
 	exit(0);
+	
     if (setsid() < 0)
 	syslog(LOG_ALERT, "setsid failed: %s", xstrerror());
+	
 #ifdef TIOCNOTTY
     if ((i = open("/dev/tty", O_RDWR | O_TEXT)) >= 0) {
 	ioctl(i, TIOCNOTTY, NULL);
@@ -1080,7 +1298,6 @@ watch_child(char *argv[])
     nullfd = open(_PATH_DEVNULL, O_RDWR | O_TEXT);
     if (nullfd < 0)
 	fatalf(_PATH_DEVNULL " %s\n", xstrerror());
-    if (!opt_stdin_overrides_http_port)
 	dup2(nullfd, 0);
     if (_db_stderr_debug_opt() < 0) {
 	dup2(nullfd, 1);
@@ -1088,61 +1305,114 @@ watch_child(char *argv[])
     }
     if (nullfd > 2)
 	close(nullfd);
+
+	// handle shutdown notifications from kids
+    squid_signal(SIGUSR1, sig_shutdown, SA_RESTART);
+
+    if (Config.workers > 128) {
+        syslog(LOG_ALERT, "Suspiciously high workers value: %d",
+               Config.workers);
+        // but we keep going in hope that user knows best
+    }
+
+	initAllkids(Config.workers);
+	
+	syslog(LOG_NOTICE, "Squid Parent: will start %d kids", (int)AllKids.kidcount);
+	
     for (;;) {
+		
 	mainStartScript(argv[0]);
-	if ((pid = fork()) == 0) {
-	    /* child */
-	    prog = xstrdup(argv[0]);
-	    argv[0] = xstrdup("(squid)");
-	    execvp(prog, argv);
-	    syslog(LOG_ALERT, "execvp failed: %s", xstrerror());
-	    exit(1);
+
+	// start each kid that needs to be [re]started; once
+	for (i = AllKids.kidcount - 1; i >= 0; --i) {
+		Kid* kid = &AllKids.storage[i];
+		if (!kidShouldRestart(kid))
+			continue;
+	
+		if ((pid = fork()) == 0) {
+			/* child */
+			openlog(APP_SHORTNAME, LOG_PID | LOG_NDELAY | LOG_CONS, LOG_LOCAL4);
+			prog = argv[0];
+			argv[0] = kid->theName;
+			execvp(prog, argv);
+			syslog(LOG_ALERT, "execvp failed: %s", xstrerror());
+		}
+	
+		kidStart(kid, pid);
+		syslog(LOG_NOTICE, "%s Parent: child process %d started", kid->theName, pid);
 	}
-	/* parent */
-	syslog(LOG_NOTICE, "Squid Parent: child process %d started", pid);
+
 	time(&start);
 	squid_signal(SIGINT, SIG_IGN, SA_RESTART);
+	
 #ifdef _SQUID_NEXT_
 	pid = wait3(&status, 0, NULL);
 #else
 	pid = waitpid(-1, &status, 0);
 #endif
 	time(&stop);
-	if (WIFEXITED(status)) {
-	    syslog(LOG_NOTICE,
-		"Squid Parent: child process %d exited with status %d",
-		pid, WEXITSTATUS(status));
-	} else if (WIFSIGNALED(status)) {
-	    syslog(LOG_NOTICE,
-		"Squid Parent: child process %d exited due to signal %d",
-		pid, WTERMSIG(status));
-	} else {
-	    syslog(LOG_NOTICE, "Squid Parent: child process %d exited", pid);
+
+	if(pid < 0)
+	{
+		syslog(LOG_ALERT, "waitpid failed: %s", xstrerror());
+		if(errno == ECHILD)
+		{
+			exit(2);
+		}
 	}
-	if (stop - start < 10)
-	    failcount++;
-	else
-	    failcount = 0;
-	if (failcount == 5) {
-	    syslog(LOG_ALERT, "Exiting due to repeated, frequent failures");
-	    exit(1);
+	
+    // Loop to collect all stopped kids before we go to sleep below.
+	do {
+		Kid* kid = kidFind(pid);
+		if (kid) {
+			stopKid(kid,status);
+			if (isKidCalledExit(kid)) {
+				syslog(LOG_NOTICE,
+					   "Squid Parent: %s process %d exited with status %d", kid->theName, kid->pid, kidExitStatus(kid));
+			} else if (isKidSignaled(kid)) {
+				syslog(LOG_NOTICE,
+					   "Squid Parent: %s process %d exited due to signal %d with status %d", kid->theName, kid->pid, kidTermSignal(kid), kidExitStatus(kid));
+			} else {
+				syslog(LOG_NOTICE, "Squid Parent: %s process %d exited", kid->theName, kid->pid);
+			}
+			if (isKidHopeless(kid)) {
+				syslog(LOG_NOTICE, "Squid Parent: %s process %d will not"
+					   " be restarted due to repeated, frequent failures",kid->theName, kid->pid);
+			}
+			
+			if(strstr(kid->theName,"squid-coord-") && !opt_create_swap_dirs)
+			{
+				syslog(LOG_NOTICE, "Squid Parent: squid-coord exited, Squid Parent exit");
+				exit(3);
+			}
+		} else {
+			syslog(LOG_NOTICE, "Squid Parent: unknown child process %d exited, Squid Parent exit", pid);
+			exit(2);
+		}
+#if _SQUID_NEXT_
+	} while ((pid = wait3(&status, WNOHANG, NULL)) > 0);
+#else
 	}
-	if (WIFEXITED(status))
-	    if (WEXITSTATUS(status) == 0)
+	while ((pid = waitpid(-1, &status, WNOHANG)) > 0);
+#endif
+
+	if (!isKidsSomeRunning() && !isKidsShouldRestartSome()) {
+
+		syslog(LOG_ALERT, "no kid running, Squid Parent exit");
+		
+		if (kidsSomeSignaledWithSig(SIGINT) || kidsSomeSignaledWithSig(SIGTERM)) {
+			syslog(LOG_ALERT, "Exiting due to unexpected forced shutdown");
+			exit(1);
+		}
+
+		if (isKidsAllHopeless()) {
+			syslog(LOG_ALERT, "Exiting due to repeated, frequent failures");
+			exit(1);
+		}
+
 		exit(0);
-	if (WIFSIGNALED(status)) {
-	    switch (WTERMSIG(status)) {
-	    case SIGKILL:
-		exit(0);
-		break;
-	    case SIGINT:
-	    case SIGTERM:
-		syslog(LOG_ALERT, "Exiting due to unexpected forced shutdown");
-		exit(1);
-	    default:
-		break;
-	    }
 	}
+
 	squid_signal(SIGINT, SIG_DFL, SA_RESTART);
 	sleep(3);
     }
@@ -1156,7 +1426,7 @@ SquidShutdown(void *unused)
 #if defined(USE_WIN32_SERVICE) && defined(_SQUID_WIN32_)
     WIN32_svcstatusupdate(SERVICE_STOP_PENDING, 10000);
 #endif
-    debug(1, 1) ("Shutting down...\n");
+    debugs(1, 1, "Shutting down...");
     idnsShutdown();
     redirectShutdown();
     storeurlShutdown();
@@ -1199,12 +1469,8 @@ SquidShutdown(void *unused)
 #endif
     storeDirSync();		/* Flush log close */
     storeFsDone();
-    if (Config.pidFilename && strcmp(Config.pidFilename, "none") != 0) {
-	enter_suid();
-	safeunlink(Config.pidFilename, 0);
-	leave_suid();
-    }
-#if LEAK_CHECK_MODE
+ 
+#if LEAK_CHECK_MODE && 0 /* doesn't work at the moment */
     configFreeMemory();
     storeFreeMemory();
     /*stmemFreeMemory(); */
@@ -1221,8 +1487,7 @@ SquidShutdown(void *unused)
 #endif
 #if !XMALLOC_TRACE
     if (opt_no_daemon) {
-	if (!opt_stdin_overrides_http_port)
-	    fd_close(0);
+	fd_close(0);
 	fd_close(1);
 	fd_close(2);
     }
@@ -1233,14 +1498,33 @@ SquidShutdown(void *unused)
     memClean();
 #if XMALLOC_TRACE
     xmalloc_find_leaks();
-    debug(1, 0) ("Memory used after shutdown: %d\n", xmalloc_total);
+    debugs(1, 0, "Memory used after shutdown: %d", xmalloc_total);
 #endif
 #if MEM_GEN_TRACE
     log_trace_done();
 #endif
-    debug(1, 1) ("Squid Cache (Version %s): Exiting normally.\n",
+
+	if (IamPrimaryProcess()) {
+	    if (Config.pidFilename && strcmp(Config.pidFilename, "none") != 0) {
+		enter_suid();
+		safeunlink(Config.pidFilename, 0);
+		leave_suid();
+	    }
+	}
+
+    debugs(1, 1, "Squid Cache (Version %s): Exiting normally.",
 	version_string);
-    if (debug_log)
-	fclose(debug_log);
-    exit(0);
+	
+    /*
+     * DPW 2006-10-23
+     * We used to fclose(debug_log) here if it was set, but then
+     * we forgot to set it to NULL.  That caused some coredumps
+     * because exit() ends up calling a bunch of destructors and
+     * such.   So rather than forcing the debug_log to close, we'll
+     * leave it open so that those destructors can write some
+     * debugging if necessary.  The file will be closed anyway when
+     * the process truly exits.
+    */
+    
+    exit(shutdown_status);
 }

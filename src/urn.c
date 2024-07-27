@@ -70,18 +70,18 @@ urnFindMinRtt(url_entry * urls, method_t * m, int *rtt_ret)
     url_entry *min_u = NULL;
     int i;
     int urlcnt = 0;
-    debug(52, 3) ("urnFindMinRtt\n");
+    debugs(52, 3, "urnFindMinRtt");
     assert(urls != NULL);
     for (i = 0; NULL != urls[i].url; i++)
 	urlcnt++;
-    debug(52, 3) ("urnFindMinRtt: Counted %d URLs\n", i);
+    debugs(52, 3, "urnFindMinRtt: Counted %d URLs", i);
     if (1 == urlcnt) {
-	debug(52, 3) ("urnFindMinRtt: Only one URL - return it!\n");
+	debugs(52, 3, "urnFindMinRtt: Only one URL - return it!");
 	return urls;
     }
     for (i = 0; i < urlcnt; i++) {
 	u = &urls[i];
-	debug(52, 3) ("urnFindMinRtt: %s rtt=%d\n", u->host, u->rtt);
+	debugs(52, 3, "urnFindMinRtt: %s rtt=%d", u->host, u->rtt);
 	if (u->rtt == 0)
 	    continue;
 	if (u->rtt > min_rtt && min_rtt != 0)
@@ -91,7 +91,7 @@ urnFindMinRtt(url_entry * urls, method_t * m, int *rtt_ret)
     }
     if (rtt_ret)
 	*rtt_ret = min_rtt;
-    debug(52, 1) ("urnFindMinRtt: Returning '%s' RTT %d\n",
+    debugs(52, 1, "urnFindMinRtt: Returning '%s' RTT %d",
 	min_u ? min_u->url : "NONE",
 	min_rtt);
     return min_u;
@@ -109,7 +109,7 @@ urnStart(request_t * r, StoreEntry * e)
     StoreEntry *urlres_e;
     ErrorState *err;
     method_t *method_get;
-    debug(52, 3) ("urnStart: '%s'\n", storeUrl(e));
+    debugs(52, 3, "urnStart: '%s'", storeUrl(e));
     CBDATA_INIT_TYPE(UrnState);
     method_get = urlMethodGetKnownByCode(METHOD_GET);
     urnState = cbdataAlloc(UrnState);
@@ -132,7 +132,7 @@ urnStart(request_t * r, StoreEntry * e)
     safe_free(host);
     urlres_r = urlParse(method_get, urlres);
     if (urlres_r == NULL) {
-	debug(52, 3) ("urnStart: Bad uri-res URL %s\n", urlres);
+	debugs(52, 3, "urnStart: Bad uri-res URL %s", urlres);
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND, r);
 	err->url = xstrdup(urlres);
 	errorAppendEntry(e, err);
@@ -189,7 +189,7 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
     int i;
     int urlcnt = 0;
 
-    debug(52, 3) ("urnHandleReply: Called with size=%d.\n", (int) size);
+    debugs(52, 3, "urnHandleReply: Called with size=%d.", (int) size);
     if (EBIT_TEST(urlres_e->flags, ENTRY_ABORTED)) {
 	stmemNodeUnref(&nr);
 	return;
@@ -212,10 +212,10 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	    urnState);
 	return;
     }
-    debug(52, 3) ("mem->reply exists, code=%d.\n",
+    debugs(52, 3, "mem->reply exists, code=%d.",
 	urlres_e->mem_obj->reply->sline.status);
     if (urlres_e->mem_obj->reply->sline.status != HTTP_OK) {
-	debug(52, 3) ("urnHandleReply: failed.\n");
+	debugs(52, 3, "urnHandleReply: failed.");
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND, urnState->request);
 	err->url = xstrdup(storeUrl(e));
 	errorAppendEntry(e, err);
@@ -240,10 +240,10 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
     }
     for (i = 0; NULL != urls[i].url; i++)
 	urlcnt++;
-    debug(52, 3) ("urnHandleReply: Counted %d URLs\n", i);
+    debugs(52, 3, "urnHandleReply: Counted %d URLs", i);
     if (urls == NULL) {		/* unkown URN error */
       error:
-	debug(52, 3) ("urnHandleReply: unknown URN %s\n", storeUrl(e));
+	debugs(52, 3, "urnHandleReply: unknown URN %s", storeUrl(e));
 	err = errorCon(ERR_URN_RESOLVE, HTTP_NOT_FOUND, urnState->request);
 	err->url = xstrdup(storeUrl(e));
 	errorAppendEntry(e, err);
@@ -261,7 +261,7 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
 	"<TABLE BORDER=\"0\" WIDTH=\"100%%\">\n", storeUrl(e), storeUrl(e));
     for (i = 0; i < urlcnt; i++) {
 	u = &urls[i];
-	debug(52, 3) ("URL {%s}\n", u->url);
+	debugs(52, 3, "URL {%s}", u->url);
 	memBufPrintf(&mb,
 	    "<TR><TD><A HREF=\"%s\">%s</A></TD>", u->url, u->url);
 	if (urls[i].rtt > 0)
@@ -283,7 +283,7 @@ urnHandleReply(void *data, mem_node_ref nr, ssize_t size)
     httpReplyReset(rep);
     httpReplySetHeaders(rep, HTTP_MOVED_TEMPORARILY, NULL, "text/html", mb.size, -1, squid_curtime);
     if (urnState->flags.force_menu) {
-	debug(52, 3) ("urnHandleReply: forcing menu\n");
+	debugs(52, 3, "urnHandleReply: forcing menu");
     } else if (min_u) {
 	httpHeaderPutStr(&rep->header, HDR_LOCATION, min_u->url);
     }
@@ -317,10 +317,10 @@ urnParseReply(const char *inbuf, method_t * m)
     url_entry *old;
     int n = 32;
     int i = 0;
-    debug(52, 3) ("urnParseReply\n");
+    debugs(52, 3, "urnParseReply");
     list = xcalloc(n + 1, sizeof(*list));
     for (token = strtok(buf, crlf); token; token = strtok(NULL, crlf)) {
-	debug(52, 3) ("urnParseReply: got '%s'\n", token);
+	debugs(52, 3, "urnParseReply: got '%s'", token);
 	if (i == n) {
 	    old = list;
 	    n <<= 2;
@@ -334,7 +334,7 @@ urnParseReply(const char *inbuf, method_t * m)
 	    continue;
 	rtt = netdbHostRtt(host);
 	if (0 == rtt) {
-	    debug(52, 3) ("urnParseReply: Pinging %s\n", host);
+	    debugs(52, 3, "urnParseReply: Pinging %s", host);
 	    netdbPingSite(host);
 	}
 	list[i].url = url;
@@ -343,6 +343,6 @@ urnParseReply(const char *inbuf, method_t * m)
 	list[i].flags.cached = storeGetPublic(url, m) ? 1 : 0;
 	i++;
     }
-    debug(52, 3) ("urnParseReply: Found %d URLs\n", i);
+    debugs(52, 3, "urnParseReply: Found %d URLs", i);
     return list;
 }

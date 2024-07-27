@@ -127,15 +127,15 @@ storeAufsDirOpenSwapLog(SwapDir * sd)
     int fd;
     path = storeAufsDirSwapLogFile(sd, NULL);
     if (aioinfo->swaplog_fd >= 0) {
-	debug(50, 1) ("AUFS: %s: storeAufsDirOpenSwapLog: a logfile is already open!\n", sd->path);
+	debugs(50, 1, "AUFS: %s: storeAufsDirOpenSwapLog: a logfile is already open!", sd->path);
 	return;
     }
     fd = file_open(path, O_WRONLY | O_CREAT | O_BINARY);
     if (fd < 0) {
-	debug(50, 1) ("%s: %s\n", path, xstrerror());
+	debugs(50, 1, "%s: %s", path, xstrerror());
 	fatal("storeAufsDirOpenSwapLog: Failed to open swap log.");
     }
-    debug(50, 1) ("AUFS: %s: log '%s' opened on FD %d\n", sd->path, path, fd);
+    debugs(50, 1, "AUFS: %s: log '%s' opened on FD %d", sd->path, path, fd);
     aioinfo->swaplog_fd = fd;
 }
 
@@ -146,7 +146,7 @@ storeAufsDirCloseSwapLog(SwapDir * sd)
     if (aioinfo->swaplog_fd < 0)	/* not open */
 	return;
     file_close(aioinfo->swaplog_fd);
-    debug(47, 1) ("AUFS: %s: log closed on FD %d\n", sd->path, aioinfo->swaplog_fd);
+    debugs(47, 1, "AUFS: %s: log closed on FD %d", sd->path, aioinfo->swaplog_fd);
     aioinfo->swaplog_fd = -1;
 }
 
@@ -158,21 +158,21 @@ storeAufsDirCloseTmpSwapLog(SwapDir * sd)
     char *new_path = xstrdup(storeAufsDirSwapLogFile(sd, ".new"));
     int fd;
     if (aioinfo->swaplog_fd > -1)
-        debug(47, 1) ("AUFS: %s: tmp log closed on FD %d\n", sd->path, aioinfo->swaplog_fd);
+        debugs(47, 1, "AUFS: %s: tmp log closed on FD %d", sd->path, aioinfo->swaplog_fd);
     file_close(aioinfo->swaplog_fd);
     if (xrename(new_path, swaplog_path) < 0) {
 	fatal("storeAufsDirCloseTmpSwapLog: rename failed");
     }
     fd = file_open(swaplog_path, O_WRONLY | O_CREAT | O_BINARY);
     if (fd < 0) {
-	debug(50, 1) ("%s: %s\n", swaplog_path, xstrerror());
+	debugs(50, 1, "%s: %s", swaplog_path, xstrerror());
 	fatal("storeAufsDirCloseTmpSwapLog: Failed to open swap log.");
     }
-    debug(47, 1) ("AUFS: %s: post-rename; log %s, opened on FD %d\n", sd->path, swaplog_path, fd);
+    debugs(47, 1, "AUFS: %s: post-rename; log %s, opened on FD %d", sd->path, swaplog_path, fd);
     safe_free(swaplog_path);
     safe_free(new_path);
     aioinfo->swaplog_fd = fd;
-    debug(47, 3) ("Cache Dir #%d log opened on FD %d\n", sd->index, fd);
+    debugs(47, 3, "Cache Dir #%d log opened on FD %d", sd->index, fd);
 }
 
 static void
@@ -236,7 +236,7 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     int fd;
 
     if (stat(swaplog_path, &log_sb) < 0) {
-	debug(47, 1) ("Cache Dir #%d: No log file\n", sd->index);
+	debugs(47, 1, "Cache Dir #%d: No log file", sd->index);
 	safe_free(swaplog_path);
 	safe_free(clean_path);
 	safe_free(new_path);
@@ -249,17 +249,17 @@ storeAufsDirOpenTmpSwapLog(SwapDir * sd, int *clean_flag, int *zero_flag)
     /* open a write-only FD for the new log */
     fd = file_open(new_path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
     if (fd < 0) {
-	debug(50, 1) ("%s: %s\n", new_path, xstrerror());
+	debugs(50, 1, "%s: %s", new_path, xstrerror());
 	fatal("storeDirOpenTmpSwapLog: Failed to open swap log.");
     }
-    debug(50, 1) ("AUFS: %s: tmp log %s opened on FD %d\n", sd->path, new_path, fd);
+    debugs(50, 1, "AUFS: %s: tmp log %s opened on FD %d", sd->path, new_path, fd);
     aioinfo->swaplog_fd = fd;
     storeAufsWriteSwapLogheader(fd);
 
     /* open a read-only stream of the old log */
     fd = file_open(swaplog_path, O_RDONLY | O_BINARY);
     if (fd < 0) {
-	debug(50, 0) ("%s: %s\n", swaplog_path, xstrerror());
+	debugs(50, 0, "%s: %s", swaplog_path, xstrerror());
 	fatal("Failed to open swap log for reading");
     }
     memset(&clean_sb, '\0', sizeof(struct stat));
@@ -314,9 +314,9 @@ storeAufsDirWriteCleanEntry(SwapDir * sd, const StoreEntry * e)
     /* buffered write */
     if (state->outbuf_offset + ss > CLEAN_BUF_SZ) {
 	if (FD_WRITE_METHOD(state->fd, state->outbuf, state->outbuf_offset) < 0) {
-	    debug(50, 0) ("storeDirWriteCleanLogs: %s: write: %s\n",
+	    debugs(50, 0, "storeDirWriteCleanLogs: %s: write: %s",
 		state->new, xstrerror());
-	    debug(50, 0) ("storeDirWriteCleanLogs: Current swap logfile not replaced.\n");
+	    debugs(50, 0, "storeDirWriteCleanLogs: Current swap logfile not replaced.");
 	    file_close(state->fd);
 	    state->fd = -1;
 	    unlink(state->new);
@@ -353,9 +353,9 @@ storeAufsDirWriteCleanDone(SwapDir * sd)
 	return;
     state->walker->Done(state->walker);
     if (FD_WRITE_METHOD(state->fd, state->outbuf, state->outbuf_offset) < 0) {
-	debug(50, 0) ("storeDirWriteCleanLogs: %s: write: %s\n",
+	debugs(50, 0, "storeDirWriteCleanLogs: %s: write: %s",
 	    state->new, xstrerror());
-	debug(50, 0) ("storeDirWriteCleanLogs: Current swap logfile "
+	debugs(50, 0, "storeDirWriteCleanLogs: Current swap logfile "
 	    "not replaced.\n");
 	file_close(state->fd);
 	state->fd = -1;
@@ -450,9 +450,9 @@ storeAufsDirWriteCleanStart(SwapDir * sd)
     state->new = xstrdup(storeAufsDirSwapLogFile(sd, ".clean"));
     state->fd = file_open(state->new, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY);
     if (state->fd < 0) {
-	debug(50, 0) ("storeDirWriteCleanStart: %s: open: %s\n",
+	debugs(50, 0, "storeDirWriteCleanStart: %s: open: %s",
 	    state->new, xstrerror());
-	debug(50, 0) ("storeDirWriteCleanStart: Current swap logfile "
+	debugs(50, 0, "storeDirWriteCleanStart: Current swap logfile "
 	    "not replaced.\n");
 	xfree(state->new);
 	xfree(state);
@@ -465,7 +465,7 @@ storeAufsDirWriteCleanStart(SwapDir * sd)
     state->outbuf_offset = 0;
     state->walker = sd->repl->WalkInit(sd->repl);
     unlink(state->cln);
-    debug(47, 3) ("storeDirWriteCleanLogs: opened %s, FD %d\n",
+    debugs(47, 3, "storeDirWriteCleanLogs: opened %s, FD %d",
 	state->new, state->fd);
 #if HAVE_FCHMOD
     if (stat(state->cur, &sb) == 0)

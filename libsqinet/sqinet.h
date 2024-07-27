@@ -4,6 +4,8 @@
 /* Max size of IPv4/IPv6 expanded addresses _PLUS_ the []'s for v6 addresses */
 #define	MAX_IPSTRLEN	77
 
+#include <sys/un.h>
+
 struct _sqaddr {
 	int init;
 	struct sockaddr_storage st;
@@ -34,6 +36,7 @@ extern int sqinet_set_v4_inaddr(sqaddr_t *s, struct in_addr *v4addr);
 extern int sqinet_set_v4_port(sqaddr_t *s, short port, sqaddr_flags flags);
 extern int sqinet_set_v4_sockaddr(sqaddr_t *s, const struct sockaddr_in *v4addr);
 extern int sqinet_set_v6_sockaddr(sqaddr_t *s, const struct sockaddr_in6 *v6addr);
+extern int sqinet_set_unix_addr(sqaddr_t *s, struct sockaddr_un* addr);
 extern int sqinet_get_port(const sqaddr_t *s);
 extern void sqinet_set_port(const sqaddr_t *s, short port, sqaddr_flags flags);
 extern struct in_addr sqinet_get_v4_inaddr(const sqaddr_t *s, sqaddr_flags flags);
@@ -50,7 +53,7 @@ extern int sqinet_assemble_rev(const sqaddr_t *s, char *buf, int len);
 static inline struct sockaddr * sqinet_get_entry(sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
 static inline const struct sockaddr * sqinet_get_entry_ro(const sqaddr_t *s) { return (struct sockaddr *) &(s->st); }
 static inline int sqinet_get_family(const sqaddr_t *s) { return s->st.ss_family; }
-static inline int sqinet_get_length(const sqaddr_t *s) { if (s->st.ss_family == AF_INET) return sizeof(struct sockaddr_in); else return sizeof(struct sockaddr_in6); }
+static inline int sqinet_get_length(const sqaddr_t *s) { if (s->st.ss_family == AF_INET) return sizeof(struct sockaddr_in); else if(s->st.ss_family == PF_UNIX) return sizeof(struct sockaddr_un); else return sizeof(struct sockaddr_in6); }
 static inline int sqinet_get_maxlength(const sqaddr_t *s) { return sizeof(s->st); }
 
 static inline int sqinet_copy(sqaddr_t *dst, const sqaddr_t *src) { *dst = *src; return 1; }

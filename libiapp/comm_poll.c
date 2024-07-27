@@ -98,7 +98,7 @@ do_select_init()
 void
 comm_select_postinit()
 {
-    debug(5, 1) ("Using poll for the IO loop\n");
+    debugs(5, 1, "Using poll for the IO loop");
 }
 
 static void
@@ -169,12 +169,12 @@ do_comm_select(int msec)
     num = poll(pfds, nfds, msec);
     saved_errno = errno;
     getCurrentTime();
-    debug(5, 5) ("do_comm_select: %d fds ready\n", num);
+    debugs(5, 5, "do_comm_select: %d fds ready", num);
     if (num < 0) {
 	if (ignoreErrno(saved_errno))
 	    return COMM_OK;
 
-	debug(5, 1) ("comm_select: poll failure: %s\n", xstrerror());
+	debugs(5, 1, "comm_select: poll failure: %s", xstrerror());
 	return COMM_ERROR;
     }
     statHistCount(&select_fds_hist, num);

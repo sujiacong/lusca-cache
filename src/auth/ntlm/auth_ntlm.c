@@ -94,7 +94,7 @@ static int authenticateNTLMcmpUsername(ntlm_user_t * u1, ntlm_user_t * u2);
 static void
 authNTLMDone(void)
 {
-    debug(29, 2) ("authNTLMDone: shutting down NTLM authentication.\n");
+    debugs(29, 2, "authNTLMDone: shutting down NTLM authentication.");
     if (ntlmauthenticators)
 	helperStatefulShutdown(ntlmauthenticators);
     authntlm_initialised = 0;
@@ -111,7 +111,7 @@ authNTLMDone(void)
 	memPoolDestroy(ntlm_user_pool);
 	ntlm_user_pool = NULL;
     }
-    debug(29, 2) ("authNTLMDone: NTLM authentication Shutdown.\n");
+    debugs(29, 2, "authNTLMDone: NTLM authentication Shutdown.");
 }
 
 /* free any allocated configuration details */
@@ -164,7 +164,7 @@ authNTLMParse(authScheme * scheme, int n_configured, char *param_str)
     } else if (strcasecmp(param_str, "keep_alive") == 0) {
 	parse_onoff(&ntlmConfig->keep_alive);
     } else {
-	debug(29, 0) ("unrecognised ntlm auth scheme parameter '%s'\n", param_str);
+	debugs(29, 0, "unrecognised ntlm auth scheme parameter '%s'", param_str);
     }
 }
 
@@ -215,7 +215,7 @@ authNTLMInit(authScheme * scheme)
 	 * state will be preserved.
 	 */
 	if (ntlmConfig->authenticate && Config.onoff.pipeline_prefetch != 0) {
-	    debug(29, 1) ("pipeline prefetching incompatile with NTLM authentication. Disabling pipeline_prefetch\n");
+	    debugs(29, 1, "pipeline prefetching incompatile with NTLM authentication. Disabling pipeline_prefetch");
 	    Config.onoff.pipeline_prefetch = 0;
 	}
 	if (!ntlm_user_pool)
@@ -232,7 +232,7 @@ authNTLMInit(authScheme * scheme)
 	if (!ntlminit) {
 	    cachemgrRegister("ntlmauthenticator",
 		"NTLM User Authenticator Stats",
-		authenticateNTLMStats, 0, 1);
+		authenticateNTLMStats, NULL, NULL, 0, 1, 0);
 	    ntlminit++;
 	}
 	CBDATA_INIT_TYPE(authenticateStateData);
@@ -250,18 +250,18 @@ static int
 authNTLMConfigured()
 {
     if (ntlmConfig == NULL) {
-	debug(29, 9) ("authNTLMConfigured: not configured\n");
+	debugs(29, 9, "authNTLMConfigured: not configured");
 	return 0;
     }
     if (ntlmConfig->authenticate == NULL) {
-	debug(29, 9) ("authNTLMConfigured: no helper\n");
+	debugs(29, 9, "authNTLMConfigured: no helper");
 	return 0;
     }
     if (ntlmConfig->authenticateChildren == 0) {
-	debug(29, 9) ("authNTLMConfigured: no helper children\n");
+	debugs(29, 9, "authNTLMConfigured: no helper children");
 	return 0;
     }
-    debug(29, 9) ("authNTLMConfigured: returning configured\n");
+    debugs(29, 9, "authNTLMConfigured: returning configured");
     return 1;
 }
 
@@ -276,7 +276,7 @@ authenticateNTLMDirection(auth_user_request_t * auth_user_request)
 	return -1;		/* Need helper response to continue */
     switch (ntlm_request->auth_state) {
     case AUTHENTICATE_STATE_NONE:	/* no progress at all. */
-	debug(29, 1) ("authenticateNTLMDirection: called before NTLM Authenticate!. Report a bug to squid-dev. au %p\n", auth_user_request);
+	debugs(29, 1, "authenticateNTLMDirection: called before NTLM Authenticate!. Report a bug to squid-dev. au %p", auth_user_request);
 	return -2;
     case AUTHENTICATE_STATE_NEGOTIATE:		/* send to client */
 	assert(ntlm_request->server_blob);
@@ -286,7 +286,7 @@ authenticateNTLMDirection(auth_user_request_t * auth_user_request)
     case AUTHENTICATE_STATE_DONE:	/* do nothing.. */
 	return 0;
     case AUTHENTICATE_STATE_INITIAL:
-	debug(29, 1) ("authenticateNTLMDirection: Unexpected AUTHENTICATE_STATE_INITIAL\n");
+	debugs(29, 1, "authenticateNTLMDirection: Unexpected AUTHENTICATE_STATE_INITIAL");
 	return -2;
     }
     return -2;
@@ -307,7 +307,7 @@ authenticateNTLMFixErrorHeader(auth_user_request_t * auth_user_request, HttpRepl
 	return;
     /* New request, no user details */
     if (auth_user_request == NULL) {
-	debug(29, 9) ("authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM'\n", type);
+	debugs(29, 9, "authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM'", type);
 	httpHeaderPutStrf(&rep->header, type, "NTLM");
 	if (!ntlmConfig->keep_alive) {
 	    /* drop the connection */
@@ -320,7 +320,7 @@ authenticateNTLMFixErrorHeader(auth_user_request_t * auth_user_request, HttpRepl
     switch (ntlm_request->auth_state) {
     case AUTHENTICATE_STATE_NONE:
     case AUTHENTICATE_STATE_FAILED:
-	debug(29, 9) ("authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM'\n", type);
+	debugs(29, 9, "authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM'", type);
 	httpHeaderPutStrf(&rep->header, type, "NTLM");
 	/* drop the connection */
 	httpHeaderDelByName(&rep->header, "keep-alive");
@@ -329,17 +329,17 @@ authenticateNTLMFixErrorHeader(auth_user_request_t * auth_user_request, HttpRepl
     case AUTHENTICATE_STATE_NEGOTIATE:
 	/* we are 'waiting' for a response from the client */
 	/* pass the blob to the client */
-	debug(29, 9) ("authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM %s'\n", type, ntlm_request->server_blob);
+	debugs(29, 9, "authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM %s'", type, ntlm_request->server_blob);
 	httpHeaderPutStrf(&rep->header, type, "NTLM %s", ntlm_request->server_blob);
 	safe_free(ntlm_request->server_blob);
 	break;
     case AUTHENTICATE_STATE_DONE:
 	/* Special case when authentication finished, but not allowed by ACL */
-	debug(29, 9) ("authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM'\n", type);
+	debugs(29, 9, "authenticateNTLMFixErrorHeader: Sending type:%d header: 'NTLM'", type);
 	httpHeaderPutStrf(&rep->header, type, "NTLM");
 	break;
     default:
-	debug(29, 0) ("authenticateNTLMFixErrorHeader: state %d.\n", ntlm_request->auth_state);
+	debugs(29, 0, "authenticateNTLMFixErrorHeader: state %d.", ntlm_request->auth_state);
 	fatal("unexpected state in AuthenticateNTLMFixErrorHeader.\n");
     }
 }
@@ -352,7 +352,7 @@ authNTLMRequestFree(ntlm_request_t * ntlm_request)
     safe_free(ntlm_request->server_blob);
     safe_free(ntlm_request->client_blob);
     if (ntlm_request->authserver != NULL) {
-	debug(29, 9) ("authenticateNTLMRequestFree: releasing server '%p'\n", ntlm_request->authserver);
+	debugs(29, 9, "authenticateNTLMRequestFree: releasing server '%p'", ntlm_request->authserver);
 	authenticateNTLMReleaseServer(ntlm_request);
     }
     if (ntlm_request->request) {
@@ -375,7 +375,7 @@ authenticateNTLMFreeUser(auth_user_t * auth_user)
 {
     ntlm_user_t *ntlm_user = auth_user->scheme_data;
 
-    debug(29, 5) ("authenticateNTLMFreeUser: Clearing NTLM scheme data\n");
+    debugs(29, 5, "authenticateNTLMFreeUser: Clearing NTLM scheme data");
     safe_free(ntlm_user->username);
     memPoolFree(ntlm_user_pool, ntlm_user);
     auth_user->scheme_data = NULL;
@@ -388,7 +388,7 @@ authenticateNTLMReleaseServer(ntlm_request_t * ntlm_request)
     helper_stateful_server *server = ntlm_request->authserver;
     if (!server)
 	return;
-    debug(29, 9) ("authenticateNTLMReleaseServer: releasing server '%p'\n", server);
+    debugs(29, 9, "authenticateNTLMReleaseServer: releasing server '%p'", server);
     ntlm_request->authserver = NULL;
     helperStatefulReleaseServer(server);
 }
@@ -403,10 +403,10 @@ authenticateNTLMHandleReply(void *data, void *srv, char *reply)
     ntlm_user_t *ntlm_user;
     ntlm_request_t *ntlm_request;
     char *blob;
-    debug(29, 9) ("authenticateNTLMHandleReply: Helper: '%p' {%s}\n", srv, reply ? reply : "<NULL>");
+    debugs(29, 9, "authenticateNTLMHandleReply: Helper: '%p' {%s}", srv, reply ? reply : "<NULL>");
     valid = cbdataValid(r->data);
     if (!valid) {
-	debug(29, 2) ("AuthenticateNTLMHandleReply: invalid callback data. Releasing helper '%p'.\n", srv);
+	debugs(29, 2, "AuthenticateNTLMHandleReply: invalid callback data. Releasing helper '%p'.", srv);
 	ntlm_request = r->auth_user_request->scheme_data;
 	if (ntlm_request != NULL) {
 	    if (ntlm_request->authserver == NULL)
@@ -418,7 +418,7 @@ authenticateNTLMHandleReply(void *data, void *srv, char *reply)
 	return;
     }
     if (!reply) {
-	debug(29, 1) ("AuthenticateNTLMHandleReply: Helper '%p' crashed!.\n", srv);
+	debugs(29, 1, "AuthenticateNTLMHandleReply: Helper '%p' crashed!.", srv);
 	reply = (char *) "BH Internal error";
     }
     auth_user_request = r->auth_user_request;
@@ -454,7 +454,7 @@ authenticateNTLMHandleReply(void *data, void *srv, char *reply)
 	    ntlm_request->auth_state = AUTHENTICATE_STATE_NEGOTIATE;
 	    safe_free(auth_user_request->message);
 	    auth_user_request->message = xstrdup("Authentication in progress");
-	    debug(29, 4) ("authenticateNTLMHandleReply: Need to challenge the client with a server blob '%s'\n", blob);
+	    debugs(29, 4, "authenticateNTLMHandleReply: Need to challenge the client with a server blob '%s'", blob);
 	} else {
 	    ntlm_request->auth_state = AUTHENTICATE_STATE_FAILED;
 	    safe_free(auth_user_request->message);
@@ -467,9 +467,9 @@ authenticateNTLMHandleReply(void *data, void *srv, char *reply)
 	ntlm_user->username = xstrdup(blob);
 	safe_free(auth_user_request->message);
 	auth_user_request->message = xstrdup("Login successful");
-	debug(29, 4) ("authenticateNTLMHandleReply: Successfully validated user via NTLM. Username '%s'\n", blob);
+	debugs(29, 4, "authenticateNTLMHandleReply: Successfully validated user via NTLM. Username '%s'", blob);
 	/* this connection is authenticated */
-	debug(29, 4) ("authenticated user %s\n", ntlm_user->username);
+	debugs(29, 4, "authenticated user %s", ntlm_user->username);
 	/* see if this is an existing user with a different proxy_auth 
 	 * string */
 	usernamehash = hash_lookup(proxy_auth_username_cache, ntlm_user->username);
@@ -498,7 +498,7 @@ authenticateNTLMHandleReply(void *data, void *srv, char *reply)
 	auth_user_request->message = xstrdup(blob);
 	ntlm_request->auth_state = AUTHENTICATE_STATE_FAILED;
 	authenticateNTLMReleaseServer(ntlm_request);
-	debug(29, 4) ("authenticateNTLMHandleReply: Failed validating user via NTLM. Error returned '%s'\n", blob);
+	debugs(29, 4, "authenticateNTLMHandleReply: Failed validating user via NTLM. Error returned '%s'", blob);
     } else if (strncasecmp(reply, "BH ", 3) == 0) {
 	/* TODO kick off a refresh process. This can occur after a YR or after
 	 * a KK. If after a YR release the helper and resubmit the request via 
@@ -509,7 +509,7 @@ authenticateNTLMHandleReply(void *data, void *srv, char *reply)
 	ntlm_request->auth_state = AUTHENTICATE_STATE_FAILED;
 	safe_free(ntlm_request->server_blob);
 	authenticateNTLMReleaseServer(ntlm_request);
-	debug(29, 1) ("authenticateNTLMHandleReply: Error validating user via NTLM. Error returned '%s'\n", reply);
+	debugs(29, 1, "authenticateNTLMHandleReply: Error validating user via NTLM. Error returned '%s'", reply);
     } else {
 	fatalf("authenticateNTLMHandleReply: *** Unsupported helper response ***, '%s'\n", reply);
     }
@@ -521,7 +521,7 @@ authenticateNTLMHandleReply(void *data, void *srv, char *reply)
 }
 
 static void
-authenticateNTLMStats(StoreEntry * sentry)
+authenticateNTLMStats(StoreEntry * sentry, void* data)
 {
     storeAppendPrintf(sentry, "NTLM Authenticator Statistics:\n");
     helperStatefulStats(sentry, ntlmauthenticators);
@@ -547,13 +547,13 @@ authenticateNTLMStart(auth_user_request_t * auth_user_request, RH * handler, voi
     assert(handler);
     assert(data);
     assert(auth_user->auth_type == AUTH_NTLM);
-    debug(29, 9) ("authenticateNTLMStart: auth state '%d'\n", ntlm_request->auth_state);
+    debugs(29, 9, "authenticateNTLMStart: auth state '%d'", ntlm_request->auth_state);
     sent_string = ntlm_request->client_blob;
 
-    debug(29, 9) ("authenticateNTLMStart: state '%d'\n", ntlm_request->auth_state);
-    debug(29, 9) ("authenticateNTLMStart: '%s'\n", sent_string);
+    debugs(29, 9, "authenticateNTLMStart: state '%d'", ntlm_request->auth_state);
+    debugs(29, 9, "authenticateNTLMStart: '%s'", sent_string);
     if (ntlmConfig->authenticate == NULL) {
-	debug(29, 0) ("authenticateNTLMStart: no NTLM program specified:'%s'\n", sent_string);
+	debugs(29, 0, "authenticateNTLMStart: no NTLM program specified:'%s'", sent_string);
 	handler(data, NULL);
 	return;
     }
@@ -587,7 +587,7 @@ authenticateNTLMOnCloseConnection(ConnStateData * conn)
 	if (ntlm_request->authserver != NULL)
 	    authenticateNTLMReleaseServer(ntlm_request);
 	/* unlock the connection based lock */
-	debug(29, 9) ("authenticateNTLMOnCloseConnection: Unlocking auth_user from the connection.\n");
+	debugs(29, 9, "authenticateNTLMOnCloseConnection: Unlocking auth_user from the connection.");
 	/* minor abstraction break here: FIXME */
 	/* Ensure that the auth user request will be getting closed */
 	/* IFF we start persisting the struct after the conn closes - say for logging
@@ -630,7 +630,7 @@ authenticateDecodeNTLMAuth(auth_user_request_t * auth_user_request, const char *
 
     /* the helper does the rest, with data collected in
      * authenticateNTLMAuthenticateUser */
-    debug(29, 9) ("authenticateDecodeNTLMAuth: NTLM authentication\n");
+    debugs(29, 9, "authenticateDecodeNTLMAuth: NTLM authentication");
     return;
 }
 
@@ -647,7 +647,7 @@ authNTLMAuthenticated(auth_user_request_t * auth_user_request)
     ntlm_request_t *ntlm_request = auth_user_request->scheme_data;
     if (ntlm_request->auth_state == AUTHENTICATE_STATE_DONE)
 	return 1;
-    debug(29, 9) ("User not fully authenticated.\n");
+    debugs(29, 9, "User not fully authenticated.");
     return 0;
 }
 
@@ -670,15 +670,15 @@ authenticateNTLMAuthenticateUser(auth_user_request_t * auth_user_request, reques
      * auth challenges */
     if (!conn) {
 	ntlm_request->auth_state = AUTHENTICATE_STATE_FAILED;
-	debug(29, 1) ("authenticateNTLMAuthenticateUser: attempt to perform authentication without a connection!\n");
+	debugs(29, 1, "authenticateNTLMAuthenticateUser: attempt to perform authentication without a connection!");
 	return;
     }
     if (ntlm_request->waiting) {
-	debug(29, 1) ("authenticateNTLMAuthenticateUser: waiting for helper reply!\n");
+	debugs(29, 1, "authenticateNTLMAuthenticateUser: waiting for helper reply!");
 	return;
     }
     if (ntlm_request->server_blob) {
-	debug(29, 2) ("authenticateNTLMAuthenticateUser: need to challenge client '%s'!\n", ntlm_request->server_blob);
+	debugs(29, 2, "authenticateNTLMAuthenticateUser: need to challenge client '%s'!", ntlm_request->server_blob);
 	return;
     }
     /* get header */
@@ -694,7 +694,7 @@ authenticateNTLMAuthenticateUser(auth_user_request_t * auth_user_request, reques
     switch (ntlm_request->auth_state) {
     case AUTHENTICATE_STATE_NONE:
 	/* we've received a ntlm request. pass to a helper */
-	debug(29, 9) ("authenticateNTLMAuthenticateUser: auth state ntlm none. %s\n", proxy_auth);
+	debugs(29, 9, "authenticateNTLMAuthenticateUser: auth state ntlm none. %s", proxy_auth);
 	ntlm_request->auth_state = AUTHENTICATE_STATE_INITIAL;
 	safe_free(ntlm_request->client_blob);
 	ntlm_request->client_blob = xstrdup(blob);
@@ -702,19 +702,19 @@ authenticateNTLMAuthenticateUser(auth_user_request_t * auth_user_request, reques
 	conn->auth_user_request = auth_user_request;
 	ntlm_request->conn = conn;
 	/* and lock for the connection duration */
-	debug(29, 9) ("authenticateNTLMAuthenticateUser: Locking auth_user from the connection.\n");
+	debugs(29, 9, "authenticateNTLMAuthenticateUser: Locking auth_user from the connection.");
 	authenticateAuthUserRequestLock(auth_user_request);
 	ntlm_request->request = requestLink(request);
 	return;
 	break;
     case AUTHENTICATE_STATE_INITIAL:
-	debug(29, 1) ("authenticateNTLMAuthenticateUser: need to ask helper!\n");
+	debugs(29, 1, "authenticateNTLMAuthenticateUser: need to ask helper!");
 	return;
 	break;
     case AUTHENTICATE_STATE_NEGOTIATE:
 	/* we should have received a blob from the clien. pass it to the same 
 	 * helper process */
-	debug(29, 9) ("authenticateNTLMAuthenticateUser: auth state challenge with header %s.\n", proxy_auth);
+	debugs(29, 9, "authenticateNTLMAuthenticateUser: auth state challenge with header %s.", proxy_auth);
 	/* do a cache lookup here. If it matches it's a successful ntlm 
 	 * challenge - release the helper and use the existing auth_user 
 	 * details. */
@@ -730,7 +730,7 @@ authenticateNTLMAuthenticateUser(auth_user_request_t * auth_user_request, reques
 	break;
     case AUTHENTICATE_STATE_FAILED:
 	/* we've failed somewhere in authentication */
-	debug(29, 9) ("authenticateNTLMAuthenticateUser: auth state ntlm failed. %s\n", proxy_auth);
+	debugs(29, 9, "authenticateNTLMAuthenticateUser: auth state ntlm failed. %s", proxy_auth);
 	return;
     }
     return;
